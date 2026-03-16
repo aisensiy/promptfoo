@@ -162,7 +162,7 @@ export interface ProviderResponse {
     http?: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers?: Record<string, string>;
       requestHeaders?: Record<string, string>;
     };
     [key: string]: any;
@@ -186,6 +186,16 @@ export interface ProviderResponse {
   providerTransformedOutput?: string | any;
   tokenUsage?: TokenUsage;
   isRefusal?: boolean;
+  /**
+   * Indicates the target intentionally ended the active conversation/session.
+   * Multi-turn redteam strategies can use this to stop probing gracefully.
+   */
+  conversationEnded?: boolean;
+  /**
+   * Optional machine-readable reason explaining why the conversation ended.
+   * Example: `thread_closed`.
+   */
+  conversationEndReason?: string;
   sessionId?: string;
   guardrails?: GuardrailResponse;
   finishReason?: string;
@@ -206,7 +216,7 @@ export interface ProviderResponse {
     storageRef?: { key?: string }; // Storage reference for video file (Sora)
     url?: string; // Storage ref URL (e.g., storageRef:video/abc123.mp4) or blob URI
     format?: string; // 'mp4'
-    size?: string; // '1280x720' or '720x1280'
+    size?: string; // '1280x720', '720x1280', '1792x1024', or '1024x1792'
     duration?: number; // Seconds
     thumbnail?: string; // Storage ref URL for thumbnail (Sora)
     spritesheet?: string; // Storage ref URL for spritesheet (Sora)

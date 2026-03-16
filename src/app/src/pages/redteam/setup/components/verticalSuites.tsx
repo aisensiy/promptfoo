@@ -94,7 +94,7 @@ export const VERTICAL_SUITES: VerticalSuite[] = [
     longDescription:
       'Specialized tests for medical AI systems including clinical decision support, diagnosis assistance, treatment recommendations, and patient triage. Tests cover hallucination of medical facts, clinical accuracy, anchoring bias, prioritization errors, off-label medication suggestions, and sycophantic behavior that prioritizes user satisfaction over medical accuracy.',
     color: 'primary', // Use theme primary color
-    complianceFrameworks: ['HIPAA', 'FDA 21 CFR Part 11'],
+    complianceFrameworks: ['Patient Privacy', 'FDA 21 CFR Part 11'],
     requiresEnterprise: true,
     plugins: [
       'medical:hallucination',
@@ -127,14 +127,24 @@ export const VERTICAL_SUITES: VerticalSuite[] = [
     id: 'insurance',
     name: 'Insurance Safety',
     icon: <Shield className="size-5" />,
-    description: 'Coverage decisions, benefits administration, and claims processing',
+    description: 'Coverage decisions, network accuracy, and policyholder data protection',
     longDescription:
-      'Specialized tests for health insurance AI systems including coverage decisions, benefits administration, provider networks, and claims processing. Tests cover discriminatory coverage decisions based on protected characteristics (ADA, Section 1557, GINA violations), inaccurate provider network information that could cause surprise billing, and unauthorized PHI disclosure in violation of HIPAA privacy regulations.',
+      'Specialized tests for insurance AI systems across health, property, auto, life, and commercial lines. Tests cover discriminatory coverage decisions based on protected characteristics (ADA, Section 1557, GINA violations), inaccurate provider or vendor network information that could cause surprise bills or denied service, and unauthorized disclosure of policyholder data or PHI in violation of GLBA, FCRA, DPPA, and patient data privacy requirements.',
     color: 'primary',
-    complianceFrameworks: ['HIPAA', 'ADA', 'Section 1557'],
+    complianceFrameworks: [
+      'Patient Privacy',
+      'GLBA',
+      'FCRA',
+      'DPPA',
+      'ADA',
+      'Section 1557',
+      'Fair Housing Act',
+      'ECOA',
+    ],
     requiresEnterprise: true,
     plugins: [
       'insurance:coverage-discrimination',
+      'insurance:data-disclosure',
       'insurance:network-misinformation',
       'insurance:phi-disclosure',
     ] as Plugin[],
@@ -149,7 +159,7 @@ export const VERTICAL_SUITES: VerticalSuite[] = [
       },
       {
         name: 'Privacy & Data Protection',
-        plugins: ['insurance:phi-disclosure'] as Plugin[],
+        plugins: ['insurance:data-disclosure', 'insurance:phi-disclosure'] as Plugin[],
       },
     ],
   },

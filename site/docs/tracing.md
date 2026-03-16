@@ -204,6 +204,31 @@ After running an evaluation, view traces in the web UI:
 3. Click the magnifying glass (🔎) icon on any test result
 4. Scroll to the "Trace Timeline" section
 
+### 4. Assert on Traced Workflows
+
+Once traces are flowing into Promptfoo, you can evaluate what the agent actually did, not just the final answer:
+
+```yaml
+tests:
+  - vars:
+      order_id: '123'
+    assert:
+      - type: trajectory:tool-used
+        value: search_orders
+
+      - type: trajectory:tool-sequence
+        value:
+          steps:
+            - search_orders
+            - compose_reply
+
+      - type: trajectory:goal-success
+        value: 'Determine the shipping status for order {{ order_id }} and tell the user whether it has shipped'
+        provider: openai:gpt-5-mini
+```
+
+Use trajectory assertions when your spans identify tools, commands, searches, reasoning steps, or messages. If you only need raw span counts, durations, or error detection, use [`trace-span-count`](/docs/configuration/expected-outputs/deterministic/#trace-span-count), [`trace-span-duration`](/docs/configuration/expected-outputs/deterministic/#trace-span-duration), or [`trace-error-spans`](/docs/configuration/expected-outputs/deterministic/#trace-error-spans).
+
 ## Configuration Reference
 
 ### Basic Configuration
@@ -269,7 +294,7 @@ tracing:
 
 ### JavaScript/TypeScript
 
-For complete provider implementation details, see the [JavaScript Provider documentation](/docs/providers/custom-api/). For tracing-specific examples, see the [OpenTelemetry tracing example](https://github.com/promptfoo/promptfoo/tree/main/examples/opentelemetry-tracing).
+For complete provider implementation details, see the [JavaScript Provider documentation](/docs/providers/custom-api/). For tracing-specific examples, see the [OpenTelemetry tracing example](https://github.com/promptfoo/promptfoo/tree/main/examples/integration-opentelemetry/javascript).
 
 Key points:
 
@@ -277,10 +302,11 @@ Key points:
 - Extract the W3C trace context from `traceparent`
 - Create child spans for each operation
 - Set appropriate span attributes and status
+- Add tool-oriented attributes like `tool.name` or `function.name` when you want to use trajectory assertions
 
 ### Python
 
-For complete provider implementation details, see the [Python Provider documentation](/docs/providers/python/). For a working example with protobuf tracing, see the [Python OpenTelemetry tracing example](https://github.com/promptfoo/promptfoo/tree/main/examples/opentelemetry-tracing-python).
+For complete provider implementation details, see the [Python Provider documentation](/docs/providers/python/). For a working example with protobuf tracing, see the [Python OpenTelemetry tracing example](https://github.com/promptfoo/promptfoo/tree/main/examples/integration-opentelemetry/python).
 
 :::note
 
@@ -668,8 +694,8 @@ For more details on red team testing with tracing, see [How to Red Team LLM Agen
 
 ## Next Steps
 
-- Explore the [OpenTelemetry tracing example (JavaScript)](https://github.com/promptfoo/promptfoo/tree/main/examples/opentelemetry-tracing)
-- Explore the [OpenTelemetry tracing example (Python)](https://github.com/promptfoo/promptfoo/tree/main/examples/opentelemetry-tracing-python) - uses protobuf format
+- Explore the [OpenTelemetry tracing example (JavaScript)](https://github.com/promptfoo/promptfoo/tree/main/examples/integration-opentelemetry/javascript)
+- Explore the [OpenTelemetry tracing example (Python)](https://github.com/promptfoo/promptfoo/tree/main/examples/integration-opentelemetry/python) - uses protobuf format
 - Try the [red team tracing example](https://github.com/promptfoo/promptfoo/tree/main/examples/redteam-tracing-example)
 - Set up forwarding to your observability platform
 - Add custom instrumentation for your use case

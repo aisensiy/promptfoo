@@ -62,6 +62,7 @@ describe('auth command', () => {
       user: mockCloudUser,
       organization: mockOrganization,
       app: mockApp,
+      hasActiveLicense: false,
     });
 
     // performApiKeyLogin always calls getUserTeams() to load/cache teams
@@ -196,6 +197,7 @@ describe('auth command', () => {
         user: newCloudUser,
         organization: mockOrganization,
         app: mockApp,
+        hasActiveLicense: false,
       });
 
       const loginCmd = program.commands

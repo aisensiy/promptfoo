@@ -432,6 +432,8 @@ interface ProviderResponse {
   output?: string | any;
   tokenUsage?: TokenUsage;
   isRefusal?: boolean;
+  conversationEnded?: boolean;
+  conversationEndReason?: string;
   sessionId?: string;
   guardrails?: GuardrailResponse;
   audio?: {
@@ -534,6 +536,29 @@ providers:
           guardrails: { flagged: context.response.headers['x-content-filtered'] === 'true' }
         }
 ```
+
+### Ending Multi-turn Conversations
+
+For stateful red team strategies, you can signal that the target intentionally closed the active thread by returning:
+
+- `conversationEnded: true`
+- Optional `conversationEndReason` for debugging (for example, `thread_closed`)
+
+```yaml
+providers:
+  - id: https
+    config:
+      url: 'https://example.com/api'
+      transformResponse: |
+        {
+          output: json.message || '',
+          sessionId: json.sessionId,
+          conversationEnded: json.threadClosed === true,
+          conversationEndReason: json.threadClosed ? 'thread_closed' : undefined
+        }
+```
+
+When this flag is set, multi-turn red team attackers stop gracefully instead of continuing into timeout/error turns.
 
 ### Interaction with Test Transforms
 
@@ -1582,14 +1607,6 @@ Supported config options:
 | tls               | object                  | Configuration for TLS/HTTPS connections including client certificates, CA certificates, and cipher settings. See TLS Configuration Options above.                                   |
 
 In addition to a full URL, the provider `id` field accepts `http` or `https` as values.
-
-## Configuration Generator
-
-Use the generator below to create an HTTP provider configuration based on your endpoint:
-
-import { HttpConfigGenerator } from '@site/src/components/HttpConfigGenerator';
-
-<HttpConfigGenerator />
 
 ## Error Handling
 

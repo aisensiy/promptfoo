@@ -154,6 +154,7 @@ prompts:
 | `strict_mcp_config`                  | boolean      | Only allow configured MCP servers                                                                            | true                     |
 | `cache_mcp`                          | boolean      | Enable caching when MCP is configured (for deterministic MCP tools)                                          | false                    |
 | `setting_sources`                    | string[]     | Where SDK looks for settings, CLAUDE.md, and slash commands                                                  | None (disabled)          |
+| `plugins`                            | array        | Local [plugins](#plugins) to load for the session                                                            | None                     |
 | `output_format`                      | object       | Structured output configuration with JSON schema                                                             | None                     |
 | `agents`                             | object       | Programmatic agent definitions for custom subagents                                                          | None                     |
 | `hooks`                              | object       | Event hooks for intercepting tool calls and other events                                                     | None                     |
@@ -343,6 +344,195 @@ Available values:
 - `user` - User-level settings
 - `project` - Project-level settings
 - `local` - Local directory settings
+
+## Plugins
+
+[Plugins](https://code.claude.com/docs/en/plugins) extend the agent with additional skills, agents, hooks, and MCP servers. While `setting_sources` discovers skills from the standard settings hierarchy (project/local/user), plugins are self-contained directories that bundle capabilities together and namespace their skills—mirroring how marketplace-installed plugins work.
+
+```yaml
+providers:
+  - id: anthropic:claude-agent-sdk
+    config:
+      working_dir: ./my-project
+      plugins:
+        - type: local
+          path: ./my-plugin
+      append_allowed_tools: ['Skill', 'Read']
+```
+
+:::note
+Only the `local` type is currently supported. Relative paths in `path` resolve against the config file's directory.
+:::
+
+### Plugin Structure
+
+A plugin is a directory containing a `.claude-plugin/plugin.json` manifest:
+
+```text
+my-plugin/
+├── .claude-plugin/
+│   └── plugin.json
+└── skills/
+    └── code-review/
+        └── SKILL.md
+```
+
+The manifest defines the plugin's name and description:
+
+```json title="my-plugin/.claude-plugin/plugin.json"
+{
+  "name": "my-plugin",
+  "description": "A plugin that provides code review skills"
+}
+```
+
+### Skill Namespacing
+
+Skills from plugins are namespaced with the plugin name. For example, a `standards-check` skill in a plugin named `project-standards` becomes `project-standards:standards-check`. Use this namespaced name when asserting on skill invocations:
+
+```yaml
+assert:
+  - type: javascript
+    value: |
+      const toolCalls = context.providerResponse?.metadata?.toolCalls || [];
+      const skillCalls = toolCalls.filter(t => t.name === 'Skill');
+      return skillCalls.some(t => t.input?.skill === 'project-standards:standards-check');
+```
+
+### Plugins vs Setting Sources
+
+Both `plugins` and `setting_sources` can provide skills, but they serve different purposes:
+
+- **`setting_sources`**: Discovers skills from the standard settings hierarchy—project, local, and user-level `.claude/skills/` directories. Skills are not namespaced.
+- **`plugins`**: Loads self-contained plugin directories, mirroring how marketplace-installed plugins work. Skills are namespaced with the plugin name (`plugin:skill`).
+
+You can use both together — skills from both sources are available in the same session.
+
+## Testing Skills
+
+[Agent Skills](https://platform.claude.com/docs/en/agent-sdk/skills) are reusable capabilities that extend Claude's functionality. They are defined as `SKILL.md` files and can be tested using the Claude Agent SDK provider. Skills can be loaded via `setting_sources` (from the standard settings hierarchy) or from [plugins](#plugins).
+
+### Enabling Skills
+
+To test skills, load them via `setting_sources` or `plugins`, and include `Skill` in the allowed tools. Using `setting_sources`:
+
+```yaml
+providers:
+  - id: anthropic:claude-agent-sdk
+    config:
+      working_dir: ./my-project
+      setting_sources: ['project'] # Load skills from .claude/skills/
+      append_allowed_tools: ['Skill']
+```
+
+### How Skills Are Discovered
+
+Skills are automatically discovered at startup from the configured `setting_sources` directories. The SDK scans for `SKILL.md` files in subdirectories of `.claude/skills/`:
+
+```text
+my-project/
+└── .claude/
+    └── skills/
+        ├── code-review/
+        │   └── SKILL.md
+        └── test-generator/
+            └── SKILL.md
+```
+
+Claude automatically invokes the relevant skill when a task matches the skill's description in its frontmatter.
+
+### Testing Skill Invocation
+
+You can test that skills are properly invoked by checking [tool calls](#tool-call-tracking). The Skill tool's input includes `skill` (the skill name) and optional `args`:
+
+```yaml
+providers:
+  - id: anthropic:claude-agent-sdk
+    config:
+      working_dir: ./my-project
+      setting_sources: ['project']
+      append_allowed_tools: ['Skill', 'Read', 'Write']
+
+prompts:
+  - 'Review the authentication module for security issues'
+
+tests:
+  - assert:
+      # Check that the Skill tool was called
+      - type: javascript
+        value: |
+          const toolCalls = context.providerResponse?.metadata?.toolCalls || [];
+          return toolCalls.some(t => t.name === 'Skill');
+      # Check that a specific skill was invoked
+      - type: javascript
+        value: |
+          const toolCalls = context.providerResponse?.metadata?.toolCalls || [];
+          const skillCalls = toolCalls.filter(t => t.name === 'Skill');
+          return skillCalls.some(t => t.input?.skill === 'code-review');
+```
+
+### Checking Available Skills
+
+You can verify skills are loaded by asking Claude to list them. Note that this relies on Claude's free-text response, so use a flexible assertion:
+
+```yaml
+prompts:
+  - 'List all available skills by name'
+
+tests:
+  - assert:
+      - type: icontains
+        value: 'code-review' # Expected skill name
+```
+
+:::note
+Because the response is free-text, `contains` assertions may be fragile. For more reliable testing, check tool calls instead (see [Testing Skill Invocation](#testing-skill-invocation)).
+:::
+
+### Testing Restrictions for CI
+
+For consistent testing in CI/CD environments, restrict to project-level skills only:
+
+```yaml
+providers:
+  - id: anthropic:claude-agent-sdk
+    config:
+      working_dir: ./my-project
+      setting_sources: ['project'] # Only team-shared skills, exclude personal
+      append_allowed_tools: ['Skill', 'Read', 'Bash']
+      permission_mode: 'acceptEdits'
+```
+
+This ensures tests don't depend on user-specific skills that may not be present in CI.
+
+### Example: Complete Skills Testing Configuration
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - id: anthropic:claude-agent-sdk
+    config:
+      working_dir: ./my-project
+      setting_sources: ['project']
+      append_allowed_tools: ['Skill', 'Read', 'Write', 'Bash']
+      permission_mode: 'acceptEdits'
+
+prompts:
+  - 'Generate unit tests for the UserService class'
+
+tests:
+  - assert:
+      # Verify the test-generator skill was invoked
+      - type: javascript
+        value: |
+          const toolCalls = context.providerResponse?.metadata?.toolCalls || [];
+          const skillCalls = toolCalls.filter(t => t.name === 'Skill');
+          return skillCalls.some(t => t.input?.skill === 'test-generator');
+      # Verify tests were generated
+      - type: icontains
+        value: 'describe('
+```
+
+For more information about creating skills, see the [Claude Code skills documentation](https://code.claude.com/docs/en/skills).
 
 ## Budget Control
 
@@ -648,6 +838,56 @@ See the [Claude Agent SDK permissions documentation](https://platform.claude.com
 If you're testing scenarios where the agent asks questions, consider what answer would lead to the most interesting test case. Using `random` behavior can help discover edge cases.
 :::
 
+## Tool Call Tracking
+
+The Claude Agent SDK provider captures all tool calls made during the agentic session and exposes them in `response.metadata.toolCalls`. This allows you to assert on tool usage in your evaluations.
+
+Each tool call entry contains:
+
+| Field             | Type           | Description                                                  |
+| ----------------- | -------------- | ------------------------------------------------------------ |
+| `id`              | string         | Unique tool call ID                                          |
+| `name`            | string         | Tool name (e.g., `Read`, `Bash`, `Grep`)                     |
+| `input`           | unknown        | Arguments passed to the tool                                 |
+| `output`          | unknown        | Tool result content (undefined if not available)             |
+| `is_error`        | boolean        | Whether the tool call resulted in an error                   |
+| `parentToolUseId` | string \| null | Parent tool use ID for sub-agent calls, `null` for top-level |
+
+### Asserting on Tool Usage
+
+Use JavaScript assertions to check which tools were called:
+
+```yaml
+assert:
+  - type: javascript
+    value: |
+      const toolCalls = context.providerResponse?.metadata?.toolCalls || [];
+      const readCalls = toolCalls.filter(t => t.name === 'Read');
+      return readCalls.length > 0;
+```
+
+Check that a specific command was run:
+
+```yaml
+assert:
+  - type: javascript
+    value: |
+      const toolCalls = context.providerResponse?.metadata?.toolCalls || [];
+      const bashCalls = toolCalls.filter(t => t.name === 'Bash');
+      return bashCalls.some(t => t.input?.command?.includes('npm test'));
+```
+
+Verify tool output content:
+
+```yaml
+assert:
+  - type: javascript
+    value: |
+      const toolCalls = context.providerResponse?.metadata?.toolCalls || [];
+      const grepCall = toolCalls.find(t => t.name === 'Grep');
+      return grepCall?.output?.includes('expected match');
+```
+
 ## Caching Behavior
 
 This provider automatically caches responses, and will read from the cache if the prompt, configuration, and files in the working directory (if `working_dir` is set) are the same as a previous run.
@@ -700,8 +940,13 @@ Here are a few complete example implementations:
 - [Structured output](https://github.com/promptfoo/promptfoo/tree/main/examples/claude-agent-sdk#structured-output) - JSON schema validation for agent responses
 - [Advanced options](https://github.com/promptfoo/promptfoo/tree/main/examples/claude-agent-sdk#advanced-options) - Sandbox, runtime configuration, and CLI arguments
 - [AskUserQuestion handling](https://github.com/promptfoo/promptfoo/tree/main/examples/claude-agent-sdk#askuserquestion-handling) - Automated handling of user questions in evaluations
+- [Skills testing](https://github.com/promptfoo/promptfoo/tree/main/examples/claude-agent-sdk#skills-testing) - Testing Agent Skills with the SDK
+- [Plugins](https://github.com/promptfoo/promptfoo/tree/main/examples/claude-agent-sdk#plugins) - Loading plugins to extend agent capabilities
 
 ## See Also
 
 - [Claude Agent SDK documentation](https://docs.claude.com/en/api/agent-sdk)
+- [Agent Skills in the SDK](https://platform.claude.com/docs/en/agent-sdk/skills) - Testing and using skills with the SDK
+- [Claude Code skills documentation](https://code.claude.com/docs/en/skills) - Creating custom skills
+- [Claude Code plugins](https://code.claude.com/docs/en/plugins) - Creating and using plugins
 - [Standard Anthropic provider](/docs/providers/anthropic/) - For text-only interactions
