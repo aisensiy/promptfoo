@@ -48,6 +48,21 @@ function addMetricKind(
   metricKinds[metric] = 'percentage';
 }
 
+function getTestVars(test: unknown): Record<string, unknown> {
+  if (
+    typeof test !== 'object' ||
+    test === null ||
+    !('vars' in test) ||
+    typeof test.vars !== 'object' ||
+    test.vars === null ||
+    Array.isArray(test.vars)
+  ) {
+    return {};
+  }
+
+  return test.vars as Record<string, unknown>;
+}
+
 function collectMetricKinds(
   assertions: Assertion[] | undefined,
   vars: Record<string, unknown>,
@@ -86,7 +101,7 @@ function collectMetricKindsFromConfig(
         continue;
       }
 
-      const vars = (test.vars ?? {}) as Record<string, unknown>;
+      const vars = getTestVars(test);
 
       if (defaultAssert) {
         collectMetricKinds(defaultAssert, vars, metricKinds);

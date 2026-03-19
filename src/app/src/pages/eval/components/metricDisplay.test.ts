@@ -145,6 +145,38 @@ describe('metricDisplay', () => {
     });
   });
 
+  it('handles file-backed test configs when collecting default metric kinds', () => {
+    const table: EvaluateTable = {
+      head: {
+        prompts: [],
+        vars: [],
+      },
+      body: [],
+    };
+    const config: Partial<UnifiedConfig> = {
+      defaultTest: {
+        assert: [
+          {
+            type: 'cost',
+            metric: 'total_cost',
+          },
+        ],
+      },
+      tests: [
+        {
+          path: 'file://tests.py:generate_tests',
+          config: {
+            dataset: 'sample',
+          },
+        },
+      ],
+    };
+
+    expect(getMetricDisplayKinds(table, config)).toEqual({
+      total_cost: 'value',
+    });
+  });
+
   it('treats derived metrics without counts as value metrics', () => {
     expect(getMetricDisplayKind('avg_cost', {}, [undefined])).toBe('value');
   });
