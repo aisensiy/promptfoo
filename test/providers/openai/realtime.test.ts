@@ -173,6 +173,50 @@ describe('OpenAI Realtime Provider', () => {
       });
     });
 
+    it('should normalize chat-style function tools for realtime sessions', async () => {
+      const provider = new OpenAiRealtimeProvider('gpt-realtime', {
+        config: {
+          tools: [
+            {
+              type: 'function',
+              function: {
+                name: 'search_flights',
+                description: 'Search for flights',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    destination: {
+                      type: 'string',
+                    },
+                  },
+                  required: ['destination'],
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      const body = await provider.getRealtimeSessionBody();
+
+      expect(body.tools).toEqual([
+        {
+          type: 'function',
+          name: 'search_flights',
+          description: 'Search for flights',
+          parameters: {
+            type: 'object',
+            properties: {
+              destination: {
+                type: 'string',
+              },
+            },
+            required: ['destination'],
+          },
+        },
+      ]);
+    });
+
     it('should handle basic text response with persistent connection', async () => {
       const config = {
         modalities: ['text'],
@@ -658,10 +702,11 @@ describe('OpenAI Realtime Provider', () => {
       const sentEvents = mockWs.send.mock.calls.map(([payload]: [string]) => JSON.parse(payload));
       expect(sentEvents.map((event: { type: string }) => event.type)).toEqual([
         'session.update',
+        'input_audio_buffer.clear',
         'input_audio_buffer.append',
         'input_audio_buffer.commit',
       ]);
-      expect(sentEvents[1].audio).toBe(Buffer.from('fake-user-audio').toString('base64'));
+      expect(sentEvents[2].audio).toBe(Buffer.from('fake-user-audio').toString('base64'));
 
       const messageHandlers = mockHandlers.message;
       const lastHandler = messageHandlers[messageHandlers.length - 1];

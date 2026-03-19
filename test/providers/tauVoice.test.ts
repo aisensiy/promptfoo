@@ -213,4 +213,55 @@ describe('TauVoiceProvider', () => {
     expect(originalProvider.cleanup).toHaveBeenCalledTimes(1);
     expect(originalProvider.config.instructions).toBe('Follow airline policy.');
   });
+
+  it('should seed initial messages before generating the first user turn', async () => {
+    userProvider = {
+      id: () => 'openai:chat:gpt-4.1-mini',
+      callApi: vi
+        .fn()
+        .mockResolvedValueOnce({ output: 'My traveler ID is mia_li_3668.' })
+        .mockResolvedValueOnce({ output: '###STOP###' }),
+    };
+
+    const provider = new TauVoiceProvider({
+      config: {
+        maxTurns: 2,
+        initialMessages: [
+          {
+            role: 'assistant',
+            content: 'Welcome to Promptfoo Air. What trip can I help with today?',
+          },
+        ],
+        _resolvedUserProvider: userProvider,
+        _resolvedTtsProvider: ttsProvider,
+      },
+    });
+
+    const result = await provider.callApi('ignored', {
+      originalProvider,
+      vars: { instructions: 'Share your traveler ID first.' },
+      prompt: {
+        raw: 'You are a voice airline assistant.',
+        display: 'You are a voice airline assistant.',
+        label: 'agent',
+      },
+      test: {
+        metadata: {},
+      },
+    });
+
+    const seededMessages = JSON.parse(vi.mocked(userProvider.callApi).mock.calls[0][0] as string);
+    expect(seededMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Welcome to Promptfoo Air. What trip can I help with today?',
+        }),
+      ]),
+    );
+    expect(result.output).toContain(
+      'Assistant: Welcome to Promptfoo Air. What trip can I help with today?',
+    );
+    expect(result.output).toContain('User: My traveler ID is mia_li_3668.');
+  });
 });

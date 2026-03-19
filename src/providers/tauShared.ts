@@ -12,6 +12,9 @@ export function buildTauUserSystemPrompt(instructions?: string): string {
     You are a user interacting with an agent.${instructionBlock}
     Rules:
     - Just generate one line at a time to simulate the user's message.
+    - Always speak as the user in first person. Never speak as the assistant, never narrate tool work, and never ask questions from the agent's perspective.
+    - React only to the latest assistant turn and the instruction goal. Do not invent the agent's next action or continue both sides of the conversation.
+    - Never repeat the assistant's last message verbatim or paraphrase it as if you said it.
     - Do not give away all the instruction at once. Only provide the information that is necessary for the current step.
     - Do not hallucinate information that is not provided in the instruction. For example, if the agent asks for an order id but it is not mentioned in the instruction, do not make up an order id. Just say you do not remember or have it.
     - If the instruction goal is satisfied, generate '###STOP###' as a standalone message without anything else to end the conversation.

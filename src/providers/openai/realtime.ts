@@ -134,6 +134,28 @@ interface ParsedRealtimePrompt {
   };
 }
 
+function normalizeRealtimeTools(tools: any[]): any[] {
+  return tools.map((tool) => {
+    if (
+      tool &&
+      typeof tool === 'object' &&
+      tool.type === 'function' &&
+      tool.function &&
+      typeof tool.function === 'object'
+    ) {
+      return {
+        type: 'function',
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters,
+        ...(tool.function.strict === undefined ? {} : { strict: tool.function.strict }),
+      };
+    }
+
+    return tool;
+  });
+}
+
 export class OpenAiRealtimeProvider extends OpenAiGenericProvider {
   static OPENAI_REALTIME_MODELS = OPENAI_REALTIME_MODELS;
 
@@ -327,7 +349,7 @@ export class OpenAiRealtimeProvider extends OpenAiGenericProvider {
     if (this.config.tools && this.config.tools.length > 0) {
       const loadedTools = await maybeLoadToolsFromExternalFile(this.config.tools);
       if (loadedTools !== undefined) {
-        responseEvent.response.tools = loadedTools;
+        responseEvent.response.tools = normalizeRealtimeTools(loadedTools);
       }
       responseEvent.response.tool_choice = this.config.tool_choice || 'auto';
     }
@@ -351,6 +373,10 @@ export class OpenAiRealtimeProvider extends OpenAiGenericProvider {
     previousItemId: string | null = null,
   ): Promise<void> {
     if (input.inputMode === 'audio' && input.audio?.data) {
+      // Reset buffered audio between synthesized turns on persistent sessions.
+      sendEvent({
+        type: 'input_audio_buffer.clear',
+      });
       sendEvent({
         type: 'input_audio_buffer.append',
         audio: input.audio.data,
@@ -484,7 +510,7 @@ export class OpenAiRealtimeProvider extends OpenAiGenericProvider {
     if (this.config.tools && this.config.tools.length > 0) {
       const loadedTools = await maybeLoadToolsFromExternalFile(this.config.tools);
       if (loadedTools !== undefined) {
-        body.tools = loadedTools;
+        body.tools = normalizeRealtimeTools(loadedTools);
       }
       // If tools are provided but no tool_choice, default to auto
       if (this.config.tool_choice === undefined) {
@@ -640,7 +666,7 @@ export class OpenAiRealtimeProvider extends OpenAiGenericProvider {
                 if (this.config.tools && this.config.tools.length > 0) {
                   const loadedTools = await maybeLoadToolsFromExternalFile(this.config.tools);
                   if (loadedTools !== undefined) {
-                    responseEvent.response.tools = loadedTools;
+                    responseEvent.response.tools = normalizeRealtimeTools(loadedTools);
                   }
                   if (Object.prototype.hasOwnProperty.call(this.config, 'tool_choice')) {
                     responseEvent.response.tool_choice = this.config.tool_choice;

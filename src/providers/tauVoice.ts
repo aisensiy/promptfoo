@@ -1,5 +1,6 @@
 import logger from '../logger';
 import { type GenAISpanContext, type GenAISpanResult, withGenAISpan } from '../tracing/genaiTracer';
+import { maybeLoadConfigFromExternalFile } from '../util/file';
 import invariant from '../util/invariant';
 import { safeJsonStringify } from '../util/json';
 import { getNunjucksEngine } from '../util/templates';
@@ -46,6 +47,7 @@ type TauVoiceConfig = {
   ttsProvider?: string | ProviderOptions | ApiProvider;
   instructions?: string;
   maxTurns?: number;
+  initialMessages?: TauMessage[] | string;
   voice?: OpenAiSpeechProvider['config']['voice'];
   ttsFormat?: 'wav' | 'pcm' | 'mp3' | 'opus' | 'aac' | 'flac';
   _resolvedUserProvider?: ApiProvider;
@@ -62,6 +64,7 @@ export class TauVoiceProvider implements ApiProvider {
   private readonly rawInstructions: string;
   private readonly resolvedUserProvider?: ApiProvider;
   private readonly resolvedTtsProvider?: ApiProvider;
+  private readonly configInitialMessages?: TauMessage[] | string;
   private readonly defaultVoice?: TauVoiceConfig['voice'];
   private readonly defaultTtsFormat?: TauVoiceConfig['ttsFormat'];
 
@@ -71,6 +74,7 @@ export class TauVoiceProvider implements ApiProvider {
     this.rawInstructions = config.instructions || '{{instructions}}';
     this.resolvedUserProvider = config._resolvedUserProvider;
     this.resolvedTtsProvider = config._resolvedTtsProvider;
+    this.configInitialMessages = config.initialMessages;
     this.defaultVoice = config.voice;
     this.defaultTtsFormat = config.ttsFormat;
   }
@@ -83,7 +87,7 @@ export class TauVoiceProvider implements ApiProvider {
     return new OpenAiSpeechProvider('gpt-4o-mini-tts', {
       config: {
         voice: this.defaultVoice || 'alloy',
-        format: this.defaultTtsFormat || 'wav',
+        format: this.defaultTtsFormat || 'pcm',
       },
     });
   }
@@ -110,6 +114,83 @@ export class TauVoiceProvider implements ApiProvider {
       sampleRate: audio.sampleRate,
       duration: audio.duration,
     };
+  }
+
+  private isValidMessage(message: unknown): message is TauMessage {
+    return (
+      !!message &&
+      typeof message === 'object' &&
+      typeof (message as TauMessage).content === 'string' &&
+      ((message as TauMessage).role === 'user' ||
+        (message as TauMessage).role === 'assistant' ||
+        (message as TauMessage).role === 'system')
+    );
+  }
+
+  private renderTemplate(template: unknown, vars: Record<string, any> | undefined): unknown {
+    if (typeof template !== 'string') {
+      return template;
+    }
+
+    try {
+      return getNunjucksEngine().renderString(template, vars || {});
+    } catch (error) {
+      logger.warn(
+        `[TauVoice] Failed to render template: ${template.substring(0, 100)}. Error: ${error instanceof Error ? error.message : error}`,
+      );
+      return template;
+    }
+  }
+
+  private resolveInitialMessages(initialMessages: TauMessage[] | string | undefined): TauMessage[] {
+    if (!initialMessages) {
+      return [];
+    }
+
+    if (Array.isArray(initialMessages)) {
+      return initialMessages;
+    }
+
+    if (!initialMessages.startsWith('file://')) {
+      logger.warn(
+        `[TauVoice] initialMessages is a string but could not be resolved: ${initialMessages.substring(0, 200)}`,
+      );
+      return [];
+    }
+
+    try {
+      const resolved = maybeLoadConfigFromExternalFile(initialMessages);
+      if (Array.isArray(resolved)) {
+        return resolved;
+      }
+      logger.warn(
+        `[TauVoice] Expected array of messages from file, got: ${typeof resolved}. Value: ${JSON.stringify(resolved).substring(0, 200)}`,
+      );
+    } catch (error) {
+      logger.warn(
+        `[TauVoice] Failed to load initialMessages from file: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
+    return [];
+  }
+
+  private getRenderedInitialMessages(vars: Record<string, any> | undefined): TauMessage[] {
+    return this.resolveInitialMessages(this.configInitialMessages)
+      .map((message) => ({
+        role: this.renderTemplate(message.role, vars),
+        content: this.renderTemplate(message.content, vars),
+      }))
+      .filter((message): message is TauMessage => {
+        if (this.isValidMessage(message)) {
+          return true;
+        }
+
+        logger.warn(
+          `[TauVoice] Invalid initial message, skipping: ${JSON.stringify(message).substring(0, 100)}`,
+        );
+        return false;
+      });
   }
 
   private buildTargetContext(
@@ -422,10 +503,10 @@ export class TauVoiceProvider implements ApiProvider {
         const ttsProvider = this.resolvedTtsProvider || this.buildDefaultTtsProvider();
         const ttsAudioProvider = createUnifiedAudioProvider(ttsProvider);
         const conversationId = `tau-voice-${crypto.randomUUID()}`;
-        const messages: TauMessage[] = [];
+        const instructions = getNunjucksEngine().renderString(this.rawInstructions, context.vars);
+        const messages = this.getRenderedInitialMessages(context.vars);
         const voiceTurns: TauVoiceTurn[] = [];
         const tokenUsage = createEmptyTokenUsage();
-        const instructions = getNunjucksEngine().renderString(this.rawInstructions, context.vars);
         const renderedTargetPrompt = getNunjucksEngine().renderString(
           context.prompt.raw,
           context.vars,

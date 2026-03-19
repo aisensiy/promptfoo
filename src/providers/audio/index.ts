@@ -63,6 +63,9 @@ export class UnifiedAudioProvider implements AudioRealtimeProvider {
     if (providerId.includes('openai') && providerId.includes('realtime')) {
       this.providerType = 'openai';
       this.audioFormats = ['pcm16', 'g711_ulaw', 'g711_alaw'];
+    } else if (providerId.includes('openai') && providerId.includes('speech')) {
+      this.providerType = 'unknown';
+      this.audioFormats = ['pcm16', 'wav'];
     } else if (providerId.includes('google') && providerId.includes('live')) {
       this.providerType = 'google';
       this.audioFormats = ['pcm16'];
