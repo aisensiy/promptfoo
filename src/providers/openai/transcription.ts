@@ -30,6 +30,38 @@ export interface OpenAiTranscriptionOptions extends OpenAiSharedOptions {
   speaker_labels?: string[];
 }
 
+function mapSpeakerLabel(
+  speaker: string | undefined,
+  speakerLabels: string[] | undefined,
+): string | undefined {
+  if (!speaker || !speakerLabels || speakerLabels.length === 0) {
+    return speaker;
+  }
+
+  const normalizedSpeaker = speaker.trim();
+  if (speakerLabels.includes(normalizedSpeaker)) {
+    return normalizedSpeaker;
+  }
+
+  const indexedMatch = normalizedSpeaker.match(/(?:speaker\s*)?(\d+)/i);
+  if (indexedMatch) {
+    const label = speakerLabels[Number(indexedMatch[1]) - 1];
+    if (label) {
+      return label;
+    }
+  }
+
+  const compactSpeaker = normalizedSpeaker.toUpperCase();
+  if (/^[A-Z]$/.test(compactSpeaker)) {
+    const label = speakerLabels[compactSpeaker.charCodeAt(0) - 65];
+    if (label) {
+      return label;
+    }
+  }
+
+  return normalizedSpeaker;
+}
+
 export class OpenAiTranscriptionProvider extends OpenAiGenericProvider {
   static OPENAI_TRANSCRIPTION_MODEL_NAMES = OPENAI_TRANSCRIPTION_MODELS.map((model) => model.id);
 
@@ -229,7 +261,7 @@ export class OpenAiTranscriptionProvider extends OpenAiGenericProvider {
         // Format diarized output with speaker labels
         output = data.segments
           .map((segment: any) => {
-            const speaker = segment.speaker || 'Unknown';
+            const speaker = mapSpeakerLabel(segment.speaker, config.speaker_labels) || 'Unknown';
             const text = segment.text || '';
             const start = segment.start?.toFixed(2) || '0.00';
             const end = segment.end?.toFixed(2) || '0.00';
@@ -268,7 +300,11 @@ export class OpenAiTranscriptionProvider extends OpenAiGenericProvider {
           ...(avgCompressionRatio === undefined ? {} : { avgCompressionRatio }),
           ...(avgNoSpeechProb === undefined ? {} : { avgNoSpeechProb }),
           ...(this.modelName.includes('diarize') && data.speakers
-            ? { speakers: data.speakers }
+            ? {
+                speakers: data.speakers.map(
+                  (speaker: string) => mapSpeakerLabel(speaker, config.speaker_labels) || speaker,
+                ),
+              }
             : {}),
         },
       };
