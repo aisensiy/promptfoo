@@ -272,6 +272,7 @@ export class UnifiedAudioProvider implements AudioRealtimeProvider {
         transcript: audioData.transcript || response.output,
         sampleRate: audioData.sampleRate || this.defaultSampleRate,
         channels: audioData.channels || 1,
+        ...(audioData.duration === undefined ? {} : { duration: audioData.duration }),
       };
     }
 

@@ -156,4 +156,29 @@ describe('OpenAiSpeechProvider', () => {
       },
     });
   });
+
+  it('should accept current gpt-4o-mini-tts snapshot aliases', () => {
+    const provider = new OpenAiSpeechProvider('gpt-4o-mini-tts-2025-12-15');
+
+    expect(provider.id()).toBe('openai:speech:gpt-4o-mini-tts-2025-12-15');
+  });
+
+  it('should estimate cost for current gpt-4o-mini-tts snapshot aliases', async () => {
+    vi.mocked(fetchWithProxy).mockResolvedValue(
+      new Response(Uint8Array.from([5, 6, 7, 8]), {
+        status: 200,
+      }),
+    );
+
+    const provider = new OpenAiSpeechProvider('gpt-4o-mini-tts-2025-12-15', {
+      config: {
+        format: 'pcm',
+      },
+    });
+
+    const result = await provider.callApi('Short utterance');
+
+    expect(result.cost).toBeCloseTo(0.0000138, 10);
+    expect(result.metadata?.costEstimated).toBe(true);
+  });
 });

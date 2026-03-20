@@ -11,14 +11,16 @@ const ajv = getAjv();
 // see https://platform.openai.com/docs/models
 export const OPENAI_CHAT_MODELS = [
   // TTS model (text input + audio output costs)
-  {
-    id: 'gpt-4o-mini-tts',
-    cost: {
-      input: 0.6 / 1e6,
-      output: 0 / 1e6,
-      audioOutput: 12 / 1e6,
-    },
-  },
+  ...['gpt-4o-mini-tts', 'gpt-4o-mini-tts-2025-12-15', 'gpt-4o-mini-tts-2025-03-20'].map(
+    (model) => ({
+      id: model,
+      cost: {
+        input: 0.6 / 1e6,
+        output: 0 / 1e6,
+        audioOutput: 12 / 1e6,
+      },
+    }),
+  ),
   // Search preview models
   ...['gpt-4o-search-preview', 'gpt-4o-search-preview-2025-03-11'].map((model) => ({
     id: model,
@@ -437,7 +439,37 @@ export const OPENAI_REALTIME_MODELS = [
     },
   },
   {
+    id: 'gpt-realtime-1.5',
+    type: 'chat',
+    cost: {
+      input: 4 / 1e6,
+      output: 16 / 1e6,
+      audioInput: 32 / 1e6,
+      audioOutput: 64 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-realtime-2025-08-28',
+    type: 'chat',
+    cost: {
+      input: 4 / 1e6,
+      output: 16 / 1e6,
+      audioInput: 32 / 1e6,
+      audioOutput: 64 / 1e6,
+    },
+  },
+  {
     id: 'gpt-4o-realtime-preview',
+    type: 'chat',
+    cost: {
+      input: 5 / 1e6,
+      output: 20 / 1e6,
+      audioInput: 40 / 1e6,
+      audioOutput: 80 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-4o-realtime-preview-2025-06-03',
     type: 'chat',
     cost: {
       input: 5 / 1e6,
@@ -499,7 +531,78 @@ export const OPENAI_REALTIME_MODELS = [
     },
   },
   {
+    id: 'gpt-realtime-mini-2025-12-15',
+    type: 'chat',
+    cost: {
+      input: 0.6 / 1e6,
+      output: 2.4 / 1e6,
+      audioInput: 10 / 1e6,
+      audioOutput: 20 / 1e6,
+    },
+  },
+  {
     id: 'gpt-realtime-mini-2025-10-06',
+    type: 'chat',
+    cost: {
+      input: 0.6 / 1e6,
+      output: 2.4 / 1e6,
+      audioInput: 10 / 1e6,
+      audioOutput: 20 / 1e6,
+    },
+  },
+  // gpt-audio models
+  {
+    id: 'gpt-audio',
+    type: 'chat',
+    cost: {
+      input: 2.5 / 1e6,
+      output: 10 / 1e6,
+      audioInput: 32 / 1e6,
+      audioOutput: 64 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-audio-1.5',
+    type: 'chat',
+    cost: {
+      input: 2.5 / 1e6,
+      output: 10 / 1e6,
+      audioInput: 32 / 1e6,
+      audioOutput: 64 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-audio-2025-08-28',
+    type: 'chat',
+    cost: {
+      input: 2.5 / 1e6,
+      output: 10 / 1e6,
+      audioInput: 32 / 1e6,
+      audioOutput: 64 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-audio-mini',
+    type: 'chat',
+    cost: {
+      input: 0.6 / 1e6,
+      output: 2.4 / 1e6,
+      audioInput: 10 / 1e6,
+      audioOutput: 20 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-audio-mini-2025-12-15',
+    type: 'chat',
+    cost: {
+      input: 0.6 / 1e6,
+      output: 2.4 / 1e6,
+      audioInput: 10 / 1e6,
+      audioOutput: 20 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-audio-mini-2025-10-06',
     type: 'chat',
     cost: {
       input: 0.6 / 1e6,
@@ -522,6 +625,22 @@ export const OPENAI_TRANSCRIPTION_MODELS = [
   },
   {
     id: 'gpt-4o-mini-transcribe',
+    cost: {
+      input: 0.3 / 1e6,
+      output: 1.2 / 1e6,
+      audioInput: 3 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-4o-mini-transcribe-2025-12-15',
+    cost: {
+      input: 0.3 / 1e6,
+      output: 1.2 / 1e6,
+      audioInput: 3 / 1e6,
+    },
+  },
+  {
+    id: 'gpt-4o-mini-transcribe-2025-03-20',
     cost: {
       input: 0.3 / 1e6,
       output: 1.2 / 1e6,

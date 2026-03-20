@@ -38,12 +38,20 @@ export interface OpenAiSpeechOptions extends OpenAiSharedOptions {
   instructions?: string;
 }
 
-const KNOWN_OPENAI_SPEECH_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
+const KNOWN_OPENAI_SPEECH_MODELS = [
+  'gpt-4o-mini-tts',
+  'gpt-4o-mini-tts-2025-12-15',
+  'gpt-4o-mini-tts-2025-03-20',
+  'tts-1',
+  'tts-1-hd',
+];
 const DEFAULT_AUDIO_SAMPLE_RATE = 24000;
 const ESTIMATED_AUDIO_OUTPUT_TOKENS_PER_SECOND: Record<string, number> = {
   // OpenAI pricing lists gpt-4o-mini-tts at roughly $0.015/minute, which is about 20.83
   // audio output tokens per second at the published $12 / 1M audio-token rate.
   'gpt-4o-mini-tts': 20.8333333333,
+  'gpt-4o-mini-tts-2025-12-15': 20.8333333333,
+  'gpt-4o-mini-tts-2025-03-20': 20.8333333333,
 };
 
 function normalizeAudioFormat(

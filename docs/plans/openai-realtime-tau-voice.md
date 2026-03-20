@@ -93,3 +93,4 @@ Build a local, eval-focused voice simulation harness in promptfoo that is inspir
 - Fixed direct realtime finalization to omit audio metadata when usage reports audio tokens but no audio bytes were received, instead of emitting a null-data audio payload.
 - Added Tau Voice negative coverage for malformed and invalid `initialMessages`, plus a realtime regression test for the missing-audio-bytes case.
 - Re-ran focused Vitest coverage, typecheck, Biome, and a live end-to-end voice eval after the audit pass.
+- Synced OpenAI model allowlists and pricing coverage with current docs/SDK aliases for realtime, audio, TTS, and mini-transcribe snapshots, and preserved audio `duration` through the unified audio wrapper so Tau Voice metadata keeps that artifact.

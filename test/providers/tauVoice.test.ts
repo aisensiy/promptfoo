@@ -548,6 +548,8 @@ describe('TauVoiceProvider', () => {
         audioOutput: 10,
       }),
     );
+    expect(result.metadata?.voiceTurns[0].user.audio?.duration).toBe(0.5);
+    expect(result.metadata?.voiceTurns[0].assistant.audio?.duration).toBe(0.5);
     expect(result.metadata?.voiceTurns[0].assistant.functionCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

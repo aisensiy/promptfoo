@@ -6,6 +6,8 @@ import {
   formatOpenAiError,
   getTokenUsage,
   OPENAI_CHAT_MODELS,
+  OPENAI_REALTIME_MODELS,
+  OPENAI_TRANSCRIPTION_MODELS,
   validateFunctionCall,
 } from '../../../src/providers/openai/util';
 
@@ -162,7 +164,32 @@ describe('calculateOpenAICost', () => {
 
   it('should calculate cost correctly for gpt-realtime', () => {
     const cost = calculateOpenAICost('gpt-realtime', {}, 1000, 500);
-    expect(cost).toBeCloseTo((1000 * 32 + 500 * 64) / 1e6, 6);
+    expect(cost).toBeCloseTo((1000 * 4 + 500 * 16) / 1e6, 6);
+  });
+
+  it('should recognize current realtime/audio aliases and snapshots', () => {
+    const modelIds = OPENAI_REALTIME_MODELS.map((model) => model.id);
+
+    expect(modelIds).toEqual(
+      expect.arrayContaining([
+        'gpt-realtime-2025-08-28',
+        'gpt-realtime-mini-2025-12-15',
+        'gpt-audio',
+        'gpt-audio-mini',
+        'gpt-audio-mini-2025-12-15',
+      ]),
+    );
+  });
+
+  it('should recognize current mini-transcribe snapshots', () => {
+    const modelIds = OPENAI_TRANSCRIPTION_MODELS.map((model) => model.id);
+
+    expect(modelIds).toEqual(
+      expect.arrayContaining([
+        'gpt-4o-mini-transcribe-2025-12-15',
+        'gpt-4o-mini-transcribe-2025-03-20',
+      ]),
+    );
   });
 
   it('should calculate cost correctly with audio tokens', () => {
@@ -368,7 +395,7 @@ describe('calculateOpenAICost', () => {
 
   it('should calculate audio token costs for gpt-realtime', () => {
     const cost = calculateOpenAICost('gpt-realtime', {}, 1000, 500, 200, 100);
-    const expectedCost = (1000 * 32 + 500 * 64 + 200 * 32 + 100 * 64) / 1e6;
+    const expectedCost = (1000 * 4 + 500 * 16 + 200 * 32 + 100 * 64) / 1e6;
     expect(cost).toBeCloseTo(expectedCost, 6);
   });
 
