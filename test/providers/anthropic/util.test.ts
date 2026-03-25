@@ -172,6 +172,16 @@ describe('Anthropic utilities', () => {
       expect(cost).toBe(5200); // (0.02 * 250,000) + (0.02 * 10,000) = 5000 + 200 = 5200
     });
 
+    it('should respect separate inputCost and outputCost overrides for tiered Sonnet models', () => {
+      const cost = calculateAnthropicCost(
+        'claude-sonnet-4-5-20250929',
+        { inputCost: 0.01, outputCost: 0.03 },
+        250_000,
+        10_000,
+      );
+      expect(cost).toBe(2800); // (0.01 * 250,000) + (0.03 * 10,000) = 2500 + 300 = 2800
+    });
+
     it('should return undefined for missing model', () => {
       const cost = calculateAnthropicCost('non-existent-model', { cost: 0.015 });
 
