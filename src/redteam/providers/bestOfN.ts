@@ -114,6 +114,16 @@ export default class BestOfNProvider implements ApiProvider {
             return;
           }
 
+          if (typeof candidatePrompt !== 'string') {
+            logger.warn('[Best-of-N] Skipping non-string candidate prompt from remote generation');
+            return;
+          }
+
+          if (candidatePrompt.startsWith('file://')) {
+            logger.warn('[Best-of-N] Skipping unsafe file:// candidate prompt from remote generation');
+            return;
+          }
+
           const targetVars = {
             ...context.vars,
             [this.config.injectVar]: candidatePrompt,

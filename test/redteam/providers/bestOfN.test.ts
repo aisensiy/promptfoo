@@ -129,6 +129,24 @@ describe('BestOfNProvider - Abort Signal Handling', () => {
     // Non-AbortError should be caught and returned as an error response
     expect(result.error).toContain('Network error');
   });
+
+  it('should skip unsafe file:// candidate prompts from remote generation', async () => {
+    const provider = new BestOfNProvider({
+      injectVar: 'input',
+    });
+    const context = createMockContext(mockTargetProvider);
+
+    mockFetchWithProxy.mockResolvedValue({
+      json: async () => ({
+        modifiedPrompts: ['file://etc/passwd', 'candidate 2'],
+      }),
+    });
+
+    await provider.callApi('test prompt', context);
+
+    expect(mockCallApi).toHaveBeenCalledTimes(1);
+    expect(mockCallApi).toHaveBeenCalledWith('candidate 2', expect.any(Object), undefined);
+  });
 });
 
 describe('BestOfNProvider - Config Serialization', () => {
