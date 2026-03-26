@@ -130,7 +130,11 @@ describe('BestOfNProvider - Abort Signal Handling', () => {
     expect(result.error).toContain('Network error');
   });
 
-  it('should skip unsafe file:// candidate prompts from remote generation', async () => {
+  it.each([
+    'file://etc/passwd',
+    ' FILE://etc/passwd',
+    '\tFiLe://etc/passwd',
+  ])('should skip unsafe file:// candidate prompt from remote generation: %s', async (unsafePrompt) => {
     const provider = new BestOfNProvider({
       injectVar: 'input',
     });
@@ -138,7 +142,7 @@ describe('BestOfNProvider - Abort Signal Handling', () => {
 
     mockFetchWithProxy.mockResolvedValue({
       json: async () => ({
-        modifiedPrompts: ['file://etc/passwd', 'candidate 2'],
+        modifiedPrompts: [unsafePrompt, 'candidate 2'],
       }),
     });
 

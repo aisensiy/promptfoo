@@ -115,12 +115,24 @@ export default class BestOfNProvider implements ApiProvider {
           }
 
           if (typeof candidatePrompt !== 'string') {
-            logger.warn('[Best-of-N] Skipping non-string candidate prompt from remote generation');
+            logger.warn('[Best-of-N] Skipping non-string candidate prompt from remote generation', {
+              component: 'Best-of-N',
+              event: 'SkippingCandidatePrompt',
+              reason: 'non-string',
+              candidatePromptType: typeof candidatePrompt,
+            });
             return;
           }
 
-          if (candidatePrompt.startsWith('file://')) {
-            logger.warn('[Best-of-N] Skipping unsafe file:// candidate prompt from remote generation');
+          if (/^\s*file:\/\//i.test(candidatePrompt)) {
+            logger.warn(
+              '[Best-of-N] Skipping unsafe file:// candidate prompt from remote generation',
+              {
+                component: 'Best-of-N',
+                event: 'SkippingCandidatePrompt',
+                reason: 'unsafe-file-protocol',
+              },
+            );
             return;
           }
 
