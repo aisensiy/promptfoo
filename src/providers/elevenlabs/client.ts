@@ -9,6 +9,10 @@ export interface ElevenLabsClientConfig {
   retries?: number;
 }
 
+interface ElevenLabsPostOptions extends RequestInit {
+  allowRetriesForNonIdempotent?: boolean;
+}
+
 /**
  * HTTP client for ElevenLabs API with automatic retries, rate limiting, and error handling
  */
@@ -22,13 +26,13 @@ export class ElevenLabsClient {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl || 'https://api.elevenlabs.io/v1';
     this.timeout = config.timeout || 120000; // 2 minutes default
-    this.retries = config.retries || 3;
+    this.retries = config.retries ?? 3;
   }
 
   /**
    * Make a POST request to the ElevenLabs API
    */
-  async post<T>(endpoint: string, body: any, options?: RequestInit): Promise<T> {
+  async post<T>(endpoint: string, body: any, options?: ElevenLabsPostOptions): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
     logger.debug('[ElevenLabs Client] POST request', {
@@ -40,23 +44,25 @@ export class ElevenLabsClient {
 
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt < this.retries; attempt++) {
+    const { headers: optionsHeaders, allowRetriesForNonIdempotent, ...restOptions } = options || {};
+    const headers = new Headers(optionsHeaders || {});
+    const hasIdempotencyKey = headers.has('Idempotency-Key') || headers.has('idempotency-key');
+    const effectiveRetries = allowRetriesForNonIdempotent || hasIdempotencyKey ? this.retries : 0;
+
+    for (let attempt = 0; attempt <= effectiveRetries; attempt++) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-        const { headers: optionsHeaders, ...restOptions } = options || {};
-
         // Handle FormData for multipart uploads
         const isFormData = body instanceof FormData;
-        const headers: HeadersInit = {
-          'xi-api-key': this.apiKey,
-          ...(optionsHeaders || {}),
-        };
+        headers.set('xi-api-key', this.apiKey);
 
         // Don't set Content-Type for FormData (fetch sets it automatically with boundary)
-        if (!isFormData) {
-          (headers as Record<string, string>)['Content-Type'] = 'application/json';
+        if (isFormData) {
+          headers.delete('Content-Type');
+        } else {
+          headers.set('Content-Type', 'application/json');
         }
 
         const response = await fetchWithProxy(url, {
@@ -70,7 +76,7 @@ export class ElevenLabsClient {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          await this.handleErrorResponse(response, attempt);
+          await this.handleErrorResponse(response, attempt, effectiveRetries);
           continue;
         }
 
@@ -99,10 +105,10 @@ export class ElevenLabsClient {
           throw error;
         }
 
-        if (attempt < this.retries - 1) {
+        if (attempt < effectiveRetries) {
           const backoffMs = Math.pow(2, attempt) * 1000;
           logger.debug(
-            `[ElevenLabs Client] Retry ${attempt + 1}/${this.retries} after ${backoffMs}ms`,
+            `[ElevenLabs Client] Retry ${attempt + 1}/${effectiveRetries} after ${backoffMs}ms`,
           );
           await new Promise((resolve) => setTimeout(resolve, backoffMs));
         }
@@ -137,7 +143,7 @@ export class ElevenLabsClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        await this.handleErrorResponse(response, 0);
+        await this.handleErrorResponse(response, 0, 0);
       }
 
       return (await response.json()) as T;
@@ -172,7 +178,7 @@ export class ElevenLabsClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        await this.handleErrorResponse(response, 0);
+        await this.handleErrorResponse(response, 0, 0);
       }
     } catch (error) {
       clearTimeout(timeoutId);
@@ -227,7 +233,7 @@ export class ElevenLabsClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        await this.handleErrorResponse(response, 0);
+        await this.handleErrorResponse(response, 0, 0);
       }
 
       // Check if response is JSON or binary
@@ -275,7 +281,11 @@ export class ElevenLabsClient {
   /**
    * Handle error responses from the API
    */
-  private async handleErrorResponse(response: Response, attempt: number): Promise<void> {
+  private async handleErrorResponse(
+    response: Response,
+    attempt: number,
+    retries: number,
+  ): Promise<void> {
     const errorText = await response.text();
     let errorData: any;
 
@@ -301,7 +311,7 @@ export class ElevenLabsClient {
     // Handle rate limiting
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After');
-      if (retryAfter && attempt < this.retries - 1) {
+      if (retryAfter && attempt < retries) {
         const waitMs = parseInt(retryAfter) * 1000;
         logger.debug(`[ElevenLabs Client] Rate limited, waiting ${waitMs}ms`);
         await new Promise((resolve) => setTimeout(resolve, waitMs));
