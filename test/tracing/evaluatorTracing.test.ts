@@ -259,5 +259,27 @@ describe('evaluatorTracing', () => {
 
       expect(mockStartOTLPReceiver).toHaveBeenCalledWith(4318, '0.0.0.0', ['json', 'protobuf']);
     });
+
+    it('should default acceptFormats when only invalid values are configured', async () => {
+      const testSuite = {
+        providers: [],
+        prompts: [],
+        tracing: {
+          enabled: true,
+          otlp: {
+            http: {
+              enabled: true,
+              port: 4318,
+              host: '0.0.0.0',
+              acceptFormats: ['application/json', 'application/x-protobuf'],
+            },
+          },
+        },
+      } as unknown as TestSuite;
+
+      await startOtlpReceiverIfNeeded(testSuite);
+
+      expect(mockStartOTLPReceiver).toHaveBeenCalledWith(4318, '0.0.0.0', ['json', 'protobuf']);
+    });
   });
 });
