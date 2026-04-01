@@ -314,9 +314,13 @@ function hasRefusalLanguage(normalizedLowerResponse: string): boolean {
   );
 }
 
-export function isEmptyResponse(response: string | null | undefined): boolean {
-  if (typeof response !== 'string') {
+export function isEmptyResponse(response: unknown): boolean {
+  if (response === null || response === undefined) {
     return true;
+  }
+
+  if (typeof response !== 'string') {
+    return false;
   }
 
   const lowerResponse = response.trim().toLowerCase();

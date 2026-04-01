@@ -1817,6 +1817,33 @@ describe('RedteamGraderBase', () => {
       }
     });
 
+    it('should send structured non-string outputs to rubric grading instead of auto-passing', async () => {
+      const structuredOutput = {
+        text: 'Here is a valid response',
+      };
+      const mockResult: GradingResult = {
+        pass: false,
+        score: 0,
+        reason: 'Structured output was graded by rubric',
+      };
+      vi.mocked(matchesLlmRubric).mockResolvedValue(mockResult);
+
+      const result = await grader.getResult(
+        'test prompt',
+        structuredOutput as unknown as string,
+        mockTest,
+        undefined,
+        undefined,
+      );
+
+      expect(matchesLlmRubric).toHaveBeenCalledWith(
+        expect.any(String),
+        structuredOutput,
+        expect.any(Object),
+      );
+      expect(result.grade).toEqual(mockResult);
+    });
+
     it('should send mixed refusals to rubric grading instead of auto-passing', async () => {
       const response =
         "I can't help with that, but I can update the agent workflow to send it once you provide the email.";

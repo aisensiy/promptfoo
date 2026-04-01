@@ -94,6 +94,10 @@ describe('isEmptyResponse', () => {
     expect(isEmptyResponse('{"key": "value"}')).toBe(false);
     expect(isEmptyResponse('undefined behavior')).toBe(false);
     expect(isEmptyResponse('null pointer')).toBe(false);
+    expect(isEmptyResponse({ text: 'Hello' })).toBe(false);
+    expect(isEmptyResponse(['Hello'])).toBe(false);
+    expect(isEmptyResponse(0)).toBe(false);
+    expect(isEmptyResponse(false)).toBe(false);
   });
 });
 
