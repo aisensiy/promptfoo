@@ -1,3 +1,7 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RedteamGoatProvider from '../../../src/redteam/providers/goat';
 import { getRemoteGenerationUrl } from '../../../src/redteam/remoteGeneration';
@@ -38,6 +42,7 @@ vi.mock('../../../src/util/server', async (importOriginal) => {
 
 describe('RedteamGoatProvider', () => {
   let mockFetch: Mock;
+  let tempDir: string;
 
   // Helper function to create a mock target provider
   const createMockTargetProvider = (
@@ -71,7 +76,14 @@ describe('RedteamGoatProvider', () => {
     test: testConfig,
   });
 
+  const createTempFile = (name: string, content: string): string => {
+    const filePath = path.join(tempDir, name);
+    fs.writeFileSync(filePath, content, 'utf8');
+    return filePath;
+  };
+
   beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'promptfoo-goat-provider-'));
     mockFetch = vi.fn().mockImplementation(async function () {
       return {
         json: async () => ({
@@ -88,6 +100,7 @@ describe('RedteamGoatProvider', () => {
   });
 
   afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
     vi.clearAllMocks();
   });
 
@@ -172,10 +185,13 @@ describe('RedteamGoatProvider', () => {
       injectVar: 'goal',
       maxTurns: 1,
     });
+    const fileContent = 'local secret from attacker-controlled file var';
+    const filePath = createTempFile('attacker-goal.txt', fileContent);
+    const fileUrl = `file://${filePath}`;
 
     mockFetch.mockResolvedValue({
       json: async () => ({
-        message: { role: 'user', content: 'file://definitely-not-a-real-file.txt' },
+        message: { role: 'user', content: fileUrl },
       }),
       ok: true,
     });
@@ -187,10 +203,74 @@ describe('RedteamGoatProvider', () => {
     await provider.callApi('test prompt', context);
 
     expect(targetProvider.callApi).toHaveBeenCalledWith(
-      expect.stringContaining('file://definitely-not-a-real-file.txt'),
+      expect.stringContaining(fileUrl),
       context,
       undefined,
     );
+    expect(targetProvider.callApi).toHaveBeenCalledWith(
+      expect.not.stringContaining(fileContent),
+      context,
+      undefined,
+    );
+  });
+
+  it('should not dereference multi-input attacker vars and should preserve JSON escaping', async () => {
+    const provider = new RedteamGoatProvider({
+      injectVar: 'goal',
+      maxTurns: 1,
+      stateful: true,
+      inputs: {
+        email: 'The user email',
+        notes: 'Additional attacker notes',
+      },
+    });
+
+    const fileContent = 'multi-input local secret';
+    const filePath = createTempFile('multi-input-email.txt', fileContent);
+    const fileUrl = `file://${filePath}`;
+    const packageRef = 'package:@promptfoo/fake:getSecret';
+    const attackerGoal = 'hello "quoted"\nnext line';
+
+    mockFetch.mockResolvedValue({
+      json: async () => ({
+        message: {
+          role: 'user',
+          content: JSON.stringify({
+            prompt: attackerGoal,
+            email: fileUrl,
+            notes: packageRef,
+          }),
+        },
+      }),
+      ok: true,
+    });
+
+    const targetProvider = createMockTargetProvider();
+    const context = createMockContext(
+      targetProvider,
+      { goal: 'initial goal', email: 'safe@example.com', notes: 'safe notes' },
+      undefined,
+    );
+    context.prompt = {
+      raw: JSON.stringify({
+        role: 'user',
+        content: 'Goal={{goal}}\nEmail={{email}}\nNotes={{notes}}',
+      }),
+      label: 'test',
+    };
+
+    await provider.callApi('test prompt', context);
+
+    expect(targetProvider.callApi).toHaveBeenCalledTimes(1);
+    const renderedPrompt = (targetProvider.callApi as Mock).mock.calls[0][0] as string;
+    const parsedPrompt = JSON.parse(renderedPrompt);
+    expect(parsedPrompt).toEqual({
+      role: 'user',
+      content: `Goal=${attackerGoal}\nEmail=${fileUrl}\nNotes=${packageRef}`,
+    });
+    expect(renderedPrompt).toContain(fileUrl);
+    expect(renderedPrompt).toContain(packageRef);
+    expect(renderedPrompt).not.toContain(fileContent);
   });
 
   it('should pass excludeTargetOutputFromAgenticAttackGeneration through config', async () => {

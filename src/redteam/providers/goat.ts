@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 import chalk from 'chalk';
 import dedent from 'dedent';
 import { VERSION } from '../../constants';
@@ -103,7 +105,7 @@ interface GoatProviderResponse extends ProviderResponse {
 }
 
 export default class GoatProvider implements ApiProvider {
-  private static readonly INJECT_VAR_PLACEHOLDER = '__PROMPTFOO_GOAT_INJECT_VAR__';
+  private static readonly ATTACKER_VAR_PLACEHOLDER_PREFIX = '__PROMPTFOO_GOAT_ATTACKER_VAR__';
   readonly config: GoatConfig;
   private readonly nunjucks: any;
   private readonly perTurnLayers: LayerConfig[];
@@ -160,6 +162,73 @@ export default class GoatProvider implements ApiProvider {
       perTurnLayers: this.perTurnLayers.map((l) => (typeof l === 'string' ? l : l.id)),
       inputs: options.inputs,
     });
+  }
+
+  private static buildAttackerVarPlaceholders(attackerVars: Record<string, string>): {
+    placeholderByVarName: Record<string, string>;
+    valueByPlaceholder: Record<string, string>;
+  } {
+    const placeholderByVarName: Record<string, string> = {};
+    const valueByPlaceholder: Record<string, string> = {};
+    const attackerValues = Object.values(attackerVars);
+
+    for (const [varName, value] of Object.entries(attackerVars)) {
+      let placeholder = '';
+      do {
+        placeholder = `${GoatProvider.ATTACKER_VAR_PLACEHOLDER_PREFIX}_${randomUUID()}__`;
+      } while (
+        attackerValues.some((attackerValue) => attackerValue.includes(placeholder)) ||
+        placeholder in valueByPlaceholder
+      );
+
+      placeholderByVarName[varName] = placeholder;
+      valueByPlaceholder[placeholder] = value;
+    }
+
+    return { placeholderByVarName, valueByPlaceholder };
+  }
+
+  private static restoreAttackerVarPlaceholders(
+    renderedPromptTemplate: string,
+    valueByPlaceholder: Record<string, string>,
+  ): string {
+    const placeholders = Object.entries(valueByPlaceholder);
+    if (placeholders.length === 0) {
+      return renderedPromptTemplate;
+    }
+    if (!placeholders.some(([placeholder]) => renderedPromptTemplate.includes(placeholder))) {
+      return renderedPromptTemplate;
+    }
+
+    const restoreInString = (value: string): string =>
+      placeholders.reduce(
+        (currentValue, [placeholder, originalValue]) =>
+          currentValue.split(placeholder).join(originalValue),
+        value,
+      );
+
+    try {
+      const parsedPrompt = JSON.parse(renderedPromptTemplate);
+      const restoreInJsonValue = (value: unknown): unknown => {
+        if (typeof value === 'string') {
+          return restoreInString(value);
+        }
+        if (Array.isArray(value)) {
+          return value.map((item) => restoreInJsonValue(item));
+        }
+        if (typeof value === 'object' && value !== null) {
+          return Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [key, restoreInJsonValue(item)]),
+          );
+        }
+        return value;
+      };
+
+      // Re-stringify parsed JSON so attacker payloads are escaped for JSON/chat prompts.
+      return JSON.stringify(restoreInJsonValue(parsedPrompt), null, 2);
+    } catch {
+      return restoreInString(renderedPromptTemplate);
+    }
   }
 
   async callApi(
@@ -409,11 +478,17 @@ export default class GoatProvider implements ApiProvider {
           }
         }
 
-        // Build target vars - handle multi-input mode
+        const attackerVars = {
+          [this.config.injectVar]: processedMessage,
+          ...(currentInputVars || {}),
+        };
+        const { placeholderByVarName, valueByPlaceholder } =
+          GoatProvider.buildAttackerVarPlaceholders(attackerVars);
+
+        // Build target vars with attacker-controlled values quarantined behind placeholders.
         const targetVars: Record<string, VarValue> = {
           ...context.vars,
-          [this.config.injectVar]: GoatProvider.INJECT_VAR_PLACEHOLDER,
-          ...(currentInputVars || {}),
+          ...placeholderByVarName,
         };
 
         const renderedAttackerPromptTemplate = await renderPrompt(
@@ -421,11 +496,12 @@ export default class GoatProvider implements ApiProvider {
           targetVars,
           context.filters,
           targetProvider,
-          [this.config.injectVar], // Skip template rendering for injection variable to prevent double-evaluation
+          Object.keys(placeholderByVarName),
         );
-        const renderedAttackerPrompt = renderedAttackerPromptTemplate
-          .split(GoatProvider.INJECT_VAR_PLACEHOLDER)
-          .join(processedMessage);
+        const renderedAttackerPrompt = GoatProvider.restoreAttackerVarPlaceholders(
+          renderedAttackerPromptTemplate,
+          valueByPlaceholder,
+        );
 
         messages.push({
           role: attackerMessage.role,
