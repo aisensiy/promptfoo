@@ -168,7 +168,7 @@ const allProviderOptions = [
   {
     value: 'openai',
     label: 'OpenAI',
-    description: 'GPT-5.2, GPT-5.1, and GPT-5 models',
+    description: 'GPT-5.4, GPT-5.4 Mini, GPT-5.4 Nano and older models',
     tag: 'providers',
     recommended: true,
   },
@@ -540,7 +540,7 @@ export default function ProviderTypeSelector({
     } else if (value === 'openai') {
       setProvider(
         {
-          id: 'openai:gpt-5.2',
+          id: 'openai:gpt-5.4',
           config: {},
           label: currentLabel,
         },

@@ -11,14 +11,14 @@ const ajv = getAjv();
 // see https://platform.openai.com/docs/models
 export const OPENAI_CHAT_MODELS = [
   // TTS model (text input + audio output costs)
-  {
-    id: 'gpt-4o-mini-tts',
+  ...['gpt-4o-mini-tts', 'gpt-4o-mini-tts-2025-12-15'].map((model) => ({
+    id: model,
     cost: {
       input: 0.6 / 1e6,
       output: 0 / 1e6,
       audioOutput: 12 / 1e6,
     },
-  },
+  })),
   // Search preview models
   ...['gpt-4o-search-preview', 'gpt-4o-search-preview-2025-03-11'].map((model) => ({
     id: model,
@@ -377,7 +377,16 @@ export const OPENAI_CHAT_MODELS = [
       audioOutput: 80 / 1e6,
     },
   })),
-  ...['gpt-audio-mini', 'gpt-audio-mini-2025-10-06'].map((model) => ({
+  {
+    id: 'gpt-audio-1.5',
+    cost: {
+      input: 2.5 / 1e6,
+      output: 10 / 1e6,
+      audioInput: 32 / 1e6,
+      audioOutput: 64 / 1e6,
+    },
+  },
+  ...['gpt-audio-mini', 'gpt-audio-mini-2025-12-15', 'gpt-audio-mini-2025-10-06'].map((model) => ({
     id: model,
     cost: {
       input: 0.6 / 1e6,
@@ -425,28 +434,18 @@ export const OPENAI_COMPLETION_MODELS = [
 
 // Realtime models for WebSocket API
 export const OPENAI_REALTIME_MODELS = [
-  // gpt-realtime models (latest)
-  {
-    id: 'gpt-realtime',
-    type: 'chat',
-    cost: {
-      input: 32 / 1e6,
-      output: 64 / 1e6,
-      audioInput: 32 / 1e6,
-      audioOutput: 64 / 1e6,
-    },
-  },
-  // gpt-4o realtime models
-  {
-    id: 'gpt-realtime',
+  // GA gpt-realtime models
+  ...['gpt-realtime', 'gpt-realtime-2025-08-28', 'gpt-realtime-1.5'].map((model) => ({
+    id: model,
     type: 'chat',
     cost: {
       input: 4 / 1e6,
       output: 16 / 1e6,
-      audioInput: 40 / 1e6,
-      audioOutput: 80 / 1e6,
+      audioInput: 32 / 1e6,
+      audioOutput: 64 / 1e6,
     },
-  },
+  })),
+  // Legacy gpt-4o realtime preview models
   {
     id: 'gpt-4o-realtime-preview',
     type: 'chat',
@@ -499,26 +498,18 @@ export const OPENAI_REALTIME_MODELS = [
     },
   },
   // gpt-realtime-mini models
-  {
-    id: 'gpt-realtime-mini',
-    type: 'chat',
-    cost: {
-      input: 0.6 / 1e6,
-      output: 2.4 / 1e6,
-      audioInput: 10 / 1e6,
-      audioOutput: 20 / 1e6,
-    },
-  },
-  {
-    id: 'gpt-realtime-mini-2025-10-06',
-    type: 'chat',
-    cost: {
-      input: 0.6 / 1e6,
-      output: 2.4 / 1e6,
-      audioInput: 10 / 1e6,
-      audioOutput: 20 / 1e6,
-    },
-  },
+  ...['gpt-realtime-mini', 'gpt-realtime-mini-2025-12-15', 'gpt-realtime-mini-2025-10-06'].map(
+    (model) => ({
+      id: model,
+      type: 'chat',
+      cost: {
+        input: 0.6 / 1e6,
+        output: 2.4 / 1e6,
+        audioInput: 10 / 1e6,
+        audioOutput: 20 / 1e6,
+      },
+    }),
+  ),
 ];
 
 // Transcription models for /v1/audio/transcriptions endpoint
@@ -537,9 +528,21 @@ export const OPENAI_TRANSCRIPTION_MODELS = [
     },
   },
   {
+    id: 'gpt-4o-mini-transcribe-2025-12-15',
+    cost: {
+      perMinute: 0.003,
+    },
+  },
+  {
     id: 'gpt-4o-transcribe-diarize',
     cost: {
       perMinute: 0.006, // $0.006 per minute (same as base gpt-4o-transcribe)
+    },
+  },
+  {
+    id: 'gpt-4o-transcribe-diarize-2025-10-15',
+    cost: {
+      perMinute: 0.006,
     },
   },
   {
