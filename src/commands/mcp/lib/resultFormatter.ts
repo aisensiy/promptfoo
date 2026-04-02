@@ -112,7 +112,7 @@ function formatSingleResult(
 
   // Format output safely
   let outputText: string | null = null;
-  if (result.response?.output) {
+  if (result.response?.output !== undefined && result.response.output !== null) {
     outputText =
       typeof result.response.output === 'string'
         ? truncateText(result.response.output, maxTextLength)

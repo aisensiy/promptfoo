@@ -190,6 +190,44 @@ describe('runEvaluation tool', () => {
       expect(result.results[0].response.output!.length).toBeLessThan(300);
       expect(result.results[0].response.output).toContain('...');
     });
+
+    it('should preserve falsy response outputs', async () => {
+      const { formatEvaluationResults } = await import(
+        '../../../../src/commands/mcp/lib/resultFormatter'
+      );
+
+      const mockSummary = {
+        version: 3,
+        stats: { successes: 2, failures: 0, errors: 0 },
+        results: [
+          {
+            testCase: { description: 'false output', assert: [] },
+            vars: {},
+            prompt: { label: 'test', raw: 'prompt' },
+            provider: { id: 'provider', label: 'Provider' },
+            response: { output: false },
+            success: true,
+            score: 1,
+            namedScores: {},
+          },
+          {
+            testCase: { description: 'zero output', assert: [] },
+            vars: {},
+            prompt: { label: 'test', raw: 'prompt' },
+            provider: { id: 'provider', label: 'Provider' },
+            response: { output: 0 },
+            success: true,
+            score: 1,
+            namedScores: {},
+          },
+        ],
+        prompts: [],
+      };
+
+      const result = formatEvaluationResults(mockSummary as any);
+      expect(result.results[0].response.output).toBe('false');
+      expect(result.results[1].response.output).toBe('0');
+    });
   });
 
   describe('prompts summary formatting', () => {
