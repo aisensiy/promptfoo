@@ -163,7 +163,9 @@ Transform functions receive:
 - `context`: an object containing `vars`, `prompt`, and optionally `metadata` from the provider response
 
 :::note
+
 Function transforms are not serializable. If you use `writeLatestResults: true`, function transforms will not be persisted in the stored config. Use string expressions or `file://` references if you need results to be fully reproducible from the stored eval.
+
 :::
 
 For more on transforms, see [Transforming Outputs](/docs/configuration/guide#transforming-outputs).
