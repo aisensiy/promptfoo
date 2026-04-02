@@ -1,10 +1,10 @@
 import type winston from 'winston';
 
 import type { BlobRef } from '../blobs/types';
-import type { TransformFunction } from '../util/transform';
 import type { EnvOverrides } from './env';
 import type { Prompt } from './prompts';
 import type { Inputs, NunjucksFilterMap, TokenUsage, VarValue } from './shared';
+import type { TransformFunction } from './transform';
 
 export type { TokenUsage } from './shared';
 export type ProviderId = string;

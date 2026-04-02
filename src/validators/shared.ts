@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { TransformFunction } from '../util/transform';
+import type { TransformFunction } from '../types/transform';
 
 export const NunjucksFilterMapSchema = z.record(
   z.string(),

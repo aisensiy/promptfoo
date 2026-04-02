@@ -7,25 +7,9 @@ import { safeJoin } from './pathUtils';
 import { getProcessShim } from './processShim';
 
 import type { Vars } from '../types/index';
+import type { TransformContext, TransformFunction } from '../types/transform';
 
-export interface TransformContext {
-  vars?: Record<string, unknown>;
-  prompt?:
-    | { label?: string; id?: string; raw?: string; display?: string }
-    | Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-  uuid?: string;
-  [key: string]: unknown;
-}
-
-/**
- * A function that transforms output or vars before assertion evaluation.
- * Supported when using promptfoo as a Node.js package.
- */
-export type TransformFunction = (
-  output: string | object,
-  context: TransformContext,
-) => string | object | Promise<string | object>;
+export type { TransformContext, TransformFunction } from '../types/transform';
 
 /** Label used in error messages when a transform is an inline function rather than a string. */
 export const INLINE_FUNCTION_LABEL = '[inline function]';
