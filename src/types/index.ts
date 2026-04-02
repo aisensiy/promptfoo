@@ -10,7 +10,7 @@ import { ApiProviderSchema, ProviderOptionsSchema, ProvidersSchema } from '../va
 export { ProvidersSchema };
 
 import { RedteamConfigSchema } from '../validators/redteam';
-import { NunjucksFilterMapSchema } from '../validators/shared';
+import { NunjucksFilterMapSchema, StringOrFunctionSchema } from '../validators/shared';
 
 import type { BlobRef } from '../blobs/types';
 import type {
@@ -150,12 +150,6 @@ export const GradingConfigSchema = z.object({
 });
 
 export type GradingConfig = z.infer<typeof GradingConfigSchema>;
-
-// Schema that accepts a string or a function (for Node.js package usage)
-const StringOrFunctionSchema = z.union([
-  z.string(),
-  z.custom<Function>((val) => typeof val === 'function'),
-]);
 
 export const OutputConfigSchema = z.object({
   /**

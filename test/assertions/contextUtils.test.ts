@@ -4,7 +4,13 @@ import * as transformUtil from '../../src/util/transform';
 
 import type { Assertion, AtomicTestCase } from '../../src/types/index';
 
-vi.mock('../../src/util/transform');
+vi.mock('../../src/util/transform', async (importOriginal) => {
+  const actual = await importOriginal<typeof transformUtil>();
+  return {
+    ...actual,
+    transform: vi.fn(),
+  };
+});
 
 describe('resolveContext', () => {
   const mockTransform = vi.mocked(transformUtil.transform);
@@ -200,7 +206,7 @@ describe('resolveContext', () => {
     });
 
     it('should show [inline function] in error messages for function contextTransform', async () => {
-      const contextFn = () => 42;
+      const contextFn = (() => 42) as any;
       mockTransform.mockRejectedValue(new Error('Transform failed'));
 
       const assertion: Assertion = {

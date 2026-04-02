@@ -19,6 +19,9 @@ export type TransformFunction = (
   context: TransformContext,
 ) => string | object | Promise<string | object>;
 
+/** Label used in error messages when a transform is an inline function rather than a string. */
+export const INLINE_FUNCTION_LABEL = '[inline function]';
+
 export const TransformInputType = {
   OUTPUT: 'output',
   VARS: 'vars',
@@ -175,8 +178,13 @@ async function getTransformFunction(
  * @throws Error if the file format is unsupported or if the transform function
  * doesn't return a value (unless validateReturn is false).
  */
+/** Returns a human-readable label for a transform value, suitable for error messages. */
+export function getTransformLabel(t: string | Function): string {
+  return typeof t === 'function' ? INLINE_FUNCTION_LABEL : t;
+}
+
 export async function transform(
-  codeOrFilepathOrFn: string | Function,
+  codeOrFilepathOrFn: string | TransformFunction,
   transformInput: string | object | undefined,
   context: TransformContext,
   validateReturn: boolean = true,
@@ -185,14 +193,15 @@ export async function transform(
   let postprocessFn: Function | null;
 
   if (typeof codeOrFilepathOrFn === 'function') {
-    // Inline function passed directly (e.g. from the Node.js package)
     postprocessFn = codeOrFilepathOrFn;
   } else {
     postprocessFn = await getTransformFunction(codeOrFilepathOrFn, inputType);
   }
 
+  const label = getTransformLabel(codeOrFilepathOrFn);
+
   if (!postprocessFn) {
-    throw new Error(`Invalid transform function for ${codeOrFilepathOrFn}`);
+    throw new Error(`Invalid transform function for ${label}`);
   }
 
   // Pass the process shim for ESM compatibility in inline transforms
@@ -200,9 +209,7 @@ export async function transform(
   const ret = await Promise.resolve(postprocessFn(transformInput, context, getProcessShim()));
 
   if (validateReturn && (ret === null || ret === undefined)) {
-    throw new Error(
-      `Transform function did not return a value\n\n${typeof codeOrFilepathOrFn === 'function' ? '[inline function]' : codeOrFilepathOrFn}`,
-    );
+    throw new Error(`Transform function did not return a value\n\n${label}`);
   }
 
   return ret;

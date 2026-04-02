@@ -1,5 +1,5 @@
 import invariant from '../util/invariant';
-import { transform } from '../util/transform';
+import { getTransformLabel, transform } from '../util/transform';
 
 import type { Assertion, AtomicTestCase, ProviderResponse } from '../types/index';
 
@@ -48,6 +48,7 @@ export async function resolveContext(
   }
 
   if (assertion.contextTransform) {
+    const transformLabel = getTransformLabel(assertion.contextTransform);
     try {
       // Use providerTransformedOutput if available
       // Otherwise fall back to output for backwards compatibility
@@ -60,11 +61,6 @@ export async function resolveContext(
           providerResponse.metadata && { metadata: providerResponse.metadata }),
       });
 
-      const transformLabel =
-        typeof assertion.contextTransform === 'function'
-          ? '[inline function]'
-          : assertion.contextTransform;
-
       invariant(
         typeof transformed === 'string' ||
           (Array.isArray(transformed) && transformed.every((item) => typeof item === 'string')),
@@ -74,10 +70,6 @@ export async function resolveContext(
 
       contextValue = transformed;
     } catch (error) {
-      const transformLabel =
-        typeof assertion.contextTransform === 'function'
-          ? '[inline function]'
-          : assertion.contextTransform;
       throw new Error(
         `Failed to transform context using expression '${transformLabel}': ${
           error instanceof Error ? error.message : String(error)

@@ -1,6 +1,18 @@
 import { z } from 'zod';
 
+import type { TransformFunction } from '../util/transform';
+
 export const NunjucksFilterMapSchema = z.record(
   z.string(),
   z.custom<(...args: unknown[]) => string>((v) => typeof v === 'function'),
 );
+
+/**
+ * Zod schema accepting a string or a function.
+ * Used for transform fields that accept inline JS expressions, file:// references,
+ * or direct functions when using the Node.js package.
+ */
+export const StringOrFunctionSchema = z.union([
+  z.string(),
+  z.custom<TransformFunction>((val) => typeof val === 'function'),
+]);

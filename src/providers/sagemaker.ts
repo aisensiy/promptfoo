@@ -16,7 +16,7 @@ import type {
   ProviderOptions,
   ProviderResponse,
 } from '../types/index';
-import type { TransformContext } from '../util/transform';
+import type { TransformContext, TransformFunction } from '../util/transform';
 
 /**
  * Sleep utility function for implementing delays
@@ -83,7 +83,7 @@ abstract class SageMakerGenericProvider {
   config: SageMakerConfig;
   endpointName: string;
   delay?: number; // Delay between API calls in milliseconds
-  transform?: string | Function; // Transform function for modifying prompts before sending
+  transform?: string | TransformFunction; // Transform function for modifying prompts before sending
 
   // Custom provider ID, separate from the id() method
   private providerId?: string;

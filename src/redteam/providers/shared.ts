@@ -27,7 +27,12 @@ import invariant from '../../util/invariant';
 import { safeJsonStringify } from '../../util/json';
 import { sleep } from '../../util/time';
 import { TokenUsageTracker } from '../../util/tokenUsage';
-import { type TransformContext, TransformInputType, transform } from '../../util/transform';
+import {
+  type TransformContext,
+  type TransformFunction,
+  TransformInputType,
+  transform,
+} from '../../util/transform';
 import { ATTACKER_MODEL, ATTACKER_MODEL_SMALL, TEMPERATURE } from './constants';
 
 import type { TraceContextData } from '../../tracing/traceContext';
@@ -444,7 +449,7 @@ export async function createIterationContext({
   loggerTag = '[Redteam]',
 }: {
   originalVars: Record<string, VarValue>;
-  transformVarsConfig?: string | Function;
+  transformVarsConfig?: string | TransformFunction;
   context?: CallApiContextParams;
   iterationNumber: number;
   loggerTag?: string;

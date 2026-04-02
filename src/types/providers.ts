@@ -1,6 +1,7 @@
 import type winston from 'winston';
 
 import type { BlobRef } from '../blobs/types';
+import type { TransformFunction } from '../util/transform';
 import type { EnvOverrides } from './env';
 import type { Prompt } from './prompts';
 import type { Inputs, NunjucksFilterMap, TokenUsage, VarValue } from './shared';
@@ -60,7 +61,7 @@ export interface ProviderOptions {
   label?: ProviderLabel;
   config?: any;
   prompts?: string[];
-  transform?: string | Function;
+  transform?: string | TransformFunction;
   delay?: number;
   env?: EnvOverrides;
   inputs?: Inputs;
@@ -117,7 +118,7 @@ export interface ApiProvider {
   getSessionId?: () => string;
   inputs?: Inputs;
   label?: ProviderLabel;
-  transform?: string | Function;
+  transform?: string | TransformFunction;
   toJSON?: () => any;
   /**
    * Provider-wide cleanup hook for releasing long-lived resources such as worker

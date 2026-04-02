@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { InputsSchema } from '../redteam/types';
 import { ProviderEnvOverridesSchema } from '../types/env';
 import { BaseTokenUsageSchema } from '../types/shared';
+import { StringOrFunctionSchema } from './shared';
 
 import type {
   CallApiFunction,
@@ -10,11 +11,6 @@ import type {
   ProviderId,
   ProviderLabel,
 } from '../types/providers';
-
-const StringOrFunctionSchema = z.union([
-  z.string(),
-  z.custom<Function>((val) => typeof val === 'function'),
-]);
 
 export const ProviderOptionsSchema = z.object({
   id: z.custom<ProviderId>().optional(),

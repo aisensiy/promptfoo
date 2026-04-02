@@ -3289,7 +3289,7 @@ describe('runAssertion', () => {
       const assertion: Assertion = {
         type: 'equals',
         value: 'HELLO WORLD',
-        transform: (output: string) => String(output).toUpperCase(),
+        transform: (output) => String(output).toUpperCase(),
       };
 
       const result: GradingResult = await runAssertion({
@@ -3309,7 +3309,7 @@ describe('runAssertion', () => {
       const assertion: Assertion = {
         type: 'equals',
         value: 'search, calculate',
-        transform: (_output: string, context: any) => {
+        transform: (_output, context: any) => {
           const tools = context.metadata?.toolCalls ?? [];
           return tools.map((t: any) => t.name).join(', ');
         },
@@ -3334,7 +3334,7 @@ describe('runAssertion', () => {
       const assertion: Assertion = {
         type: 'equals',
         value: 'hello async',
-        transform: async (output: string) => output + ' async',
+        transform: async (output) => output + ' async',
       };
 
       const result: GradingResult = await runAssertion({
