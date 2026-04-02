@@ -470,6 +470,9 @@ export function getProviderIds(providerPaths: TestSuiteConfig['providers']): str
       if (typeof provider === 'function') {
         return provider.label || `custom-function-${idx}`;
       }
+      if (isApiProviderObject(provider)) {
+        return provider.id();
+      }
       if ((provider as ProviderOptions).id) {
         return (provider as ProviderOptions).id!;
       }

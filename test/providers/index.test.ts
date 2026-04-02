@@ -1567,6 +1567,16 @@ describe('getProviderIds', () => {
     ]);
   });
 
+  it('calls id() for ApiProvider objects', () => {
+    const apiProvider = {
+      id: () => 'custom-api-provider',
+      callApi: async () => ({ output: 'test' }),
+    };
+
+    const providerIds = getProviderIds([apiProvider] as any);
+    expect(providerIds).toEqual(['custom-api-provider']);
+  });
+
   it('extracts id from ProviderOptionsMap objects', () => {
     const providerIds = getProviderIds([
       { 'openai:gpt-4o-mini': { config: { temperature: 0.5 } } },

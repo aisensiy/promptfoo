@@ -79,7 +79,7 @@ import {
   createEmptyAssertions,
   createEmptyTokenUsage,
 } from './util/tokenUsageUtils';
-import { type TransformContext, TransformInputType, transform } from './util/transform';
+import { TransformInputType, transform } from './util/transform';
 import type { SingleBar } from 'cli-progress';
 import type winston from 'winston';
 
@@ -96,6 +96,7 @@ import type {
   VarValue,
 } from './types/index';
 import type { CallApiContextParams } from './types/providers';
+import type { TransformContext } from './types/transform';
 
 /**
  * Manages a single progress bar for the evaluation

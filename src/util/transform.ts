@@ -9,10 +9,12 @@ import { getProcessShim } from './processShim';
 import type { Vars } from '../types/index';
 import type { TransformContext, TransformFunction } from '../types/transform';
 
-export type { TransformContext, TransformFunction } from '../types/transform';
-
 /** Label used in error messages when a transform is an inline function rather than a string. */
 export const INLINE_FUNCTION_LABEL = '[inline function]';
+/** Label used in error messages when a transform is an inline string expression. */
+export const INLINE_STRING_LABEL = '[inline transform]';
+/** Label used in error messages when a transform is loaded from a file reference. */
+export const FILE_TRANSFORM_LABEL = '[file transform]';
 
 export const TransformInputType = {
   OUTPUT: 'output',
@@ -160,7 +162,7 @@ export function getTransformLabel(t: string | Function): string {
   if (typeof t === 'function') {
     return t.name ? `${INLINE_FUNCTION_LABEL}: ${t.name}` : INLINE_FUNCTION_LABEL;
   }
-  return t;
+  return t.startsWith('file://') ? FILE_TRANSFORM_LABEL : INLINE_STRING_LABEL;
 }
 
 /**

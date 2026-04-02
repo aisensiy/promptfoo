@@ -13,6 +13,6 @@ export interface TransformContext {
  * Supported when using promptfoo as a Node.js package.
  */
 export type TransformFunction = (
-  output: string | object,
+  output: unknown | undefined,
   context: TransformContext,
-) => string | object | Promise<string | object>;
+) => unknown | undefined | Promise<unknown | undefined>;

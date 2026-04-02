@@ -3,13 +3,15 @@ import { importModule } from '../../src/esm';
 import logger from '../../src/logger';
 import { runPython } from '../../src/python/pythonUtils';
 import {
+  FILE_TRANSFORM_LABEL,
   getTransformLabel,
   INLINE_FUNCTION_LABEL,
+  INLINE_STRING_LABEL,
   TransformInputType,
   transform,
 } from '../../src/util/transform';
 
-import type { TransformFunction } from '../../src/util/transform';
+import type { TransformFunction } from '../../src/types/transform';
 
 vi.mock('../../src/esm', () => ({
   importModule: vi.fn(),
@@ -463,8 +465,18 @@ describe('util', () => {
     });
 
     describe('getTransformLabel', () => {
-      it('returns the string itself for string transforms', () => {
-        expect(getTransformLabel('output.toUpperCase()')).toBe('output.toUpperCase()');
+      it('redacts inline string transforms', () => {
+        expect(getTransformLabel('output.toUpperCase()')).toBe(INLINE_STRING_LABEL);
+      });
+
+      it('redacts file transform paths', () => {
+        expect(getTransformLabel('file://transform.js')).toBe(FILE_TRANSFORM_LABEL);
+      });
+
+      it('does not leak inline transform source in thrown errors', async () => {
+        await expect(
+          transform('process.env.SECRET_SHOULD_NOT_APPEAR', 'test', { vars: {}, prompt: {} }),
+        ).rejects.toThrow(`Transform function did not return a value\n\n${INLINE_STRING_LABEL}`);
       });
 
       it('returns [inline function] for anonymous functions', () => {

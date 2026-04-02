@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import logger from '../../src/logger';
 
 // Use vi.hoisted to create mock functions that can be used in vi.mock factories
 const { mockSend, mockCacheGet, mockCacheSet, mockIsCacheEnabled } = vi.hoisted(() => ({
@@ -104,6 +105,23 @@ describe('SageMakerCompletionProvider', () => {
   });
 
   describe('payload formatting', () => {
+    it('accepts function transforms in config without validation warnings', () => {
+      const warnSpy = vi.spyOn(logger, 'warn');
+      const transformFn = (output: unknown) => String(output).trim();
+
+      const provider = new SageMakerCompletionProvider('test-endpoint', {
+        config: {
+          region: 'us-east-1',
+          modelType: 'custom',
+          transform: transformFn,
+        },
+      });
+
+      expect(provider.transform).toBe(transformFn);
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
     it('preserves an explicit maxTokens value of 0', () => {
       vi.stubEnv('AWS_SAGEMAKER_MAX_TOKENS', '1024');
 

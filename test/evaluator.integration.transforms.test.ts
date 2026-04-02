@@ -79,6 +79,7 @@ vi.mock('../src/esm', () => ({}));
 describe('Transformation integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTransform.mockReset();
   });
 
   afterEach(() => {
@@ -252,7 +253,7 @@ describe('Transformation integration', () => {
   });
 
   it('should support inline function as provider transform', async () => {
-    const providerTransformFn = (output: string | object) => String(output).trim().toUpperCase();
+    const providerTransformFn = (output: unknown) => String(output).trim().toUpperCase();
     mockTransform.mockImplementation(async (expressionOrFn, input) => {
       if (typeof expressionOrFn === 'function') {
         return expressionOrFn(input);
@@ -295,7 +296,7 @@ describe('Transformation integration', () => {
   });
 
   it('should support inline function as test options.transform', async () => {
-    const testTransformFn = (output: string | object) => String(output).toUpperCase();
+    const testTransformFn = (output: unknown) => String(output).toUpperCase();
     mockTransform.mockImplementation(async (expressionOrFn, input) => {
       if (typeof expressionOrFn === 'function') {
         return expressionOrFn(input);

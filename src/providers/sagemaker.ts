@@ -5,6 +5,7 @@ import { getEnvFloat, getEnvInt, getEnvString } from '../envars';
 import logger from '../logger';
 import telemetry from '../telemetry';
 import { transform } from '../util/transform';
+import { StringOrFunctionSchema } from '../validators/shared';
 
 import type { EnvOverrides } from '../types/env';
 import type {
@@ -16,7 +17,7 @@ import type {
   ProviderOptions,
   ProviderResponse,
 } from '../types/index';
-import type { TransformContext, TransformFunction } from '../util/transform';
+import type { TransformContext, TransformFunction } from '../types/transform';
 
 /**
  * Sleep utility function for implementing delays
@@ -50,7 +51,7 @@ const SageMakerConfigSchema = z.strictObject({
 
   // Provider behavior options
   delay: z.number().optional(), // Delay between API calls in milliseconds
-  transform: z.string().optional(), // Transform function or file path to transform prompts
+  transform: StringOrFunctionSchema.optional(), // Transform expression, file path, or function
 
   // Model type for request/response handling
   // TODO(Will): What is custom? User uploaded model?
