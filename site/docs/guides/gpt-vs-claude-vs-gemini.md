@@ -9,7 +9,7 @@ When evaluating the performance of LLMs, generic benchmarks will only get you so
 
 So, the sensible thing to do is run an eval on your own data.
 
-This guide will walk you through setting up a comparison between OpenAI's GPT-5.4, Anthropic's Claude Sonnet 4.6, and Google's Gemini using `promptfoo`. The end result is a side-by-side evaluation of how these models perform on custom tasks:
+This guide will walk you through setting up a comparison between OpenAI's GPT-5.4, Anthropic's Claude Sonnet 4.6, and Google's Gemini 3.1 Pro Preview using `promptfoo`. The end result is a side-by-side evaluation of how these models perform on custom tasks:
 
 <div style={{textAlign: 'center'}}><img src="/img/docs/gpt-vs-claude-vs-gemini-overview.jpg" alt="LLM model comparison" style={{maxWidth: '80%'}} /></div>
 
