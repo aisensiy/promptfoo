@@ -171,21 +171,6 @@ async function getTransformFunction(
   return transformFn;
 }
 
-/**
- * Transforms the output using a specified function or file.
- *
- * @param codeOrFilepath - The transformation function code or file path.
- * If it starts with 'file://', it's treated as a file path. The file path can
- * optionally include a function name (e.g., 'file://transform.js:myFunction').
- * If no function name is provided for Python files, it defaults to 'get_transform'.
- * For inline code, it's treated as JavaScript.
- * @param transformInput - The output to be transformed. Can be a string or an object.
- * @param context - A context object that will be passed to the transform function.
- * @param validateReturn - Optional. If true, throws an error if the transform function doesn't return a value.
- * @returns A promise that resolves to the transformed output.
- * @throws Error if the file format is unsupported or if the transform function
- * doesn't return a value (unless validateReturn is false).
- */
 /** Returns a human-readable label for a transform value, suitable for error messages. */
 export function getTransformLabel(t: string | Function): string {
   if (typeof t === 'function') {
@@ -194,6 +179,18 @@ export function getTransformLabel(t: string | Function): string {
   return t;
 }
 
+/**
+ * Transforms the output using a specified function, inline code, or file reference.
+ *
+ * @param codeOrFilepathOrFn - A TransformFunction, inline JavaScript code, or a file path
+ * starting with 'file://'. File paths can include a function name
+ * (e.g., 'file://transform.js:myFunction'). Python files default to 'get_transform'.
+ * @param transformInput - The input to transform. Can be a string, object, or undefined.
+ * @param context - Context object passed to the transform function (vars, prompt, metadata).
+ * @param validateReturn - If true (default), throws when the transform returns null/undefined.
+ * @param inputType - Whether the first parameter is named 'output' or 'vars' in inline code.
+ * @returns A promise that resolves to the transformed output.
+ */
 export async function transform(
   codeOrFilepathOrFn: string | TransformFunction,
   transformInput: string | object | undefined,

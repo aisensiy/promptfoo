@@ -83,7 +83,7 @@ abstract class SageMakerGenericProvider {
   config: SageMakerConfig;
   endpointName: string;
   delay?: number; // Delay between API calls in milliseconds
-  transform?: string | TransformFunction; // Transform function for modifying prompts before sending
+  transform?: string | TransformFunction;
 
   // Custom provider ID, separate from the id() method
   private providerId?: string;

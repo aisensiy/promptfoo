@@ -684,7 +684,7 @@ Use `defaultTest` apply a transform option to every test case in your test suite
 :::
 
 :::tip
-When using the [Node.js package](/docs/usage/node-package#transform-functions), you can pass functions directly as `transform` values instead of string expressions.
+When using the [Node.js package](/docs/usage/node-package#transform-functions), you can pass functions directly as `transform`, `transformVars`, and `contextTransform` values instead of string expressions.
 :::
 
 ### Transforms from separate files

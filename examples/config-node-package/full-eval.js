@@ -93,7 +93,6 @@ const tests = [
     },
     options: {
       // Transform functions can be passed directly when using the node package.
-      // This transforms the output before assertions run.
       transform: (output) => output.toLowerCase(),
     },
     assert: [
