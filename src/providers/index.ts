@@ -26,6 +26,28 @@ import type {
   ProviderOptionsMap,
 } from '../types/providers';
 
+type ProviderFunctionWithMetadata = ProviderFunction & Pick<ApiProvider, 'label' | 'transform'>;
+
+function createProviderFromFunction(
+  provider: ProviderFunctionWithMetadata,
+  id: string,
+): ApiProvider {
+  return {
+    id: () => provider.label ?? id,
+    callApi: provider,
+    transform: provider.transform,
+  };
+}
+
+function isApiProviderObject(provider: unknown): provider is ApiProvider {
+  return (
+    Boolean(provider) &&
+    typeof provider === 'object' &&
+    typeof (provider as Partial<ApiProvider>).id === 'function' &&
+    typeof (provider as Partial<ApiProvider>).callApi === 'function'
+  );
+}
+
 // FIXME(ian): Make loadApiProvider handle all the different provider types (string, ProviderOptions, ApiProvider, etc), rather than the callers.
 export async function loadApiProvider(
   providerPath: string,
@@ -364,10 +386,7 @@ export async function loadApiProviders(
     return [await loadApiProvider(providerPaths, { basePath, env })];
   } else if (typeof providerPaths === 'function') {
     return [
-      {
-        id: () => 'custom-function',
-        callApi: providerPaths,
-      },
+      createProviderFromFunction(providerPaths as ProviderFunctionWithMetadata, 'custom-function'),
     ];
   } else if (Array.isArray(providerPaths)) {
     const providersArrays = await Promise.all(
@@ -383,11 +402,14 @@ export async function loadApiProviders(
         }
         if (typeof provider === 'function') {
           return [
-            {
-              id: () => provider.label ?? `custom-function-${idx}`,
-              callApi: provider,
-            },
+            createProviderFromFunction(
+              provider as ProviderFunctionWithMetadata,
+              `custom-function-${idx}`,
+            ),
           ];
+        }
+        if (isApiProviderObject(provider)) {
+          return [provider];
         }
         if (provider.id) {
           // List of ProviderConfig objects

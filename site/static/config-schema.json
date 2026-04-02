@@ -1443,12 +1443,7 @@
                 "callClassificationApi": {},
                 "label": {},
                 "transform": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {}
-                  ]
+                  "type": "string"
                 },
                 "delay": {
                   "type": "number"
@@ -1482,12 +1477,7 @@
                   }
                 },
                 "transform": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {}
-                  ]
+                  "type": "string"
                 },
                 "delay": {
                   "type": "number"

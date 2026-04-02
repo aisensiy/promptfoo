@@ -305,5 +305,31 @@ describe('config-schema.json', () => {
         ]),
       );
     });
+
+    it('should reject non-string redteam provider transforms in JSON/YAML config files', () => {
+      const validate = ajv.compile(schema);
+
+      const config = {
+        prompts: ['hello'],
+        redteam: {
+          plugins: ['default'],
+          strategies: ['default'],
+          provider: {
+            id: 'openai:chat:gpt-4o-mini',
+            transform: { unexpected: 'object' },
+          },
+        },
+      };
+
+      expect(validate(config)).toBe(false);
+      expect(validate.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            instancePath: '/redteam/provider/transform',
+            keyword: 'type',
+          }),
+        ]),
+      );
+    });
   });
 });

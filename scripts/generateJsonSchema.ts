@@ -39,6 +39,50 @@ function getBaseSchema(schema: ZodType): ZodType {
 
 const innerSchema = getInnerSchema(UnifiedConfigSchema);
 
+const transformSchemaKeys = new Set([
+  'contextTransform',
+  'postprocess',
+  'transform',
+  'transformVars',
+]);
+
+function forceStringTransformSchemas(node: unknown): void {
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      forceStringTransformSchemas(item);
+    }
+    return;
+  }
+
+  const schemaObject = node as Record<string, unknown>;
+
+  for (const [key, value] of Object.entries(schemaObject)) {
+    if (
+      transformSchemaKeys.has(key) &&
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
+      const description = (value as Record<string, unknown>).description;
+
+      for (const schemaKey of Object.keys(value)) {
+        delete (value as Record<string, unknown>)[schemaKey];
+      }
+
+      Object.assign(value as Record<string, unknown>, {
+        ...(typeof description === 'string' ? { description } : {}),
+        type: 'string',
+      });
+    }
+
+    forceStringTransformSchemas(value);
+  }
+}
+
 // Options for nested toJSONSchema calls (without reused:'ref' to avoid orphaned definitions)
 const nestedOptions = {
   target: 'draft-07' as const,
@@ -110,5 +154,9 @@ const jsonSchema = {
     ...(zodDefinitions as Record<string, unknown>),
   },
 };
+
+// Zod may rewrite reused StringOrFunctionSchema nodes after `override` runs. Do a final pass to keep
+// transform-like fields string-only in JSON Schema while runtime Zod still accepts functions.
+forceStringTransformSchemas(jsonSchema);
 
 console.log(JSON.stringify(jsonSchema, null, 2));

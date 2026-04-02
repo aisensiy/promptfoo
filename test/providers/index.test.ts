@@ -883,18 +883,40 @@ describe('loadApiProvider', () => {
   });
 
   it('loadApiProviders with ProviderFunction', async () => {
-    const providerFunction: ProviderFunction = async (prompt) => {
+    const providerFunction: ProviderFunction & { transform?: (output: string) => string } = async (
+      prompt,
+    ) => {
       return {
         output: `Output for ${prompt}`,
         tokenUsage: { total: 10, prompt: 5, completion: 5 },
       };
     };
+    providerFunction.transform = (output) => output.toUpperCase();
+
     const providers = await loadApiProviders(providerFunction);
     expect(providers).toHaveLength(1);
     expect(providers[0].id()).toBe('custom-function');
+    expect(providers[0].transform).toBe(providerFunction.transform);
     const response = await providers[0].callApi('Test prompt');
     expect(response.output).toBe('Output for Test prompt');
     expect(response.tokenUsage).toEqual({ total: 10, prompt: 5, completion: 5 });
+  });
+
+  it('loadApiProviders with ApiProvider object preserves the provider instance', async () => {
+    const apiProvider = {
+      id: () => 'custom-api-provider',
+      callApi: async (prompt: string) => ({ output: `Output for ${prompt}` }),
+      transform: (output: string | object) => String(output).toUpperCase(),
+    };
+
+    const providers = await loadApiProviders([apiProvider] as any);
+    expect(providers).toHaveLength(1);
+    expect(providers[0]).toBe(apiProvider);
+    expect(providers[0].id()).toBe('custom-api-provider');
+    expect(providers[0].transform).toBe(apiProvider.transform);
+    await expect(providers[0].callApi('Test prompt')).resolves.toEqual({
+      output: 'Output for Test prompt',
+    });
   });
 
   it('loadApiProviders with CustomApiProvider', async () => {
