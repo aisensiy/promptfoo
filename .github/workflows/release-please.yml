@@ -77,9 +77,12 @@ jobs:
               || true
           )
 
-          if [[ "${#changelog_files[@]}" -gt 0 ]]; then
-            npx prettier --write "${changelog_files[@]}"
+          if [[ "${#changelog_files[@]}" -eq 0 ]]; then
+            echo "No CHANGELOG files changed in release PR"
+            exit 0
           fi
+
+          npx prettier --write "${changelog_files[@]}"
 
           if git diff --quiet -- "${changelog_files[@]}"; then
             echo "No formatting changes needed"
