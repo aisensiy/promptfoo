@@ -180,6 +180,7 @@ load_port_assignment() {
   fi
 
   local line key value
+  local uses_legacy_server_port=0
 
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
@@ -198,6 +199,7 @@ load_port_assignment() {
         ;;
       SERVER_PORT)
         API_PORT="${value}"
+        uses_legacy_server_port=1
         ;;
       *)
         echo "Unexpected port assignment key in ${WORKTREE_PORT_FILE}: ${key}" >&2
@@ -216,6 +218,10 @@ load_port_assignment() {
       echo "Invalid saved port assignment in ${WORKTREE_PORT_FILE}" >&2
       exit 1
     fi
+  fi
+
+  if ((uses_legacy_server_port == 1)) && [[ -n "${APP_PORT:-}" ]] && [[ -n "${API_PORT:-}" ]]; then
+    save_port_assignment "${APP_PORT}" "${API_PORT}"
   fi
 }
 
@@ -238,7 +244,7 @@ write_port_lock_metadata() {
 
 port_lock_age_seconds() {
   if [[ ! -f "${PORT_LOCK_CREATED_AT_FILE}" ]]; then
-    printf '0\n'
+    printf '%s\n' "${PORT_LOCK_STALE_SECONDS}"
     return
   fi
 
@@ -255,10 +261,6 @@ port_lock_age_seconds() {
 }
 
 port_lock_is_stale() {
-  if (($(port_lock_age_seconds) >= PORT_LOCK_STALE_SECONDS)); then
-    return 0
-  fi
-
   if [[ -f "${PORT_LOCK_PID_FILE}" ]]; then
     local lock_pid
     lock_pid="$(trim_file "${PORT_LOCK_PID_FILE}")"

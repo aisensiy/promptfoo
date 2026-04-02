@@ -5,9 +5,16 @@ set -euo pipefail
 WORKTREE_ROOT="$(git rev-parse --show-toplevel)"
 WORKTREE_PORT_FILE="$(git rev-parse --git-path codex-port-range.env)"
 CONCURRENTLY_BIN="${WORKTREE_ROOT}/node_modules/.bin/concurrently"
+APP_PORT=''
+API_PORT=''
 
-APP_PORT=3000
-API_PORT=15500
+if [[ ! -f "${WORKTREE_PORT_FILE}" ]]; then
+  echo "Missing ${WORKTREE_PORT_FILE}; run .codex/setup.sh first" >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+. "${WORKTREE_PORT_FILE}"
 
 export NVM_DIR="${NVM_DIR:-${HOME}/.nvm}"
 if [[ ! -s "${NVM_DIR}/nvm.sh" ]]; then
@@ -17,11 +24,6 @@ fi
 # shellcheck source=/dev/null
 . "${NVM_DIR}/nvm.sh"
 nvm use "$(tr -d '[:space:]' < "${WORKTREE_ROOT}/.nvmrc")"
-
-if [[ -f "${WORKTREE_PORT_FILE}" ]]; then
-  # shellcheck source=/dev/null
-  . "${WORKTREE_PORT_FILE}"
-fi
 
 if [[ ! "${APP_PORT}" =~ ^[0-9]+$ ]] || [[ ! "${API_PORT}" =~ ^[0-9]+$ ]]; then
   echo "Invalid app/API port assignment in ${WORKTREE_PORT_FILE}" >&2
