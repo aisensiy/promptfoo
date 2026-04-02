@@ -8,7 +8,15 @@ import { getProcessShim } from './processShim';
 
 import type { Vars } from '../types/index';
 
-export type TransformContext = object;
+export interface TransformContext {
+  vars?: Record<string, unknown>;
+  prompt?:
+    | { label?: string; id?: string; raw?: string; display?: string }
+    | Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  uuid?: string;
+  [key: string]: unknown;
+}
 
 /**
  * A function that transforms output or vars before assertion evaluation.
@@ -180,7 +188,10 @@ async function getTransformFunction(
  */
 /** Returns a human-readable label for a transform value, suitable for error messages. */
 export function getTransformLabel(t: string | Function): string {
-  return typeof t === 'function' ? INLINE_FUNCTION_LABEL : t;
+  if (typeof t === 'function') {
+    return t.name ? `${INLINE_FUNCTION_LABEL}: ${t.name}` : INLINE_FUNCTION_LABEL;
+  }
+  return t;
 }
 
 export async function transform(
@@ -204,9 +215,20 @@ export async function transform(
     throw new Error(`Invalid transform function for ${label}`);
   }
 
-  // Pass the process shim for ESM compatibility in inline transforms
-  // This allows inline code to use process.mainModule.require just like in CommonJS
-  const ret = await Promise.resolve(postprocessFn(transformInput, context, getProcessShim()));
+  let ret: unknown;
+  try {
+    if (typeof codeOrFilepathOrFn === 'function') {
+      // Direct function: call with (input, context) only
+      ret = await Promise.resolve(postprocessFn(transformInput, context));
+    } else {
+      // String-based (inline code or file): pass process shim for ESM compatibility
+      ret = await Promise.resolve(postprocessFn(transformInput, context, getProcessShim()));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(`Error in transform function (${label}): ${message}`);
+    throw error;
+  }
 
   if (validateReturn && (ret === null || ret === undefined)) {
     throw new Error(`Transform function did not return a value\n\n${label}`);

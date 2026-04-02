@@ -14,5 +14,7 @@ export const NunjucksFilterMapSchema = z.record(
  */
 export const StringOrFunctionSchema = z.union([
   z.string(),
-  z.custom<TransformFunction>((val) => typeof val === 'function'),
+  z.custom<TransformFunction>((val) => typeof val === 'function', {
+    message: 'Transform must be a string expression, file:// path, or a function (Node.js package)',
+  }),
 ]);

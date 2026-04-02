@@ -216,7 +216,7 @@ describe('resolveContext', () => {
       const test: AtomicTestCase = { vars: {}, options: {} };
 
       await expect(resolveContext(assertion, test, 'output', 'prompt')).rejects.toThrow(
-        "Failed to transform context using expression '[inline function]': Transform failed",
+        /Failed to transform context using expression '\[inline function\].*': Transform failed/,
       );
     });
   });

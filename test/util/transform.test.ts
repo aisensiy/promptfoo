@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { importModule } from '../../src/esm';
 import logger from '../../src/logger';
 import { runPython } from '../../src/python/pythonUtils';
-import { TransformInputType, transform } from '../../src/util/transform';
+import {
+  getTransformLabel,
+  INLINE_FUNCTION_LABEL,
+  TransformInputType,
+  transform,
+} from '../../src/util/transform';
 
 import type { TransformFunction } from '../../src/util/transform';
 
@@ -441,6 +446,36 @@ describe('util', () => {
 
         const result = await transform(fn, output, context);
         expect(result).toBe('search, calculate');
+      });
+
+      it('propagates errors thrown by inline functions', async () => {
+        const fn: TransformFunction = () => {
+          throw new Error('user transform error');
+        };
+
+        await expect(transform(fn, 'test', { vars: {}, prompt: {} })).rejects.toThrow(
+          'user transform error',
+        );
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.stringContaining('Error in transform function'),
+        );
+      });
+    });
+
+    describe('getTransformLabel', () => {
+      it('returns the string itself for string transforms', () => {
+        expect(getTransformLabel('output.toUpperCase()')).toBe('output.toUpperCase()');
+      });
+
+      it('returns [inline function] for anonymous functions', () => {
+        expect(getTransformLabel(() => 'x')).toBe(INLINE_FUNCTION_LABEL);
+      });
+
+      it('includes function name for named functions', () => {
+        function myTransform() {
+          return 'x';
+        }
+        expect(getTransformLabel(myTransform)).toBe(`${INLINE_FUNCTION_LABEL}: myTransform`);
       });
     });
   });
