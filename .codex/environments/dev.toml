@@ -1,0 +1,12 @@
+version = 1
+name = "dev"
+
+[setup]
+script = '''
+bash .codex/setup.sh
+'''
+
+[[actions]]
+name = "dev"
+icon = "run"
+command = "bash .codex/dev.sh"
