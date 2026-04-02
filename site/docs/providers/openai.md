@@ -635,8 +635,8 @@ OpenAI supports image generation via `openai:image:<model>`. Supported models in
 - `gpt-image-1.5` - OpenAI's state-of-the-art image generation model with best instruction following
 - `gpt-image-1` - High-quality image generation model
 - `gpt-image-1-mini` - Cost-efficient version of GPT Image 1
-- `dall-e-3` - High quality image generation with larger resolution support
-- `dall-e-2` - Lower cost option with concurrent requests support
+
+`dall-e-3` and `dall-e-2` remain available for backward compatibility, but use `gpt-image-1.5`, `gpt-image-1`, or `gpt-image-1-mini` for new evals.
 
 See the [OpenAI image generation example](https://github.com/promptfoo/promptfoo/tree/main/examples/openai-images).
 
@@ -731,27 +731,6 @@ providers:
 | Low     | $0.005    | $0.006    | $0.006    |
 | Medium  | $0.011    | $0.015    | $0.015    |
 | High    | $0.036    | $0.052    | $0.052    |
-
-#### DALL-E 3
-
-```yaml title="promptfooconfig.yaml"
-providers:
-  - id: openai:image:dall-e-3
-    config:
-      size: 1024x1024 # 1024x1024, 1792x1024, 1024x1792
-      quality: standard # standard or hd
-      style: vivid # vivid or natural
-```
-
-#### DALL-E 2
-
-```yaml title="promptfooconfig.yaml"
-providers:
-  - id: openai:image:dall-e-2
-    config:
-      size: 512x512 # 256x256, 512x512, 1024x1024
-      response_format: url # url or b64_json
-```
 
 #### Example
 
@@ -1658,15 +1637,15 @@ npx promptfoo@latest init --example openai-audio-transcription
 
 ## Realtime API Models
 
-The Realtime API allows for real-time communication with GPT-4o class models using WebSockets, supporting both text and audio inputs/outputs with streaming responses.
+The Realtime API allows for real-time communication with models like `gpt-realtime-1.5` and `gpt-realtime` using WebSockets, supporting both text and audio inputs/outputs with streaming responses.
 
 ### Supported Realtime Models
 
-- `gpt-realtime` - Latest realtime model ($4/$16 per 1M text tokens, $40/$80 per 1M audio tokens)
+- `gpt-realtime-1.5` - Flagship realtime model ($4/$16 per 1M text tokens, $32/$64 per 1M audio tokens)
+- `gpt-realtime` - General-availability realtime model ($4/$16 per 1M text tokens, $32/$64 per 1M audio tokens)
 - `gpt-realtime-mini` - Cost-efficient realtime model ($0.60/$2.40 per 1M text tokens, $10/$20 per 1M audio tokens)
-- `gpt-4o-realtime-preview-2024-12-17`
-- `gpt-4o-mini-realtime-preview-2024-12-17`
-- `gpt-realtime-mini-2025-10-06`
+- `gpt-realtime-mini-2025-12-15`
+- `gpt-4o-realtime-preview-2024-12-17` and `gpt-4o-mini-realtime-preview-2024-12-17` - Legacy preview models
 
 ### Using Realtime API
 
@@ -1674,7 +1653,7 @@ To use the OpenAI Realtime API, use the provider format `openai:realtime:<model 
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - id: openai:realtime:gpt-4o-realtime-preview-2024-12-17
+  - id: openai:realtime:gpt-realtime-1.5
     config:
       modalities: ['text', 'audio']
       voice: 'alloy'
@@ -1692,17 +1671,17 @@ providers:
 
 The Realtime API configuration supports these parameters in addition to standard OpenAI parameters:
 
-| Parameter                    | Description                                         | Default                | Options                                 |
-| ---------------------------- | --------------------------------------------------- | ---------------------- | --------------------------------------- |
-| `modalities`                 | Types of content the model can process and generate | ['text', 'audio']      | 'text', 'audio'                         |
-| `voice`                      | Voice for audio generation                          | 'alloy'                | alloy, echo, fable, onyx, nova, shimmer |
-| `instructions`               | System instructions for the model                   | 'You are a helpful...' | Any text string                         |
-| `input_audio_format`         | Format of audio input                               | 'pcm16'                | 'pcm16', 'g711_ulaw', 'g711_alaw'       |
-| `output_audio_format`        | Format of audio output                              | 'pcm16'                | 'pcm16', 'g711_ulaw', 'g711_alaw'       |
-| `websocketTimeout`           | Timeout for WebSocket connection (milliseconds)     | 30000                  | Any number                              |
-| `max_response_output_tokens` | Maximum tokens in model response                    | 'inf'                  | Number or 'inf'                         |
-| `tools`                      | Array of tool definitions for function calling      | []                     | Array of tool objects                   |
-| `tool_choice`                | Controls how tools are selected                     | 'auto'                 | 'none', 'auto', 'required', or object   |
+| Parameter                    | Description                                         | Default                | Options                                               |
+| ---------------------------- | --------------------------------------------------- | ---------------------- | ----------------------------------------------------- |
+| `modalities`                 | Types of content the model can process and generate | ['text', 'audio']      | 'text', 'audio'                                       |
+| `voice`                      | Voice for audio generation                          | 'alloy'                | alloy, cedar, echo, fable, marin, onyx, nova, shimmer |
+| `instructions`               | System instructions for the model                   | 'You are a helpful...' | Any text string                                       |
+| `input_audio_format`         | Format of audio input                               | 'pcm16'                | 'pcm16', 'g711_ulaw', 'g711_alaw'                     |
+| `output_audio_format`        | Format of audio output                              | 'pcm16'                | 'pcm16', 'g711_ulaw', 'g711_alaw'                     |
+| `websocketTimeout`           | Timeout for WebSocket connection (milliseconds)     | 30000                  | Any number                                            |
+| `max_response_output_tokens` | Maximum tokens in model response                    | 'inf'                  | Number or 'inf'                                       |
+| `tools`                      | Array of tool definitions for function calling      | []                     | Array of tool objects                                 |
+| `tool_choice`                | Controls how tools are selected                     | 'auto'                 | 'none', 'auto', 'required', or object                 |
 
 #### Custom endpoints and proxies (Realtime)
 
@@ -1712,7 +1691,7 @@ You can use this to target Azure-compatible endpoints, proxies, or local/dev ser
 
 ```yaml
 providers:
-  - id: openai:realtime:gpt-4o-realtime-preview
+  - id: openai:realtime:gpt-realtime-1.5
     config:
       apiBaseUrl: 'https://my-custom-api.com/v1' # connects to wss://my-custom-api.com/v1/realtime
       modalities: ['text']
@@ -1727,7 +1706,7 @@ The Realtime API supports function calling via tools, similar to the Chat API. H
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - id: openai:realtime:gpt-4o-realtime-preview-2024-12-17
+  - id: openai:realtime:gpt-realtime-1.5
     config:
       tools:
         - type: function
