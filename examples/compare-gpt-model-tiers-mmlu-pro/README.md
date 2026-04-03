@@ -68,8 +68,7 @@ The configuration in `promptfooconfig.yaml` includes:
    - Required final answer format (`Therefore, the answer is X`)
    - Deterministic JavaScript scoring that compares the parsed final letter against `answer`
 3. **Model Configuration**:
-   - Low temperature (0.1) for consistent reasoning
-   - 1200 max tokens for concise reasoning plus the final answer
+   - 1200 max completion tokens for concise reasoning plus the final answer
 
 ## Customizing
 
@@ -95,8 +94,7 @@ You can modify the test by editing `promptfooconfig.yaml`:
    providers:
      - id: openai:gpt-5.4
        config:
-         temperature: 0.0
-         max_tokens: 1500
+         max_completion_tokens: 1500
    ```
 
 ## Additional Resources
