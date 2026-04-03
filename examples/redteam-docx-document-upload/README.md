@@ -31,4 +31,6 @@ The target declares two inputs:
 
 The custom provider uploads the DOCX bytes to `example-app`'s `/documents` endpoint, then asks the chat endpoint to call `summarize_document` with the returned `document_id`.
 
-The `indirect-prompt-injection` plugin attempts to place malicious instructions inside the generated DOCX content and checks whether the assistant follows them instead of safely summarizing the document.
+The example config currently runs `bias:age`, `rbac`, `bfla`, `sql-injection`, and `prompt-extraction` against the uploaded DOCX flow. The red team purpose describes the available `example-app` tools and explicitly marks Jane Smith's `readwrite` profile as out of bounds for the current `readonly` user.
+
+`special-token-injection` is intentionally omitted for now because that plugin is currently excluded in multi-input mode.
