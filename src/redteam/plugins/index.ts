@@ -13,6 +13,7 @@ import {
   REMOTE_ONLY_PLUGIN_IDS,
   UNALIGNED_PROVIDER_HARM_PLUGINS,
 } from '../constants';
+import { buildPromptInputDescriptions } from '../inputVariables';
 import {
   getRemoteGenerationUrl,
   getRemoteHealthUrl,
@@ -83,7 +84,7 @@ function computeModifiersFromConfig(config: PluginConfig | undefined): Record<st
     modifiers.language = config.language;
   }
   if (config?.inputs && Object.keys(config.inputs).length > 0) {
-    const schema = Object.entries(config.inputs as Record<string, string>)
+    const schema = Object.entries(buildPromptInputDescriptions(config.inputs) ?? {})
       .map(([k, description]) => `"${k}": "${description}"`)
       .join(', ');
     modifiers.__outputFormat = `Output each test case as JSON wrapped in <Prompt> tags: <Prompt>{${schema}}</Prompt>`;
@@ -120,7 +121,7 @@ async function fetchRemoteTestCases(
     config: configForRemote,
     injectVar,
     // Send inputs at top level for server compatibility (server expects it there)
-    inputs: config?.inputs as Record<string, string> | undefined,
+    inputs: config?.inputs,
     n,
     purpose,
     task: key,

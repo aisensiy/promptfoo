@@ -1,6 +1,6 @@
 import invariant from '../../../util/invariant';
 import { HARM_PLUGINS } from '../../constants';
-import { extractVariablesFromJson, getShortPluginId } from '../../util';
+import { extractMaterializedVariablesFromJson, getShortPluginId } from '../../util';
 import { RedteamPluginBase } from '../base';
 import { getHarmfulAssertions } from './common';
 import { REDTEAM_MODEL_CATEGORIES } from './constants';
@@ -52,7 +52,7 @@ export class AlignedHarmfulPlugin extends RedteamPluginBase {
       if (hasMultipleInputs) {
         try {
           const parsed = JSON.parse(__prompt);
-          Object.assign(vars, extractVariablesFromJson(parsed, this.config.inputs!));
+          Object.assign(vars, extractMaterializedVariablesFromJson(parsed, this.config.inputs!));
         } catch {
           // If parsing fails, just use the raw prompt
         }

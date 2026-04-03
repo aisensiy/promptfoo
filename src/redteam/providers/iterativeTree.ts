@@ -33,7 +33,7 @@ import {
 } from '../shared/runtimeTransform';
 import { Strategies } from '../strategies';
 import { checkExfilTracking } from '../strategies/indirectWebPwn';
-import { extractPromptFromTags, extractVariablesFromJson, getSessionId } from '../util';
+import { extractMaterializedVariablesFromJson, extractPromptFromTags, getSessionId } from '../util';
 import {
   ATTACKER_SYSTEM_PROMPT,
   CLOUD_ATTACKER_SYSTEM_PROMPT,
@@ -56,6 +56,7 @@ import type {
   CallApiOptionsParams,
   GradingResult,
   GuardrailResponse,
+  Inputs,
   NunjucksFilterMap,
   Prompt,
   ProviderResponse,
@@ -486,7 +487,7 @@ async function runRedteamConversation({
   vars: Record<string, VarValue>;
   excludeTargetOutputFromAgenticAttackGeneration: boolean;
   perTurnLayers?: LayerConfig[];
-  inputs?: Record<string, string>;
+  inputs?: Inputs;
   treeParams?: {
     maxDepth?: number;
     maxAttempts?: number;
@@ -665,7 +666,7 @@ async function runRedteamConversation({
           try {
             // Use the original newInjectVar (before escaping) for parsing
             const parsed = JSON.parse(newInjectVar);
-            Object.assign(updatedVars, extractVariablesFromJson(parsed, inputs));
+            Object.assign(updatedVars, extractMaterializedVariablesFromJson(parsed, inputs));
           } catch {
             // If parsing fails, it's plain text - keep original vars
           }
@@ -1055,7 +1056,7 @@ async function runRedteamConversation({
   if (inputs && Object.keys(inputs).length > 0) {
     try {
       const parsed = JSON.parse(bestPrompt);
-      Object.assign(finalUpdatedVars, extractVariablesFromJson(parsed, inputs));
+      Object.assign(finalUpdatedVars, extractMaterializedVariablesFromJson(parsed, inputs));
     } catch {
       // If parsing fails, it's plain text - keep original vars
     }
@@ -1129,7 +1130,7 @@ async function runRedteamConversation({
 class RedteamIterativeTreeProvider implements ApiProvider {
   private readonly injectVar: string;
   private readonly excludeTargetOutputFromAgenticAttackGeneration: boolean;
-  readonly inputs?: Record<string, string>;
+  readonly inputs?: Inputs;
 
   /**
    * Creates a new instance of RedteamIterativeTreeProvider.
@@ -1148,7 +1149,7 @@ class RedteamIterativeTreeProvider implements ApiProvider {
     logger.debug('[IterativeTree] Constructor config', { config });
     invariant(typeof config.injectVar === 'string', 'Expected injectVar to be set');
     this.injectVar = config.injectVar;
-    this.inputs = config.inputs as Record<string, string> | undefined;
+    this.inputs = config.inputs as Inputs | undefined;
     this.excludeTargetOutputFromAgenticAttackGeneration = Boolean(
       config.excludeTargetOutputFromAgenticAttackGeneration,
     );

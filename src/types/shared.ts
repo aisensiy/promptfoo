@@ -48,14 +48,86 @@ export type NunjucksFilterMap = Record<string, (...args: any[]) => string>;
 // Includes primitives (string, number, boolean), objects, and arrays
 export type VarValue = string | number | boolean | object | unknown[];
 
-// Inputs schema for multi-variable test case generation
-// Keys are variable names, values are descriptions of what the variable should contain
-export const InputsSchema = z.record(
-  z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, {
-    error: 'Input variable names must be valid identifiers (start with letter or underscore)',
+const InputVariableNameSchema = z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, {
+  error: 'Input variable names must be valid identifiers (start with letter or underscore)',
+});
+
+export const InputTypeValues = ['text', 'pdf', 'docx', 'image'] as const;
+export const InputTypeSchema = z.enum(InputTypeValues);
+export type InputType = z.infer<typeof InputTypeSchema>;
+
+export const InputDefinitionObjectSchema = z.object({
+  description: z.string().min(1, {
+    error: 'Input descriptions must be non-empty strings',
   }),
+  type: InputTypeSchema.optional(),
+});
+
+export const InputDefinitionSchema = z.union([
   z.string().min(1, {
     error: 'Input descriptions must be non-empty strings',
   }),
-);
+  InputDefinitionObjectSchema,
+]);
+
+export type InputDefinition = z.infer<typeof InputDefinitionSchema>;
+export type NormalizedInputDefinition = {
+  description: string;
+  type: InputType;
+};
+
+export function normalizeInputDefinition(input: InputDefinition): NormalizedInputDefinition {
+  if (typeof input === 'string') {
+    return {
+      description: input,
+      type: 'text',
+    };
+  }
+
+  return {
+    description: input.description,
+    type: input.type ?? 'text',
+  };
+}
+
+export function normalizeInputs(
+  inputs?: Inputs,
+): Record<string, NormalizedInputDefinition> | undefined {
+  if (!inputs) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(inputs).map(([key, input]) => [key, normalizeInputDefinition(input)]),
+  );
+}
+
+export function getInputDescription(input: InputDefinition): string {
+  return normalizeInputDefinition(input).description;
+}
+
+export function getInputType(input: InputDefinition): InputType {
+  return normalizeInputDefinition(input).type;
+}
+
+export function buildInputPromptDescription(input: InputDefinition): string {
+  const normalized = normalizeInputDefinition(input);
+
+  if (normalized.type === 'text') {
+    return normalized.description;
+  }
+
+  const formatLabel =
+    normalized.type === 'pdf'
+      ? 'PDF document'
+      : normalized.type === 'docx'
+        ? 'DOCX document'
+        : 'image';
+
+  return `${normalized.description} (format: ${formatLabel}; provide the text or instructions that should be embedded in the file)`;
+}
+
+// Inputs schema for multi-variable test case generation.
+// Keys are variable names, values are descriptions or typed definitions for what the variable should contain.
+export const InputsSchema = z.record(InputVariableNameSchema, InputDefinitionSchema);
 export type Inputs = z.infer<typeof InputsSchema>;

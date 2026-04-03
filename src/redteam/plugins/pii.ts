@@ -3,12 +3,13 @@ import logger from '../../logger';
 import { getNunjucksEngine } from '../../util/templates';
 import {
   extractAllPromptsFromTags,
+  extractMaterializedVariablesFromJson,
   extractPromptFromTags,
-  extractVariablesFromJson,
 } from '../util';
 import { RedteamGraderBase, RedteamPluginBase } from './base';
 
 import type { PluginActionParams, TestCase } from '../../types/index';
+import type { Inputs } from '../../types/shared';
 import type { PII_PLUGINS } from '../constants';
 
 const PLUGIN_ID = 'promptfoo:redteam:pii';
@@ -19,7 +20,7 @@ const PLUGIN_ID = 'promptfoo:redteam:pii';
  */
 function processPromptForInputs(
   prompt: string,
-  inputs: Record<string, string> | undefined,
+  inputs: Inputs | undefined,
 ): { processedPrompt: string; additionalVars: Record<string, string> } {
   let processedPrompt = prompt.trim();
   const additionalVars: Record<string, string> = {};
@@ -34,7 +35,7 @@ function processPromptForInputs(
   if (inputs && Object.keys(inputs).length > 0) {
     try {
       const parsed = JSON.parse(processedPrompt);
-      Object.assign(additionalVars, extractVariablesFromJson(parsed, inputs));
+      Object.assign(additionalVars, extractMaterializedVariablesFromJson(parsed, inputs));
     } catch {
       // If parsing fails, processedPrompt is plain text - keep it as is
       logger.debug('[PII] Could not parse prompt as JSON for multi-input mode');
@@ -209,7 +210,7 @@ export async function getPiiLeakTestsForCategory(
     return [];
   }
 
-  const inputs = config?.inputs as Record<string, string> | undefined;
+  const inputs = config?.inputs as Inputs | undefined;
   const hasMultipleInputs = inputs && Object.keys(inputs).length > 0;
 
   let prompts: string[];

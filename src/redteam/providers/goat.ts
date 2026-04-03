@@ -35,6 +35,7 @@ import type {
   AssertionSet,
   AtomicTestCase,
   GradingResult,
+  Inputs,
   VarValue,
 } from '../../types/index';
 import type {
@@ -93,7 +94,7 @@ interface GoatConfig {
    * Multi-input schema for generating multiple vars at each turn.
    * Keys are variable names, values are descriptions.
    */
-  inputs?: Record<string, string>;
+  inputs?: Inputs;
   [key: string]: unknown;
 }
 
@@ -126,7 +127,7 @@ export default class GoatProvider implements ApiProvider {
       continueAfterSuccess?: boolean;
       tracing?: RawTracingConfig;
       _perTurnLayers?: LayerConfig[];
-      inputs?: Record<string, string>;
+      inputs?: Inputs;
     } = {},
   ) {
     if (neverGenerateRemote()) {

@@ -42,9 +42,14 @@ import { getRemoteHealthUrl, shouldGenerateRemote } from './remoteGeneration';
 import { validateSharpDependency } from './sharpAvailability';
 import { loadStrategy, Strategies, validateStrategies } from './strategies/index';
 import { pluginMatchesStrategyTargets } from './strategies/util';
-import { extractGoalFromPrompt, extractVariablesFromJson, getShortPluginId } from './util';
+import {
+  extractGoalFromPrompt,
+  extractMaterializedVariablesFromJson,
+  getShortPluginId,
+} from './util';
 
 import type { TestCase, TestCaseWithPlugin } from '../types/index';
+import type { Inputs } from '../types/shared';
 import type {
   FailedPluginInfo,
   Policy,
@@ -452,13 +457,13 @@ async function applyStrategies(
     newTestCases.push(
       ...resultTestCases.map((t) => {
         // Re-extract individual keys from transformed JSON if inputs was used
-        const inputs = t?.metadata?.pluginConfig?.inputs as Record<string, string> | undefined;
+        const inputs = t?.metadata?.pluginConfig?.inputs as Inputs | undefined;
         let updatedVars = t.vars;
         if (inputs && Object.keys(inputs).length > 0 && t.vars?.[injectVar]) {
           try {
             const parsed = JSON.parse(String(t.vars[injectVar]));
             updatedVars = { ...t.vars };
-            Object.assign(updatedVars, extractVariablesFromJson(parsed, inputs));
+            Object.assign(updatedVars, extractMaterializedVariablesFromJson(parsed, inputs));
           } catch {
             // If parsing fails, keep original vars
           }

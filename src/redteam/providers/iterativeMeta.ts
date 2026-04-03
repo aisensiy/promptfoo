@@ -39,6 +39,7 @@ import type {
   CallApiOptionsParams,
   GradingResult,
   GuardrailResponse,
+  Inputs,
   NunjucksFilterMap,
   Prompt,
   RedteamFileConfig,
@@ -115,7 +116,7 @@ export async function runMetaAgentRedteam({
   test?: AtomicTestCase;
   vars: Record<string, VarValue>;
   excludeTargetOutputFromAgenticAttackGeneration?: boolean;
-  inputs?: Record<string, string>;
+  inputs?: Inputs;
   perTurnLayers?: LayerConfig[];
 }): Promise<{
   output: string;
@@ -629,7 +630,7 @@ class RedteamIterativeMetaProvider implements ApiProvider {
   private readonly gradingProvider: RedteamFileConfig['provider'];
   private readonly excludeTargetOutputFromAgenticAttackGeneration: boolean;
   private readonly perTurnLayers: LayerConfig[];
-  readonly inputs?: Record<string, string>;
+  readonly inputs?: Inputs;
 
   constructor(readonly config: Record<string, VarValue>) {
     logger.debug('[IterativeMeta] Constructor config', {
@@ -637,7 +638,7 @@ class RedteamIterativeMetaProvider implements ApiProvider {
     });
     invariant(typeof config.injectVar === 'string', 'Expected injectVar to be set');
     this.injectVar = config.injectVar;
-    this.inputs = config.inputs as Record<string, string> | undefined;
+    this.inputs = config.inputs as Inputs | undefined;
 
     const configuredIterations =
       Number(config.numIterations) || getEnvInt('PROMPTFOO_NUM_JAILBREAK_ITERATIONS', 10);

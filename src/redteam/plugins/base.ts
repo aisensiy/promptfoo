@@ -6,6 +6,7 @@ import { maybeLoadToolsFromExternalFile } from '../../util/index';
 import invariant from '../../util/invariant';
 import { extractVariablesFromTemplate, getNunjucksEngine } from '../../util/templates';
 import { sleep } from '../../util/time';
+import { materializeInputVariables } from '../inputVariables';
 import { redteamProviderManager } from '../providers/shared';
 import {
   extractInputVarsFromPrompt,
@@ -216,11 +217,15 @@ export abstract class RedteamPluginBase {
       const inputVars = hasMultipleInputs
         ? extractInputVarsFromPrompt(promptObj.__prompt, this.config.inputs)
         : undefined;
+      const materializedInputVars =
+        inputVars && this.config.inputs
+          ? materializeInputVariables(inputVars, this.config.inputs)
+          : undefined;
 
       // Use the configured injectVar (will be MULTI_INPUT_VAR in multi-input mode)
       const vars: Record<string, string> = {
         [this.injectVar]: promptObj.__prompt,
-        ...(inputVars || {}),
+        ...(materializedInputVars || {}),
       };
 
       return {

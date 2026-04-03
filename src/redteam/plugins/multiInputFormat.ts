@@ -5,9 +5,10 @@
 
 import dedent from 'dedent';
 import logger from '../../logger';
+import { buildInputPromptDescription, type Inputs } from '../../types/shared';
 import { extractAllPromptsFromTags, removePrefix } from '../util';
 
-export type InputsSchema = Record<string, string>;
+export type InputsSchema = Inputs;
 
 /**
  * Build a schema description string from inputs config.
@@ -16,7 +17,7 @@ export type InputsSchema = Record<string, string>;
  */
 export function buildSchemaString(inputs: InputsSchema): string {
   return Object.entries(inputs)
-    .map(([key, description]) => `"${key}": "${description}"`)
+    .map(([key, definition]) => `"${key}": "${buildInputPromptDescription(definition)}"`)
     .join(', ');
 }
 
@@ -185,7 +186,7 @@ export function parseGeneratedPrompts(generatedPrompts: string): { __prompt: str
  */
 export function parseGeneratedInputs(
   generatedOutput: string,
-  inputs: Record<string, string>,
+  inputs: Inputs,
 ): { __prompt: string }[] {
   const results: { __prompt: string }[] = [];
   const inputKeys = Object.keys(inputs);

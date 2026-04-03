@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 
 import { TooltipProvider } from '@app/components/ui/tooltip';
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import InputsEditor from './InputsEditor';
+import type { Inputs } from '@promptfoo/types';
 
 const renderWithProviders = (ui: React.ReactElement) => {
   return render(<TooltipProvider>{ui}</TooltipProvider>);
@@ -15,14 +17,14 @@ function ControlledInputsEditor({
   onChange,
   ...props
 }: {
-  initialInputs?: Record<string, string>;
-  onChange?: (inputs: Record<string, string> | undefined) => void;
+  initialInputs?: Inputs;
+  onChange?: (inputs: Inputs | undefined) => void;
   compact?: boolean;
   disabled?: boolean;
   disabledReason?: string;
 }) {
   const [inputs, setInputs] = useState(initialInputs);
-  const handleChange = (newInputs: Record<string, string> | undefined) => {
+  const handleChange = (newInputs: Inputs | undefined) => {
     setInputs(newInputs);
     onChange?.(newInputs);
   };
@@ -125,6 +127,25 @@ describe('InputsEditor', () => {
       // onChange should be called immediately (no debounce)
       expect(onChange).toHaveBeenCalledWith({ variable: '' });
     });
+
+    it('should store non-text variable types as structured input definitions', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      renderWithProviders(<ControlledInputsEditor {...defaultProps} onChange={onChange} compact />);
+
+      fireEvent.click(screen.getByRole('button', { name: /add variable/i }));
+
+      await user.click(screen.getByRole('combobox'));
+      await user.click(await screen.findByRole('option', { name: 'PDF' }));
+
+      expect(onChange).toHaveBeenLastCalledWith({
+        variable: {
+          description: '',
+          type: 'pdf',
+        },
+      });
+    });
   });
 
   describe('removing variables', () => {
@@ -160,7 +181,7 @@ describe('InputsEditor', () => {
 
   describe('validation', () => {
     it('should show duplicate error when inputs prop contains duplicate names', () => {
-      // Note: With Record<string, string>, actual duplicates are impossible since keys must be unique.
+      // Note: With Inputs, actual duplicates are still impossible since keys must be unique.
       // This test verifies that if duplicate names somehow exist in the derived variables,
       // the error would be displayed. In practice, the Record model prevents this.
       // We test by providing initial inputs with similar names to verify the UI renders correctly.

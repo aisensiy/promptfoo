@@ -14,6 +14,7 @@ import { getNunjucksEngine } from '../../../util/templates';
 import { sleep } from '../../../util/time';
 import { TokenUsageTracker } from '../../../util/tokenUsage';
 import { accumulateResponseTokenUsage, createEmptyTokenUsage } from '../../../util/tokenUsageUtils';
+import { buildPromptInputDescriptions } from '../../inputVariables';
 import { shouldGenerateRemote } from '../../remoteGeneration';
 import {
   applyRuntimeTransforms,
@@ -56,6 +57,7 @@ import type {
   CallApiContextParams,
   CallApiOptionsParams,
   GradingResult,
+  Inputs,
   NunjucksFilterMap,
   Prompt,
   ProviderResponse,
@@ -116,7 +118,7 @@ interface CrescendoConfig {
    * Multi-input schema for generating multiple vars at each turn.
    * Keys are variable names, values are descriptions.
    */
-  inputs?: Record<string, string>;
+  inputs?: Inputs;
   [key: string]: unknown;
 }
 
@@ -340,7 +342,7 @@ export class CrescendoProvider implements ApiProvider {
         )
           .map(([key, value]) => `${key}: ${value}`)
           .join('\n') || undefined,
-      inputs: this.config.inputs,
+      inputs: buildPromptInputDescriptions(this.config.inputs),
     });
 
     this.memory.addMessage(this.redTeamingChatConversationId, {
@@ -381,7 +383,7 @@ export class CrescendoProvider implements ApiProvider {
             )
               .map(([key, value]) => `${key}: ${value}`)
               .join('\n') || undefined,
-          inputs: this.config.inputs,
+          inputs: buildPromptInputDescriptions(this.config.inputs),
         });
 
         const conversation = this.memory.getConversation(this.redTeamingChatConversationId);

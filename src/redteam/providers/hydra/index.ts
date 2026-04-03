@@ -47,6 +47,7 @@ import type {
   CallApiContextParams,
   CallApiOptionsParams,
   GradingResult,
+  Inputs,
   NunjucksFilterMap,
   Prompt,
   ProviderResponse,
@@ -107,7 +108,7 @@ interface HydraConfig {
    * Multi-input schema for generating multiple vars at each turn.
    * Keys are variable names, values are descriptions.
    */
-  inputs?: Record<string, string>;
+  inputs?: Inputs;
 }
 
 function scrubOutputForHistory(output: string): string {
@@ -172,7 +173,7 @@ export class HydraProvider implements ApiProvider {
       jsonOnly: true,
       preferSmallModel: false,
       // Pass inputs schema for multi-input mode
-      inputs: this.config.inputs as Record<string, string> | undefined,
+      inputs: this.config.inputs,
     });
 
     logger.debug('[Hydra] Provider initialized', {

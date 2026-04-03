@@ -15,6 +15,7 @@ import { getNunjucksEngine } from '../../util/templates';
 import { sleep } from '../../util/time';
 import { TokenUsageTracker } from '../../util/tokenUsage';
 import { accumulateResponseTokenUsage, createEmptyTokenUsage } from '../../util/tokenUsageUtils';
+import { buildPromptInputDescriptions } from '../inputVariables';
 import { shouldGenerateRemote } from '../remoteGeneration';
 import {
   applyRuntimeTransforms,
@@ -49,6 +50,7 @@ import type {
   CallApiOptionsParams,
   GradingResult,
   GuardrailResponse,
+  Inputs,
   NunjucksFilterMap,
   Prompt,
   RedteamFileConfig,
@@ -130,7 +132,7 @@ export async function runRedteamConversation({
   vars: Record<string, VarValue>;
   excludeTargetOutputFromAgenticAttackGeneration: boolean;
   perTurnLayers?: LayerConfig[];
-  inputs?: Record<string, string>;
+  inputs?: Inputs;
 }): Promise<{
   output: string;
   prompt?: string;
@@ -161,13 +163,13 @@ export async function runRedteamConversation({
         goal,
         purpose: test?.metadata?.purpose,
         modifierSection,
-        inputs,
+        inputs: buildPromptInputDescriptions(inputs),
       })
     : nunjucks.renderString(ATTACKER_SYSTEM_PROMPT, {
         goal,
         purpose: test?.metadata?.purpose,
         modifierSection,
-        inputs,
+        inputs: buildPromptInputDescriptions(inputs),
       });
 
   const judgeSystemPrompt = nunjucks.renderString(JUDGE_SYSTEM_PROMPT, { goal });
@@ -773,13 +775,13 @@ class RedteamIterativeProvider implements ApiProvider {
   private readonly excludeTargetOutputFromAgenticAttackGeneration: boolean;
   private readonly gradingProvider: RedteamFileConfig['provider'];
   private readonly perTurnLayers: LayerConfig[];
-  readonly inputs?: Record<string, string>;
+  readonly inputs?: Inputs;
 
   constructor(readonly config: Record<string, VarValue>) {
     logger.debug('[Iterative] Constructor config', { config });
     invariant(typeof config.injectVar === 'string', 'Expected injectVar to be set');
     this.injectVar = config.injectVar;
-    this.inputs = config.inputs as Record<string, string> | undefined;
+    this.inputs = config.inputs as Inputs | undefined;
 
     const configuredIterations =
       Number(config.numIterations) || getEnvInt('PROMPTFOO_NUM_JAILBREAK_ITERATIONS', 4);
