@@ -142,8 +142,8 @@ Now that you've created an initial configuration, you can update `promptfooconfi
 
    ```yaml
    providers:
-     - openai:chat:gpt-5.4
-     - openai:chat:gpt-5.4-mini
+     - openai:gpt-5.4
+     - openai:gpt-5.4-mini
      - anthropic:messages:claude-opus-4-6
      - google:gemini-3-pro-preview
      # Or use your own custom provider
@@ -271,7 +271,7 @@ description: Automatic response evaluation using LLM rubric scoring
 prompts:
   - file://prompts.txt
 providers:
-  - openai:chat:gpt-5.4
+  - openai:gpt-5.4
 defaultTest:
   assert:
     - type: llm-rubric
@@ -357,8 +357,8 @@ prompts:
   - 'Solve this riddle: {{riddle}}'
 
 providers:
-  - openai:chat:gpt-5.4
-  - openai:chat:gpt-5.4-mini
+  - openai:gpt-5.4
+  - openai:gpt-5.4-mini
 
 defaultTest:
   assert:

@@ -93,7 +93,7 @@ You can modify the test by editing `promptfooconfig.yaml`:
 
    ```yaml
    providers:
-     - id: openai:chat:gpt-5.4
+     - id: openai:gpt-5.4
        config:
          temperature: 0.0
          max_tokens: 1500

@@ -71,9 +71,9 @@ prompts:
     End with: Therefore, the answer is <LETTER>.
 
 providers:
-  - openai:chat:gpt-5.4
-  - openai:chat:gpt-5.4-mini
-  - openai:chat:gpt-5.4-nano
+  - openai:gpt-5.4
+  - openai:gpt-5.4-mini
+  - openai:gpt-5.4-nano
 
 defaultTest:
   assert:
@@ -120,15 +120,15 @@ prompts:
     Think through this step by step, then provide your final answer as "Therefore, the answer is A."
 
 providers:
-  - id: openai:chat:gpt-5.4
+  - id: openai:gpt-5.4
     config:
       temperature: 0.1
       max_tokens: 1200
-  - id: openai:chat:gpt-5.4-mini
+  - id: openai:gpt-5.4-mini
     config:
       temperature: 0.1
       max_tokens: 1200
-  - id: openai:chat:gpt-5.4-nano
+  - id: openai:gpt-5.4-nano
     config:
       temperature: 0.1
       max_tokens: 1200

@@ -40,7 +40,7 @@ Specify the models you want to compare under `providers`:
 
 ```yaml
 providers:
-  - openai:chat:gpt-5.4
+  - openai:gpt-5.4
   - anthropic:claude-sonnet-4-6
   - google:gemini-3.1-pro-preview
 ```
@@ -49,7 +49,7 @@ You can optionally set parameters like temperature and max tokens for each model
 
 ```yaml
 providers:
-  - id: openai:chat:gpt-5.4
+  - id: openai:gpt-5.4
     config:
       max_tokens: 1024
   - id: anthropic:claude-sonnet-4-6
@@ -103,7 +103,7 @@ prompts:
 providers:
   - id: google:gemini-3.1-pro-preview
     prompts: gemini_prompt
-  - id: openai:chat:gpt-5.4
+  - id: openai:gpt-5.4
     prompts:
       - gpt_prompt
   - id: anthropic:claude-sonnet-4-6
@@ -273,7 +273,7 @@ If you're working on an application that involves classifying images, you can se
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - openai:chat:gpt-5.4
+  - openai:gpt-5.4
   - anthropic:claude-sonnet-4-6
   - google:gemini-3.1-pro-preview
 
