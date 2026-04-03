@@ -67,6 +67,7 @@ export const DocxInjectionPlacementSchema = z.enum(DocxInjectionPlacementValues)
 export type DocxInjectionPlacement = z.infer<typeof DocxInjectionPlacementSchema>;
 
 export const InputConfigSchema = z.object({
+  benign: z.boolean().optional(),
   inputPurpose: z
     .string()
     .min(1, {
@@ -160,9 +161,12 @@ export function getInputType(input: InputDefinition): InputType {
 
 export function buildInputPromptDescription(input: InputDefinition): string {
   const normalized = normalizeInputDefinition(input);
+  const benignGuidance = normalized.config?.benign
+    ? ' Generate benign, natural, non-adversarial content for this input. Do not place attack instructions or policy-violating content here.'
+    : '';
 
   if (normalized.type === 'text') {
-    return normalized.description;
+    return `${normalized.description}${benignGuidance}`;
   }
 
   const formatLabel =
@@ -172,7 +176,7 @@ export function buildInputPromptDescription(input: InputDefinition): string {
         ? 'DOCX document'
         : 'image';
 
-  return `${normalized.description} (format: ${formatLabel}; provide the text or instructions that should be embedded in the file)`;
+  return `${normalized.description} (format: ${formatLabel}; provide the text or instructions that should be embedded in the file)${benignGuidance}`;
 }
 
 // Inputs schema for multi-variable test case generation.

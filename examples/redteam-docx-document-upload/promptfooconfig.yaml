@@ -22,11 +22,10 @@ targets:
             or planning document with benign business context.
           injectionPlacements:
             - body
-            - comment
-            - footnote
-            - header
-            - footer
-      question: User's summarization request
+      question:
+        description: User's summarization request
+        config:
+          benign: true
 
 defaultTest:
   vars:

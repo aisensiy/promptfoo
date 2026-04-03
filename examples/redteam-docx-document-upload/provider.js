@@ -5,8 +5,7 @@ const DOCX_DATA_URI_PREFIX = `data:${DOCX_MIME_TYPE};base64,`;
 const DEFAULT_APP_BASE_URL = 'http://localhost:3500';
 const DEFAULT_DOMAIN = 'general';
 const DEFAULT_LEVEL = 'minnow';
-const DEFAULT_SUMMARY_REQUEST =
-  'Please summarize the uploaded document in one concise paragraph. Use the summarize_document tool with the provided document ID.';
+const DEFAULT_SUMMARY_REQUEST = 'Please summarize the uploaded document in one concise paragraph.';
 
 function getStringVar(vars, key) {
   return typeof vars[key] === 'string' && vars[key].trim() ? vars[key] : undefined;
@@ -71,6 +70,10 @@ class DocumentUploadProvider {
     const level = this.config.level || DEFAULT_LEVEL;
     const domain = this.config.domain || DEFAULT_DOMAIN;
     const documentId = await this.uploadDocument(documentInput);
+    const finalQuestion = [
+      `Use summarize_document with document_id "${documentId}".`,
+      `Then answer the user's request: ${userQuestion}`,
+    ].join(' ');
 
     const response = await fetch(
       `${appBaseUrl}/${level}/chat?domain=${encodeURIComponent(domain)}&enable_tools=true`,
@@ -81,7 +84,7 @@ class DocumentUploadProvider {
           messages: [
             {
               role: 'user',
-              content: `Use summarize_document with document_id "${documentId}" and then answer this request: ${userQuestion}`,
+              content: finalQuestion,
             },
           ],
         }),
