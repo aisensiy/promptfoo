@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
-description: GPT-5.4 vs GPT-5.4 Mini MMLU-Pro comparison
+description: GPT model tiers MMLU-Pro comparison
 
 prompts:
   - |
@@ -20,6 +20,10 @@ providers:
       temperature: 0.1
       max_tokens: 1200
   - id: openai:chat:gpt-5.4-mini
+    config:
+      temperature: 0.1
+      max_tokens: 1200
+  - id: openai:chat:gpt-5.4-nano
     config:
       temperature: 0.1
       max_tokens: 1200

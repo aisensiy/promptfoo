@@ -1,16 +1,26 @@
 ---
-title: GPT-5.4 vs GPT-5.4 Mini MMLU-Pro Benchmark Comparison
-description: Compare GPT-5.4 and GPT-5.4 Mini performance on MMLU-Pro reasoning tasks using promptfoo with step-by-step setup and deterministic scoring.
+title: GPT Model Tiers MMLU-Pro Benchmark Comparison
+description: Compare full, mini, and nano GPT model tiers on MMLU-Pro reasoning tasks using promptfoo with step-by-step setup and deterministic scoring.
 image: /img/docs/gpt-5-vs-gpt-5-mini-mmlu.png
 keywords:
-  [gpt-5.4, gpt-5.4-mini, mmlu-pro, benchmark, comparison, academic reasoning, openai, evaluation]
-sidebar_label: GPT-5.4 vs GPT-5.4 Mini MMLU-Pro
+  [
+    gpt-5.4,
+    gpt-5.4-mini,
+    gpt-5.4-nano,
+    mmlu-pro,
+    benchmark,
+    comparison,
+    academic reasoning,
+    openai,
+    evaluation,
+  ]
+sidebar_label: GPT Model Tiers MMLU-Pro
 slug: gpt-mmlu-comparison
 ---
 
-# GPT-5.4 vs GPT-5.4 Mini: MMLU-Pro Benchmark Comparison
+# GPT Model Tiers: MMLU-Pro Benchmark Comparison
 
-This guide compares GPT-5.4 and GPT-5.4 Mini on MMLU-Pro reasoning tasks using promptfoo.
+This guide compares full, mini, and nano OpenAI GPT model tiers on MMLU-Pro reasoning tasks using promptfoo.
 
 **MMLU-Pro** is a harder successor to MMLU with more challenging reasoning questions and up to 10 answer options per item.
 
@@ -18,12 +28,12 @@ This guide shows you how to run MMLU-Pro benchmarks using promptfoo.
 
 MMLU-Pro covers a broad set of academic and professional subjects, and it is more useful than classic MMLU when current models are already near saturation on easier multiple-choice benchmarks.
 
-Running your own MMLU-Pro evaluation lets you compare reasoning quality, latency, and cost on a benchmark where full-size and mini models are less likely to tie at a perfect score.
+Running your own MMLU-Pro evaluation lets you compare reasoning quality, latency, and cost on a benchmark where full-size, mini, and nano models are less likely to tie at a perfect score.
 
 :::tip Quick Start
 
 ```bash
-npx promptfoo@latest init --example compare-gpt-mmlu-pro
+npx promptfoo@latest init --example compare-gpt-model-tiers-mmlu-pro
 ```
 
 :::
@@ -39,8 +49,8 @@ npx promptfoo@latest init --example compare-gpt-mmlu-pro
 Initialize and configure:
 
 ```bash
-npx promptfoo@latest init gpt-5-mmlu-pro-comparison
-cd gpt-5-mmlu-pro-comparison
+npx promptfoo@latest init gpt-mmlu-pro-comparison
+cd gpt-mmlu-pro-comparison
 export HF_TOKEN=your_token_here
 ```
 
@@ -48,7 +58,7 @@ Create a minimal configuration:
 
 ```yaml title="promptfooconfig.yaml"
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
-description: GPT-5.4 vs GPT-5.4 Mini MMLU-Pro comparison
+description: GPT model tiers MMLU-Pro comparison
 
 prompts:
   - |
@@ -63,6 +73,7 @@ prompts:
 providers:
   - openai:chat:gpt-5.4
   - openai:chat:gpt-5.4-mini
+  - openai:chat:gpt-5.4-nano
 
 defaultTest:
   assert:
@@ -84,7 +95,7 @@ npx promptfoo@latest eval
 npx promptfoo@latest view
 ```
 
-You should see GPT-5.4 outperforming GPT-5.4 Mini on at least some MMLU-Pro categories, though the exact gap depends on the sample.
+You should see the full-size GPT tier outperforming the smaller tiers on at least some MMLU-Pro categories, though the exact gaps depend on the sample.
 
 ![GPT benchmark results](/img/docs/gpt-5-vs-gpt-5-mini-mmlu-results.jpg)
 
@@ -117,6 +128,10 @@ providers:
     config:
       temperature: 0.1
       max_tokens: 1200
+  - id: openai:chat:gpt-5.4-nano
+    config:
+      temperature: 0.1
+      max_tokens: 1200
 
 defaultTest:
   assert:
@@ -146,14 +161,14 @@ tests:
 
 ### What to Look For
 
-- **Accuracy**: GPT-5.4 may score higher across harder subjects
+- **Accuracy**: Full-size GPT models may score higher across harder subjects
 - **Reasoning Quality**: Look for stronger elimination among similar distractors
 - **Format Compliance**: Better adherence to answer format
 - **Consistency**: More reliable performance across question types
 
 ### Key Areas to Compare
 
-When evaluating GPT-5.4 vs GPT-5.4 Mini on MMLU-Pro, look for differences in:
+When evaluating full, mini, and nano GPT model tiers on MMLU-Pro, look for differences in:
 
 - **Mathematical Reasoning**: Algebra, calculus, and formal logic performance
 - **Scientific Knowledge**: Chemistry, physics, and biology understanding

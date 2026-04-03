@@ -1,13 +1,13 @@
-# compare-gpt-mmlu-pro (GPT-5.4 vs GPT-5.4 Mini MMLU-Pro Comparison)
+# compare-gpt-model-tiers-mmlu-pro (GPT Model Tiers MMLU-Pro Comparison)
 
 You can run this example with:
 
 ```bash
-npx promptfoo@latest init --example compare-gpt-mmlu-pro
-cd compare-gpt-mmlu-pro
+npx promptfoo@latest init --example compare-gpt-model-tiers-mmlu-pro
+cd compare-gpt-model-tiers-mmlu-pro
 ```
 
-This example demonstrates how to benchmark OpenAI's GPT-5.4 against GPT-5.4 Mini using the MMLU-Pro benchmark, a harder multiple-choice benchmark with up to 10 answer options per question.
+This example demonstrates how to benchmark full, mini, and nano OpenAI GPT model tiers using MMLU-Pro, a harder multiple-choice benchmark with up to 10 answer options per question.
 
 ## Prerequisites
 
@@ -38,8 +38,8 @@ To access the MMLU dataset, you'll need to authenticate with Hugging Face:
 1. Get a local copy of the promptfooconfig:
 
    ```bash
-   npx promptfoo@latest init --example compare-gpt-mmlu-pro
-   cd compare-gpt-mmlu-pro
+   npx promptfoo@latest init --example compare-gpt-model-tiers-mmlu-pro
+   cd compare-gpt-model-tiers-mmlu-pro
    ```
 
 2. Run the evaluation:
@@ -56,7 +56,7 @@ To access the MMLU dataset, you'll need to authenticate with Hugging Face:
 
 ## What's Being Tested
 
-This comparison evaluates both models on 100 MMLU-Pro questions spanning many subject categories.
+This comparison evaluates all three models on 100 MMLU-Pro questions spanning many subject categories.
 
 ## Test Structure
 
