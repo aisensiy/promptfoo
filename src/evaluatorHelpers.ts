@@ -92,6 +92,28 @@ function autoWrapRawIfPartialNunjucks(prompt: string): string {
   return prompt;
 }
 
+function isLikelyJsonValue(prompt: string): boolean {
+  for (let i = 0; i < prompt.length; i++) {
+    const char = prompt[i];
+    if (/\s/.test(char)) {
+      continue;
+    }
+
+    return (
+      char === '{' ||
+      char === '[' ||
+      char === '"' ||
+      char === '-' ||
+      (char >= '0' && char <= '9') ||
+      char === 't' ||
+      char === 'f' ||
+      char === 'n'
+    );
+  }
+
+  return false;
+}
+
 function referencesUndefinedVariables(template: string, vars: Record<string, VarValue>): boolean {
   return extractVariablesFromTemplate(template).some((variableName) => {
     const rootVariableName = /^([A-Za-z_]\w*)/.exec(variableName)?.[1];
@@ -472,19 +494,8 @@ export async function renderPrompt(
     );
     return heliconeResult;
   }
-  // Render prompt
-  try {
-    if (getEnvBool('PROMPTFOO_DISABLE_JSON_AUTOESCAPE')) {
-      // Pre-process: auto-wrap in {% raw %} if partial Nunjucks tags detected
-      basePrompt = autoWrapRawIfPartialNunjucks(basePrompt);
-      return nunjucks.renderString(basePrompt, vars);
-    }
 
-    const parsed = JSON.parse(basePrompt);
-    // The _raw_ prompt is valid JSON. That means that the user likely wants to substitute vars _within_ the JSON itself.
-    // Recursively walk the JSON structure. If we find a string, render it with nunjucks.
-    return JSON.stringify(renderVarsInObject(parsed, vars), null, 2);
-  } catch {
+  const renderTextPrompt = (template: string) => {
     // Vars values can be template strings, so we need to render them first:
     const renderedVars = Object.fromEntries(
       Object.entries(vars).map(([key, value]) => {
@@ -501,11 +512,31 @@ export async function renderPrompt(
     );
 
     // Pre-process: auto-wrap in {% raw %} if partial Nunjucks tags detected
-    basePrompt = autoWrapRawIfPartialNunjucks(basePrompt);
+    const wrappedTemplate = autoWrapRawIfPartialNunjucks(template);
     // Note: Explicitly not using `renderVarsInObject` as it will re-call `renderString`; each call will
     // strip Nunjucks Tags, which breaks using raw (https://mozilla.github.io/nunjucks/templating.html#raw) e.g.
     // {% raw %}{{some_string}}{% endraw %} -> {{some_string}} -> ''
-    return nunjucks.renderString(basePrompt, renderedVars);
+    return nunjucks.renderString(wrappedTemplate, renderedVars);
+  };
+
+  // Render prompt
+  try {
+    if (getEnvBool('PROMPTFOO_DISABLE_JSON_AUTOESCAPE')) {
+      // Pre-process: auto-wrap in {% raw %} if partial Nunjucks tags detected
+      basePrompt = autoWrapRawIfPartialNunjucks(basePrompt);
+      return nunjucks.renderString(basePrompt, vars);
+    }
+
+    if (isLikelyJsonValue(basePrompt)) {
+      const parsed = JSON.parse(basePrompt);
+      // The _raw_ prompt is valid JSON. That means that the user likely wants to substitute vars _within_ the JSON itself.
+      // Recursively walk the JSON structure. If we find a string, render it with nunjucks.
+      return JSON.stringify(renderVarsInObject(parsed, vars), null, 2);
+    }
+
+    return renderTextPrompt(basePrompt);
+  } catch {
+    return renderTextPrompt(basePrompt);
   }
 }
 
