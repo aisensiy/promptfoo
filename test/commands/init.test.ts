@@ -321,6 +321,20 @@ describe('init command', () => {
         expect(opencodeResult).toEqual('provider-opencode-sdk/basic');
       });
 
+      it('should preserve legacy GPT model comparison example names', async () => {
+        mockFetchWithProxy.mockRejectedValue(new Error('404 Not Found'));
+        vi.mocked(confirm).mockResolvedValue(false);
+
+        const legacyFolderResult = await init.handleExampleDownload(
+          '.',
+          'compare-gpt-4o-vs-4o-mini',
+        );
+        const legacyAliasResult = await init.handleExampleDownload('.', 'gpt-4o-vs-4o-mini');
+
+        expect(legacyFolderResult).toEqual('compare-gpt-model-tiers');
+        expect(legacyAliasResult).toEqual('compare-gpt-model-tiers');
+      });
+
       it('should use legacy ref for removed examples', async () => {
         const mockFailure = createMockResponse({
           ok: false,
