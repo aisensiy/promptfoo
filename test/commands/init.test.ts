@@ -330,9 +330,14 @@ describe('init command', () => {
           'compare-gpt-4o-vs-4o-mini',
         );
         const legacyAliasResult = await init.handleExampleDownload('.', 'gpt-4o-vs-4o-mini');
+        const legacyMmluResult = await init.handleExampleDownload(
+          '.',
+          'compare-gpt-5-vs-gpt-5-mini-mmlu',
+        );
 
         expect(legacyFolderResult).toEqual('compare-gpt-model-tiers');
         expect(legacyAliasResult).toEqual('compare-gpt-model-tiers');
+        expect(legacyMmluResult).toEqual('compare-gpt-mmlu-pro');
       });
 
       it('should use legacy ref for removed examples', async () => {
