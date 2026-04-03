@@ -7,17 +7,17 @@ npx promptfoo@latest init --example compare-gpt-model-tiers-mmlu-pro
 cd compare-gpt-model-tiers-mmlu-pro
 ```
 
-This example demonstrates how to benchmark full, mini, and nano OpenAI GPT model tiers using MMLU-Pro, a harder multiple-choice benchmark with up to 10 answer options per question.
+This example demonstrates how to benchmark full, mini, and nano OpenAI GPT model tiers using MMLU-Pro, a more challenging successor to MMLU with up to 10 answer options per question.
 
 ## Prerequisites
 
 - promptfoo CLI installed (`npm install -g promptfoo` or `brew install promptfoo`)
 - OpenAI API key set as `OPENAI_API_KEY`
-- Hugging Face account and access token (for the MMLU-Pro dataset)
+- Hugging Face account and access token (optional for public MMLU-Pro data, useful for higher rate limits)
 
 ## Hugging Face Authentication
 
-To access the MMLU dataset, you'll need to authenticate with Hugging Face:
+For higher rate limits or private datasets, authenticate with Hugging Face:
 
 1. Create a Hugging Face account at [huggingface.co](https://huggingface.co) if you don't have one
 2. Generate an access token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
@@ -75,7 +75,7 @@ The configuration in `promptfooconfig.yaml` includes:
 
 You can modify the test by editing `promptfooconfig.yaml`:
 
-1. **Add more MMLU subjects**:
+1. **Evaluate more MMLU-Pro questions**:
 
    ```yaml
    tests:

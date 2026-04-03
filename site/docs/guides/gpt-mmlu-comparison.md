@@ -22,7 +22,7 @@ slug: gpt-mmlu-comparison
 
 This guide compares full, mini, and nano OpenAI GPT model tiers on MMLU-Pro reasoning tasks using promptfoo.
 
-**MMLU-Pro** is a harder successor to MMLU with more challenging reasoning questions and up to 10 answer options per item.
+**MMLU-Pro** is a more challenging successor to MMLU with harder reasoning questions and up to 10 answer options per item.
 
 This guide shows you how to run MMLU-Pro benchmarks using promptfoo.
 
@@ -42,7 +42,7 @@ npx promptfoo@latest init --example compare-gpt-model-tiers-mmlu-pro
 
 - [promptfoo CLI installed](/docs/installation)
 - OpenAI API key (set as `OPENAI_API_KEY`)
-- [Hugging Face token](https://huggingface.co/settings/tokens) (set as `HF_TOKEN`)
+- [Hugging Face token](https://huggingface.co/settings/tokens) (optional for public datasets; set as `HF_TOKEN`)
 
 ## Step 1: Basic Setup
 
@@ -183,7 +183,7 @@ Ready to go deeper? Try these advanced techniques:
 1. **Compare multiple prompting strategies** - Test few-shot vs zero-shot approaches
 2. **Increase MMLU-Pro sample size** - Use larger random subsets once your prompt and assertions are stable
 3. **Add domain-specific assertions** - Create custom metrics for your use cases
-4. **Scale with distributed testing** - Run comprehensive benchmarks across all 57 MMLU subjects
+4. **Scale with distributed testing** - Run broader MMLU-Pro benchmarks across more questions and categories
 
 ## See Also
 
