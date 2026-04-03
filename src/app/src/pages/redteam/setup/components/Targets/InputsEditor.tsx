@@ -19,6 +19,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@app/components/ui/tooltip';
 import { cn } from '@app/lib/utils';
 import {
+  type InputConfig,
   type InputDefinition,
   type Inputs,
   type InputType,
@@ -38,6 +39,7 @@ interface InputsEditorProps {
 }
 
 type Variable = {
+  config?: InputConfig;
   name: string;
   description: string;
   type: InputType;
@@ -56,6 +58,7 @@ function toStoredInputDefinition(variable: Variable): InputDefinition {
   }
 
   return {
+    ...(variable.config ? { config: variable.config } : {}),
     description: variable.description,
     type: variable.type,
   };
@@ -130,10 +133,15 @@ export default function InputsEditor({
       return;
     }
     const currentInput = inputs[name];
-    const currentType = currentInput ? normalizeInputDefinition(currentInput).type : 'text';
+    const normalizedInput = currentInput ? normalizeInputDefinition(currentInput) : undefined;
     onChange({
       ...inputs,
-      [name]: toStoredInputDefinition({ name, description, type: currentType }),
+      [name]: toStoredInputDefinition({
+        config: normalizedInput?.config,
+        name,
+        description,
+        type: normalizedInput?.type ?? 'text',
+      }),
     });
   };
 
@@ -142,10 +150,15 @@ export default function InputsEditor({
       return;
     }
     const currentInput = inputs[name];
-    const description = currentInput ? normalizeInputDefinition(currentInput).description : '';
+    const normalizedInput = currentInput ? normalizeInputDefinition(currentInput) : undefined;
     onChange({
       ...inputs,
-      [name]: toStoredInputDefinition({ name, description, type }),
+      [name]: toStoredInputDefinition({
+        config: normalizedInput?.config,
+        name,
+        description: normalizedInput?.description ?? '',
+        type,
+      }),
     });
   };
 

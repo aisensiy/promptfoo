@@ -12,7 +12,7 @@ docker-compose up -d
 pnpm dev
 ```
 
-If port `3000` is already in use, start the app on another port and update `targets[0].config.appBaseUrl` in `promptfooconfig.yaml`.
+If port `3500` is already in use, start the app on another port and update `targets[0].config.appBaseUrl` in `promptfooconfig.yaml`.
 
 ## Running
 
@@ -26,7 +26,7 @@ npm run local -- redteam run -c examples/redteam-docx-document-upload/promptfooc
 
 The target declares two inputs:
 
-- `document` uses `type: docx`, so generated document text is materialized into a real DOCX data URI before the provider is called.
+- `document` uses `type: docx`, so generated document text is materialized into a real DOCX data URI before the provider is called. Its `config.inputPurpose` describes the kind of document the app expects, and `config.injectionPlacements` controls which DOCX-native surfaces may carry the injected instruction.
 - `question` is plain text that asks the assistant to summarize the uploaded document.
 
 The custom provider uploads the DOCX bytes to `example-app`'s `/documents` endpoint, then asks the chat endpoint to call `summarize_document` with the returned `document_id`.

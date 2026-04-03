@@ -3,7 +3,7 @@ import logger from '../../logger';
 import { getNunjucksEngine } from '../../util/templates';
 import {
   extractAllPromptsFromTags,
-  extractMaterializedVariablesFromJson,
+  extractMaterializedVariablesFromJsonWithMetadata,
   extractPromptFromTags,
 } from '../util';
 import { RedteamGraderBase, RedteamPluginBase } from './base';
@@ -18,12 +18,20 @@ const PLUGIN_ID = 'promptfoo:redteam:pii';
  * Extract content from <Prompt> tags and parse JSON if inputs are defined.
  * Returns the processed prompt and any additional vars extracted from JSON.
  */
-function processPromptForInputs(
+async function processPromptForInputs(
   prompt: string,
   inputs: Inputs | undefined,
-): { processedPrompt: string; additionalVars: Record<string, string> } {
+  provider: PluginActionParams['provider'],
+  purpose: string,
+  pluginId: string,
+): Promise<{
+  additionalMetadata?: Record<string, unknown>;
+  additionalVars: Record<string, string>;
+  processedPrompt: string;
+}> {
   let processedPrompt = prompt.trim();
   const additionalVars: Record<string, string> = {};
+  let additionalMetadata: Record<string, unknown> | undefined;
 
   // Extract content from <Prompt> tags if present
   const extractedPrompt = extractPromptFromTags(processedPrompt);
@@ -35,14 +43,24 @@ function processPromptForInputs(
   if (inputs && Object.keys(inputs).length > 0) {
     try {
       const parsed = JSON.parse(processedPrompt);
-      Object.assign(additionalVars, extractMaterializedVariablesFromJson(parsed, inputs));
+      const materializedVars = await extractMaterializedVariablesFromJsonWithMetadata(
+        parsed,
+        inputs,
+        {
+          pluginId,
+          provider,
+          purpose,
+        },
+      );
+      Object.assign(additionalVars, materializedVars.vars);
+      additionalMetadata = materializedVars.metadata;
     } catch {
       // If parsing fails, processedPrompt is plain text - keep it as is
       logger.debug('[PII] Could not parse prompt as JSON for multi-input mode');
     }
   }
 
-  return { processedPrompt, additionalVars };
+  return { processedPrompt, additionalVars, additionalMetadata };
 }
 
 type PiiRequestCategory = (typeof PII_PLUGINS)[number];
@@ -228,24 +246,39 @@ export async function getPiiLeakTestsForCategory(
       .map((line) => line.substring(line.indexOf('Prompt:') + 'Prompt:'.length).trim());
   }
 
-  return prompts.map((prompt) => {
-    const { processedPrompt, additionalVars } = processPromptForInputs(prompt, inputs);
+  return Promise.all(
+    prompts.map(async (prompt) => {
+      const { processedPrompt, additionalVars, additionalMetadata } = await processPromptForInputs(
+        prompt,
+        inputs,
+        provider,
+        purpose,
+        categoryKey,
+      );
 
-    const vars: Record<string, string> = {
-      [injectVar]: processedPrompt,
-      ...additionalVars,
-    };
+      const vars: Record<string, string> = {
+        [injectVar]: processedPrompt,
+        ...additionalVars,
+      };
 
-    return {
-      vars,
-      assert: [
-        {
-          type: PLUGIN_ID,
-          metric: 'PIILeak',
-        },
-      ],
-    };
-  });
+      return {
+        vars,
+        assert: [
+          {
+            type: PLUGIN_ID,
+            metric: 'PIILeak',
+          },
+        ],
+        ...(additionalMetadata
+          ? {
+              metadata: {
+                inputMaterialization: additionalMetadata,
+              },
+            }
+          : {}),
+      };
+    }),
+  );
 }
 
 export class PiiGrader extends RedteamGraderBase {

@@ -6,7 +6,12 @@ import { safeJsonStringify } from '../util/json';
 import { escapeRegExp } from '../util/text';
 import { pluginDescriptions } from './constants';
 import { DATASET_PLUGINS } from './constants/strategies';
-import { materializeInputVariables } from './inputVariables';
+import {
+  type InputMaterializationContext,
+  type MaterializedInputVariablesResult,
+  materializeInputVariables,
+  materializeInputVariablesWithMetadata,
+} from './inputVariables';
 import { getRemoteGenerationUrl, neverGenerateRemote } from './remoteGeneration';
 
 import type { CallApiContextParams, ProviderResponse } from '../types/index';
@@ -76,6 +81,18 @@ export function extractMaterializedVariablesFromJson(
   inputs: Inputs,
 ): Record<string, string> {
   return materializeInputVariables(extractVariablesFromJson(parsed, inputs), inputs);
+}
+
+export async function extractMaterializedVariablesFromJsonWithMetadata(
+  parsed: Record<string, unknown>,
+  inputs: Inputs,
+  context: InputMaterializationContext = {},
+): Promise<MaterializedInputVariablesResult> {
+  return materializeInputVariablesWithMetadata(
+    extractVariablesFromJson(parsed, inputs),
+    inputs,
+    context,
+  );
 }
 
 /**

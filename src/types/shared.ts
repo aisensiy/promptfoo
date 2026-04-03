@@ -56,12 +56,58 @@ export const InputTypeValues = ['text', 'pdf', 'docx', 'image'] as const;
 export const InputTypeSchema = z.enum(InputTypeValues);
 export type InputType = z.infer<typeof InputTypeSchema>;
 
-export const InputDefinitionObjectSchema = z.object({
-  description: z.string().min(1, {
-    error: 'Input descriptions must be non-empty strings',
-  }),
-  type: InputTypeSchema.optional(),
+export const DocxInjectionPlacementValues = [
+  'body',
+  'comment',
+  'footnote',
+  'header',
+  'footer',
+] as const;
+export const DocxInjectionPlacementSchema = z.enum(DocxInjectionPlacementValues);
+export type DocxInjectionPlacement = z.infer<typeof DocxInjectionPlacementSchema>;
+
+export const InputConfigSchema = z.object({
+  inputPurpose: z
+    .string()
+    .min(1, {
+      error: 'Input purpose must be a non-empty string',
+    })
+    .optional(),
+  injectionPlacements: z
+    .array(z.string().min(1, { error: 'Injection placement must be a non-empty string' }))
+    .min(1, { error: 'Injection placements must contain at least one placement' })
+    .optional(),
 });
+export type InputConfig = z.infer<typeof InputConfigSchema>;
+
+export const InputDefinitionObjectSchema = z
+  .object({
+    config: InputConfigSchema.optional(),
+    description: z.string().min(1, {
+      error: 'Input descriptions must be non-empty strings',
+    }),
+    type: InputTypeSchema.optional(),
+  })
+  .superRefine((input, ctx) => {
+    const inputType = input.type ?? 'text';
+    const injectionPlacements = input.config?.injectionPlacements ?? [];
+
+    if (inputType !== 'docx' || injectionPlacements.length === 0) {
+      return;
+    }
+
+    const invalidPlacements = injectionPlacements.filter(
+      (placement) => !DocxInjectionPlacementSchema.safeParse(placement).success,
+    );
+
+    if (invalidPlacements.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['config', 'injectionPlacements'],
+        message: `Invalid DOCX injection placements: ${invalidPlacements.join(', ')}. Expected one of: ${DocxInjectionPlacementValues.join(', ')}`,
+      });
+    }
+  });
 
 export const InputDefinitionSchema = z.union([
   z.string().min(1, {
@@ -72,6 +118,7 @@ export const InputDefinitionSchema = z.union([
 
 export type InputDefinition = z.infer<typeof InputDefinitionSchema>;
 export type NormalizedInputDefinition = {
+  config?: InputConfig;
   description: string;
   type: InputType;
 };
@@ -85,6 +132,7 @@ export function normalizeInputDefinition(input: InputDefinition): NormalizedInpu
   }
 
   return {
+    config: input.config,
     description: input.description,
     type: input.type ?? 'text',
   };

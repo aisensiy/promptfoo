@@ -3,7 +3,10 @@ import logger from '../../../logger';
 import { PromptfooHarmfulCompletionProvider } from '../../../providers/promptfoo';
 import { retryWithDeduplication, sampleArray } from '../../../util/generation';
 import { sleep } from '../../../util/time';
-import { extractMaterializedVariablesFromJson, extractPromptFromTags } from '../../util';
+import {
+  extractMaterializedVariablesFromJsonWithMetadata,
+  extractPromptFromTags,
+} from '../../util';
 import { createTestCase } from './common';
 
 import type { PluginActionParams, TestCase } from '../../../types/index';
@@ -14,13 +17,20 @@ import type { UNALIGNED_PROVIDER_HARM_PLUGINS } from '../../constants';
  * Extract content from <Prompt> tags and parse JSON if inputs are defined.
  * Returns the processed prompt and any additional vars extracted from JSON.
  */
-function processPromptForInputs(
+async function processPromptForInputs(
   prompt: string,
-  _injectVar: string,
   inputs: Inputs | undefined,
-): { processedPrompt: string; additionalVars: Record<string, string> } {
+  plugin: keyof typeof UNALIGNED_PROVIDER_HARM_PLUGINS,
+  provider: PromptfooHarmfulCompletionProvider,
+  purpose: string,
+): Promise<{
+  additionalMetadata?: Record<string, unknown>;
+  additionalVars: Record<string, string>;
+  processedPrompt: string;
+}> {
   let processedPrompt = prompt.trim();
   const additionalVars: Record<string, string> = {};
+  let additionalMetadata: Record<string, unknown> | undefined;
 
   // Extract content from <Prompt> tags if present
   const extractedPrompt = extractPromptFromTags(processedPrompt);
@@ -32,14 +42,24 @@ function processPromptForInputs(
   if (inputs && Object.keys(inputs).length > 0) {
     try {
       const parsed = JSON.parse(processedPrompt);
-      Object.assign(additionalVars, extractMaterializedVariablesFromJson(parsed, inputs));
+      const materializedVars = await extractMaterializedVariablesFromJsonWithMetadata(
+        parsed,
+        inputs,
+        {
+          pluginId: plugin,
+          provider,
+          purpose,
+        },
+      );
+      Object.assign(additionalVars, materializedVars.vars);
+      additionalMetadata = materializedVars.metadata;
     } catch {
       // If parsing fails, processedPrompt is plain text - keep it as is
       logger.debug('[Harmful] Could not parse prompt as JSON for multi-input mode');
     }
   }
 
-  return { processedPrompt, additionalVars };
+  return { processedPrompt, additionalVars, additionalMetadata };
 }
 
 export async function getHarmfulTests(
@@ -67,18 +87,33 @@ export async function getHarmfulTests(
   const allPrompts = await retryWithDeduplication(generatePrompts, n);
   const inputs = config?.inputs as Inputs | undefined;
 
-  return sampleArray(allPrompts, n).map((prompt) => {
-    const { processedPrompt, additionalVars } = processPromptForInputs(prompt, injectVar, inputs);
-    const testCase = createTestCase(injectVar, processedPrompt, plugin);
+  return Promise.all(
+    sampleArray(allPrompts, n).map(async (prompt) => {
+      const { processedPrompt, additionalVars, additionalMetadata } = await processPromptForInputs(
+        prompt,
+        inputs,
+        plugin,
+        unalignedProvider,
+        purpose,
+      );
+      const testCase = createTestCase(injectVar, processedPrompt, plugin);
 
-    // Merge additional vars from JSON parsing
-    if (Object.keys(additionalVars).length > 0) {
-      testCase.vars = {
-        ...testCase.vars,
-        ...additionalVars,
-      };
-    }
+      // Merge additional vars from JSON parsing
+      if (Object.keys(additionalVars).length > 0) {
+        testCase.vars = {
+          ...testCase.vars,
+          ...additionalVars,
+        };
+      }
 
-    return testCase;
-  });
+      if (additionalMetadata) {
+        testCase.metadata = {
+          ...testCase.metadata,
+          inputMaterialization: additionalMetadata,
+        };
+      }
+
+      return testCase;
+    }),
+  );
 }
