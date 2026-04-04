@@ -783,6 +783,64 @@ describe('EvalOutputCell', () => {
     expect(tooltipElement).toBeInTheDocument();
   });
 
+  it('displays total and prompt/completion token counts when reasoning tokens are absent', () => {
+    const propsWithStandardTokens: MockEvalOutputCellProps = {
+      ...defaultProps,
+      output: {
+        ...defaultProps.output,
+        tokenUsage: {
+          prompt: 11,
+          completion: 22,
+          total: 33,
+        },
+      },
+    };
+
+    renderWithProviders(<EvalOutputCell {...propsWithStandardTokens} />);
+
+    expect(screen.getByText('33 (11+22)')).toBeInTheDocument();
+  });
+
+  it('renders JSON diffs with added and removed fragments when showDiffs is enabled', () => {
+    const { container } = renderWithProviders(
+      <EvalOutputCell
+        {...defaultProps}
+        firstOutput={{
+          ...defaultProps.firstOutput,
+          text: '{"status":"old"}',
+        }}
+        output={{
+          ...defaultProps.output,
+          text: '{"status":"new"}',
+        }}
+        showDiffs={true}
+      />,
+    );
+
+    expect(container.querySelector('del')?.textContent).toContain('old');
+    expect(container.querySelector('ins')?.textContent).toContain('new');
+  });
+
+  it('renders word diffs for non-JSON outputs without sentence punctuation', () => {
+    const { container } = renderWithProviders(
+      <EvalOutputCell
+        {...defaultProps}
+        firstOutput={{
+          ...defaultProps.firstOutput,
+          text: 'alpha beta',
+        }}
+        output={{
+          ...defaultProps.output,
+          text: 'alpha gamma',
+        }}
+        showDiffs={true}
+      />,
+    );
+
+    expect(container.querySelector('del')?.textContent).toContain('beta');
+    expect(container.querySelector('ins')?.textContent).toContain('gamma');
+  });
+
   it('does not highlight text when shouldHighlightSearchText is true but searchText is empty', () => {
     mockTableStoreState.shouldHighlightSearchText = true;
 

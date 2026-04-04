@@ -157,6 +157,981 @@ function getPrimaryRenderedImageSrc(text: string, inlineImageSrc?: string): stri
   return undefined;
 }
 
+function getFailAndPassReasons(output: EvaluateTableOutput): {
+  failReasons: string[];
+  passReasons: string[];
+} {
+  const failReasons =
+    output.gradingResult?.componentResults
+      ?.filter((result) => (result ? !result.pass : false))
+      .map((result) => result.reason)
+      .filter((reason) => reason) ?? [];
+
+  const passReasons =
+    output.gradingResult?.componentResults
+      ?.filter((result) => (result ? result.pass : false))
+      .map((result) => result.reason)
+      .filter((reason) => reason) ?? [];
+
+  if (output.error && output.failureReason === ResultFailureReason.ERROR) {
+    return {
+      failReasons: [output.error, ...failReasons],
+      passReasons,
+    };
+  }
+
+  return { failReasons, passReasons };
+}
+
+function renderDiffNode(firstOutputText: string, text: string): React.ReactNode {
+  let diffResult;
+  try {
+    JSON.parse(firstOutputText);
+    JSON.parse(text);
+    diffResult = diffJson(firstOutputText, text);
+  } catch {
+    diffResult =
+      firstOutputText.includes('. ') && text.includes('. ')
+        ? diffSentences(firstOutputText, text)
+        : diffWords(firstOutputText, text);
+  }
+
+  return diffResult.map(
+    (part: { added?: boolean; removed?: boolean; value: string }, index: number) =>
+      part.added ? (
+        <ins key={index}>{part.value}</ins>
+      ) : part.removed ? (
+        <del key={index}>{part.value}</del>
+      ) : (
+        <span key={index}>{part.value}</span>
+      ),
+  );
+}
+
+function renderHighlightedTextNode(text: string, searchText: string): React.ReactNode {
+  try {
+    const regex = new RegExp(searchText, 'gi');
+    const matches: { start: number; end: number }[] = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      matches.push({
+        start: match.index,
+        end: regex.lastIndex,
+      });
+    }
+
+    if (matches.length === 0) {
+      return <span key="no-match">{text}</span>;
+    }
+
+    return (
+      <>
+        <span key="text-before">{text?.substring(0, matches[0].start)}</span>
+        {matches.map((range, index) => {
+          const matchText = text?.substring(range.start, range.end);
+          const afterText = text?.substring(
+            range.end,
+            matches[index + 1] ? matches[index + 1].start : text?.length,
+          );
+          return (
+            <React.Fragment key={`fragment-${index}`}>
+              <span className="search-highlight" key={`match-${index}`}>
+                {matchText}
+              </span>
+              <span key={`text-after-${index}`}>{afterText}</span>
+            </React.Fragment>
+          );
+        })}
+      </>
+    );
+  } catch (error) {
+    console.error('Invalid regular expression:', (error as Error).message);
+    return undefined;
+  }
+}
+
+function renderMediaNode({
+  output,
+  outputAudioSource,
+  primaryRenderedImageSrc,
+  toggleLightbox,
+}: {
+  output: EvaluateTableOutput;
+  outputAudioSource: ReturnType<typeof resolveAudioSource>;
+  primaryRenderedImageSrc?: string;
+  toggleLightbox: (url?: string) => void;
+}): React.ReactNode | undefined {
+  if (primaryRenderedImageSrc) {
+    return (
+      <img
+        src={primaryRenderedImageSrc}
+        alt={output.prompt}
+        style={{ width: '100%' }}
+        onClick={() => toggleLightbox(primaryRenderedImageSrc)}
+      />
+    );
+  }
+
+  if (output.audio) {
+    if (outputAudioSource) {
+      return (
+        <div className="audio-output">
+          <audio controls style={{ width: '100%' }} data-testid="audio-player">
+            <source src={outputAudioSource.src} type={outputAudioSource.type || 'audio/mpeg'} />
+            Your browser does not support the audio element.
+          </audio>
+          {output.audio.transcript && (
+            <div className="transcript">
+              <strong>Transcript:</strong> {output.audio.transcript}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (output.audio.transcript) {
+      return (
+        <div className="transcript">
+          <strong>Transcript:</strong> {output.audio.transcript}
+        </div>
+      );
+    }
+  }
+
+  if (output.video || output.response?.video) {
+    const videoData = output.video || output.response?.video;
+    const videoSource = resolveVideoSource(videoData);
+    if (videoSource) {
+      return (
+        <div className="video-output">
+          <video
+            controls
+            style={{ width: '100%', maxWidth: '640px', borderRadius: '4px' }}
+            poster={videoSource.poster}
+            data-testid="video-player"
+          >
+            <source src={videoSource.src} type={videoSource.type || 'video/mp4'} />
+            Your browser does not support the video element.
+          </video>
+          <div
+            className="video-metadata"
+            style={{ marginTop: '8px', fontSize: '0.85em', opacity: 0.8 }}
+          >
+            {videoData?.model && (
+              <span style={{ marginRight: '12px' }}>Model: {videoData.model}</span>
+            )}
+            {videoData?.size && <span style={{ marginRight: '12px' }}>Size: {videoData.size}</span>}
+            {videoData?.duration && <span>Duration: {videoData.duration}s</span>}
+          </div>
+        </div>
+      );
+    }
+  }
+
+  return undefined;
+}
+
+function renderMarkdownOrJsonNode({
+  text,
+  normalizedText,
+  renderMarkdown,
+  prettifyJson,
+  markdownComponents,
+}: {
+  text: string;
+  normalizedText: string;
+  renderMarkdown: boolean;
+  prettifyJson: boolean;
+  markdownComponents: React.ComponentProps<typeof ReactMarkdown>['components'];
+}): { node?: React.ReactNode; renderedMarkdownOutput: boolean } {
+  if (!prettifyJson && !renderMarkdown) {
+    return { node: undefined, renderedMarkdownOutput: false };
+  }
+
+  if (prettifyJson) {
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return {
+          node: <pre>{JSON.stringify(parsed, null, 2)}</pre>,
+          renderedMarkdownOutput: false,
+        };
+      }
+    } catch {
+      // Not valid JSON, continue to Markdown if enabled.
+    }
+  }
+
+  if (!renderMarkdown) {
+    return { node: undefined, renderedMarkdownOutput: false };
+  }
+
+  return {
+    node: (
+      <ReactMarkdown
+        remarkPlugins={REMARK_PLUGINS}
+        urlTransform={IDENTITY_URL_TRANSFORM}
+        components={markdownComponents}
+      >
+        {normalizedText}
+      </ReactMarkdown>
+    ),
+    renderedMarkdownOutput: true,
+  };
+}
+
+function renderStructuredImages({
+  node,
+  output,
+  normalizedText,
+  primaryRenderedImageSrc,
+  primaryRenderedAsImage,
+  renderedMarkdownOutput,
+  toggleLightbox,
+}: {
+  node?: React.ReactNode;
+  output: EvaluateTableOutput;
+  normalizedText: string;
+  primaryRenderedImageSrc?: string;
+  primaryRenderedAsImage: boolean;
+  renderedMarkdownOutput: boolean;
+  toggleLightbox: (url?: string) => void;
+}): React.ReactNode | undefined {
+  if (!output.images?.length) {
+    return node;
+  }
+
+  const renderedImageSrcs = new Set<string>();
+  if (primaryRenderedImageSrc) {
+    renderedImageSrcs.add(normalizeImageSrcForComparison(primaryRenderedImageSrc));
+  }
+  if (renderedMarkdownOutput) {
+    for (const source of extractMarkdownImageSources(normalizedText)) {
+      renderedImageSrcs.add(source);
+    }
+  }
+
+  const imagesToRender =
+    primaryRenderedAsImage && !renderedMarkdownOutput ? output.images.slice(1) : output.images;
+  const imageElements = imagesToRender
+    .map((img: ImageOutput, idx: number) => {
+      const src = resolveEvalImageOutputSource(img);
+      if (!src || renderedImageSrcs.has(normalizeImageSrcForComparison(src))) {
+        return null;
+      }
+      return (
+        <img
+          key={`img-${idx}`}
+          src={src}
+          alt={output.prompt || 'Generated image'}
+          loading="lazy"
+          style={{ display: 'block', width: '100%', cursor: 'pointer' }}
+          onClick={() => toggleLightbox(src)}
+        />
+      );
+    })
+    .filter((img): img is React.ReactElement => img !== null);
+
+  if (imageElements.length === 0) {
+    return node;
+  }
+
+  return node ? (
+    <>
+      {node}
+      {imageElements}
+    </>
+  ) : (
+    imageElements
+  );
+}
+
+function renderOutputNode({
+  output,
+  firstOutput,
+  showDiffs,
+  searchText,
+  shouldHighlightSearchText,
+  text,
+  normalizedText,
+  renderMarkdown,
+  prettifyJson,
+  markdownComponents,
+  toggleLightbox,
+  outputAudioSource,
+  primaryRenderedImageSrc,
+  primaryRenderedAsImage,
+}: {
+  output: EvaluateTableOutput;
+  firstOutput: EvaluateTableOutput;
+  showDiffs: boolean;
+  searchText?: string;
+  shouldHighlightSearchText: boolean;
+  text: string;
+  normalizedText: string;
+  renderMarkdown: boolean;
+  prettifyJson: boolean;
+  markdownComponents: React.ComponentProps<typeof ReactMarkdown>['components'];
+  toggleLightbox: (url?: string) => void;
+  outputAudioSource: ReturnType<typeof resolveAudioSource>;
+  primaryRenderedImageSrc?: string;
+  primaryRenderedAsImage: boolean;
+}): React.ReactNode | undefined {
+  let node: React.ReactNode | undefined;
+  let renderedMarkdownOutput = false;
+
+  if (showDiffs && firstOutput) {
+    const firstOutputText =
+      typeof firstOutput.text === 'string' ? firstOutput.text : JSON.stringify(firstOutput.text);
+    node = renderDiffNode(firstOutputText, text);
+  }
+
+  if (searchText && shouldHighlightSearchText) {
+    node = renderHighlightedTextNode(text, searchText);
+  } else {
+    node =
+      renderMediaNode({
+        output,
+        outputAudioSource,
+        primaryRenderedImageSrc,
+        toggleLightbox,
+      }) || node;
+
+    if (!node && !showDiffs) {
+      const formattedNode = renderMarkdownOrJsonNode({
+        text,
+        normalizedText,
+        renderMarkdown,
+        prettifyJson,
+        markdownComponents,
+      });
+      node = formattedNode.node;
+      renderedMarkdownOutput = formattedNode.renderedMarkdownOutput;
+    }
+  }
+
+  return renderStructuredImages({
+    node,
+    output,
+    normalizedText,
+    primaryRenderedImageSrc,
+    primaryRenderedAsImage,
+    renderedMarkdownOutput,
+    toggleLightbox,
+  });
+}
+
+function getPassFailCounts(output: EvaluateTableOutput): {
+  passCount: number;
+  failCount: number;
+  errorCount: number;
+} {
+  let passCount = 0;
+  let failCount = 0;
+
+  if (output.gradingResult?.componentResults) {
+    output.gradingResult.componentResults.forEach((result) => {
+      if (result?.pass) {
+        passCount++;
+      } else {
+        failCount++;
+      }
+    });
+  } else if (output.gradingResult) {
+    passCount = output.gradingResult.pass ? 1 : 0;
+    failCount = output.gradingResult.pass ? 0 : 1;
+  } else if (output.pass) {
+    passCount = 1;
+  } else if (!output.pass) {
+    failCount = 1;
+  }
+
+  return {
+    passCount,
+    failCount,
+    errorCount: output.failureReason === ResultFailureReason.ERROR ? 1 : 0,
+  };
+}
+
+function getPassFailText({
+  passCount,
+  failCount,
+  errorCount,
+}: {
+  passCount: number;
+  failCount: number;
+  errorCount: number;
+}): React.ReactNode {
+  if (errorCount === 1) {
+    return 'ERROR';
+  }
+
+  if (failCount === 1 && passCount === 1) {
+    return (
+      <>
+        {`${failCount} FAIL`} {`${passCount} PASS`}
+      </>
+    );
+  }
+
+  const failText =
+    failCount > 1 || (passCount > 1 && failCount > 0)
+      ? `${failCount} FAIL`
+      : failCount === 1
+        ? 'FAIL'
+        : '';
+  const passText =
+    passCount > 1 || (failCount > 1 && passCount > 0)
+      ? `${passCount} PASS`
+      : passCount === 1 && failCount === 0
+        ? 'PASS'
+        : '';
+  const separator = failText && passText ? ' ' : '';
+
+  return (
+    <>
+      {failText}
+      {separator}
+      {passText}
+    </>
+  );
+}
+
+function getCombinedContextText(output: EvaluateTableOutput): string {
+  if (!output.gradingResult?.componentResults) {
+    return typeof output.text === 'string' ? output.text : JSON.stringify(output.text);
+  }
+
+  return output.gradingResult.componentResults
+    .map((result, index) => {
+      const displayName = result.assertion?.metric || result.assertion?.type || 'unknown';
+      const value = result.assertion?.value || '';
+      return `Assertion ${index + 1} (${displayName}): ${value}`;
+    })
+    .join('\n\n');
+}
+
+function getProviderOverrideBadge(output: EvaluateTableOutput): React.ReactNode {
+  const testCaseProvider = output.testCase?.provider;
+  const providerId =
+    typeof testCaseProvider === 'string'
+      ? testCaseProvider
+      : typeof testCaseProvider === 'object' &&
+          testCaseProvider !== null &&
+          'id' in testCaseProvider &&
+          typeof testCaseProvider.id === 'string'
+        ? testCaseProvider.id
+        : null;
+
+  if (!providerId) {
+    return null;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="provider pill">{providerId}</span>
+      </TooltipTrigger>
+      <TooltipContent side="top">Model override for this test</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function getCommentTextToDisplay(comment?: string): string | undefined {
+  return comment?.startsWith('!highlight') ? comment.slice('!highlight'.length).trim() : comment;
+}
+
+function formatTokenUsageDisplay(
+  tokenUsage:
+    | EvaluateTableOutput['tokenUsage']
+    | NonNullable<EvaluateTableOutput['response']>['tokenUsage']
+    | undefined,
+): React.ReactNode | undefined {
+  if (tokenUsage?.cached) {
+    return (
+      <span>
+        {Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(tokenUsage.cached ?? 0)}{' '}
+        (cached)
+      </span>
+    );
+  }
+
+  if (!tokenUsage?.total) {
+    return undefined;
+  }
+
+  const promptTokens = Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
+    tokenUsage.prompt ?? 0,
+  );
+  const completionTokens = Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
+    tokenUsage.completion ?? 0,
+  );
+  const totalTokens = Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
+    tokenUsage.total ?? 0,
+  );
+
+  if (tokenUsage.completionDetails?.reasoning) {
+    const reasoningTokens = Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
+      tokenUsage.completionDetails.reasoning ?? 0,
+    );
+    const tooltipText = `${promptTokens} prompt tokens + ${completionTokens} completion tokens & ${reasoningTokens} reasoning tokens = ${totalTokens} total`;
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span aria-label={tooltipText}>
+            {totalTokens}
+            {(promptTokens !== '0' || completionTokens !== '0') &&
+              ` (${promptTokens}+${completionTokens})`}
+            {` R${reasoningTokens}`}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{tooltipText}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span>
+          {totalTokens}
+          {(promptTokens !== '0' || completionTokens !== '0') &&
+            ` (${promptTokens}+${completionTokens})`}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{`${promptTokens} prompt tokens + ${completionTokens} completion tokens = ${totalTokens} total`}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function getLatencyDisplay(output: EvaluateTableOutput): React.ReactNode | undefined {
+  if (!output.latencyMs) {
+    return undefined;
+  }
+
+  return (
+    <span>
+      {Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(output.latencyMs)} ms
+      {output.response?.cached ? ' (cached)' : ''}
+    </span>
+  );
+}
+
+function getTokensPerSecondDisplay({
+  tokenUsage,
+  latencyMs,
+}: {
+  tokenUsage:
+    | EvaluateTableOutput['tokenUsage']
+    | NonNullable<EvaluateTableOutput['response']>['tokenUsage']
+    | undefined;
+  latencyMs?: number;
+}): React.ReactNode | undefined {
+  if (!tokenUsage?.completion || !latencyMs || latencyMs <= 0) {
+    return undefined;
+  }
+
+  const tokPerSec = tokenUsage.completion / (latencyMs / 1000);
+  return (
+    <span>{Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(tokPerSec)}</span>
+  );
+}
+
+function getCostDisplay(cost?: number): React.ReactNode | undefined {
+  return cost ? <span>${cost.toPrecision(2)}</span> : undefined;
+}
+
+function getCellStyles({
+  output,
+  maxImageWidth,
+  maxImageHeight,
+}: {
+  output: EvaluateTableOutput;
+  maxImageWidth: number;
+  maxImageHeight: number;
+}): {
+  cellStyle: CSSPropertiesWithCustomVars;
+  contentStyle: React.CSSProperties;
+  isHighlighted: boolean;
+} {
+  const isHighlighted = output.gradingResult?.comment?.startsWith('!highlight') ?? false;
+
+  return {
+    cellStyle: {
+      ...(isHighlighted ? { backgroundColor: 'var(--cell-highlight-color)' } : {}),
+      '--max-image-width': `${maxImageWidth}px`,
+      '--max-image-height': `${maxImageHeight}px`,
+    },
+    contentStyle: isHighlighted ? { color: 'var(--cell-highlight-text-color)' } : {},
+    isHighlighted,
+  };
+}
+
+function renderCommentNode({
+  commentTextToDisplay,
+  handleCommentOpen,
+  contentStyle,
+}: {
+  commentTextToDisplay?: string;
+  handleCommentOpen: () => void;
+  contentStyle: React.CSSProperties;
+}): React.ReactNode {
+  if (!commentTextToDisplay) {
+    return null;
+  }
+
+  return (
+    <div className="comment" onClick={handleCommentOpen} style={contentStyle}>
+      {commentTextToDisplay}
+    </div>
+  );
+}
+
+function renderCellDetail({
+  showStats,
+  tokenUsageDisplay,
+  latencyDisplay,
+  tokPerSecDisplay,
+  costDisplay,
+}: {
+  showStats: boolean;
+  tokenUsageDisplay?: React.ReactNode;
+  latencyDisplay?: React.ReactNode;
+  tokPerSecDisplay?: React.ReactNode;
+  costDisplay?: React.ReactNode;
+}): React.ReactNode {
+  if (!showStats) {
+    return null;
+  }
+
+  return (
+    <div className="cell-detail">
+      {tokenUsageDisplay && (
+        <div className="stat-item">
+          <strong>Tokens:</strong> {tokenUsageDisplay}
+        </div>
+      )}
+      {latencyDisplay && (
+        <div className="stat-item">
+          <strong>Latency:</strong> {latencyDisplay}
+        </div>
+      )}
+      {tokPerSecDisplay && (
+        <div className="stat-item">
+          <strong>Tokens/Sec:</strong> {tokPerSecDisplay}
+        </div>
+      )}
+      {costDisplay && (
+        <div className="stat-item">
+          <strong>Cost:</strong> {costDisplay}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderStatusBlock({
+  showPassFail,
+  output,
+  passFailText,
+  scoreString,
+  providerOverride,
+  failReasons,
+  showPassReasons,
+  passReasons,
+}: {
+  showPassFail: boolean;
+  output: EvaluateTableOutput;
+  passFailText: React.ReactNode;
+  scoreString: string;
+  providerOverride: React.ReactNode;
+  failReasons: string[];
+  showPassReasons: boolean;
+  passReasons: string[];
+}): React.ReactNode {
+  if (!showPassFail) {
+    return null;
+  }
+
+  return (
+    <div className={`status ${output.pass ? 'pass' : 'fail'}`}>
+      <div className="status-row">
+        <div className="pill">
+          {passFailText}
+          {scoreString && <span className="score"> {scoreString}</span>}
+        </div>
+        {providerOverride}
+      </div>
+      <CustomMetrics lookup={output.namedScores} />
+      {failReasons.length > 0 && (
+        <span className="fail-reason">
+          <FailReasonCarousel failReasons={failReasons} />
+        </span>
+      )}
+      {showPassReasons && passReasons.length > 0 && (
+        <div className="pass-reasons">
+          {passReasons.map((reason, index) => (
+            <div key={index} className="pass-reason">
+              {reason}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderPromptBlock({
+  showPrompts,
+  firstOutput,
+  prompt,
+}: {
+  showPrompts: boolean;
+  firstOutput: EvaluateTableOutput;
+  prompt: EvaluateTableOutput['prompt'];
+}): React.ReactNode {
+  if (!showPrompts || !firstOutput.prompt) {
+    return null;
+  }
+
+  return (
+    <div className="prompt">
+      <span className="pill">Prompt</span>
+      {typeof prompt === 'string' ? prompt : JSON.stringify(prompt, null, 2)}
+    </div>
+  );
+}
+
+function renderResponseAudioPlayer(
+  responseAudioSource: ReturnType<typeof resolveAudioSource>,
+): React.ReactNode {
+  if (!responseAudioSource?.src) {
+    return null;
+  }
+
+  return (
+    <div className="response-audio" style={{ marginBottom: '8px' }}>
+      <audio controls style={{ width: '100%', height: '32px' }} data-testid="response-audio-player">
+        <source src={responseAudioSource.src} type={responseAudioSource.type || 'audio/mpeg'} />
+        Your browser does not support the audio element.
+      </audio>
+    </div>
+  );
+}
+
+function renderOutputActions({
+  showExtraActions,
+  copied,
+  linked,
+  isHighlighted,
+  activeRating,
+  openPrompt,
+  output,
+  text,
+  rowIndex,
+  promptIndex,
+  evaluationId,
+  testCaseId,
+  cloudConfig,
+  addFilter,
+  resetFilters,
+  replayEvaluation,
+  fetchTraces,
+  handleCopy,
+  handleToggleHighlight,
+  handleRowShareLink,
+  handleRating,
+  handleSetScore,
+  handleCommentOpen,
+  handlePromptOpen,
+  handlePromptClose,
+  setActionsHovered,
+}: {
+  showExtraActions: boolean;
+  copied: boolean;
+  linked: boolean;
+  isHighlighted: boolean;
+  activeRating: boolean | null;
+  openPrompt: boolean;
+  output: EvaluateTableOutput;
+  text: string;
+  rowIndex: number;
+  promptIndex: number;
+  evaluationId?: string;
+  testCaseId?: string;
+  cloudConfig: ReturnType<typeof useCloudConfig>['data'];
+  addFilter: ReturnType<typeof useTableStore.getState>['addFilter'];
+  resetFilters: ReturnType<typeof useTableStore.getState>['resetFilters'];
+  replayEvaluation: ReturnType<typeof useEvalOperations>['replayEvaluation'];
+  fetchTraces: ReturnType<typeof useEvalOperations>['fetchTraces'];
+  handleCopy: () => void;
+  handleToggleHighlight: () => void;
+  handleRowShareLink: () => void;
+  handleRating: (isPass: boolean) => void;
+  handleSetScore: () => void;
+  handleCommentOpen: () => void;
+  handlePromptOpen: () => void;
+  handlePromptClose: () => void;
+  setActionsHovered: (hovered: boolean) => void;
+}): React.ReactNode {
+  return (
+    <div
+      className="cell-actions"
+      onMouseEnter={() => setActionsHovered(true)}
+      onMouseLeave={() => setActionsHovered(false)}
+    >
+      {showExtraActions && (
+        <>
+          <Tooltip disableHoverableContent>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="action p-1 rounded hover:bg-muted transition-colors"
+                onClick={handleCopy}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {copied ? <Check className="size-4" /> : <ClipboardCopy className="size-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Copy output to clipboard</TooltipContent>
+          </Tooltip>
+          <Tooltip disableHoverableContent>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={`action p-1 rounded hover:bg-muted transition-colors ${isHighlighted ? 'text-amber-500 dark:text-amber-400' : ''}`}
+                onClick={handleToggleHighlight}
+                onMouseDown={(e) => e.preventDefault()}
+                aria-label="Toggle test highlight"
+              >
+                <Star
+                  className={`size-4 ${isHighlighted ? 'stroke-amber-600 dark:stroke-amber-300' : ''}`}
+                  fill={isHighlighted ? 'currentColor' : 'none'}
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Toggle test highlight</TooltipContent>
+          </Tooltip>
+          <Tooltip disableHoverableContent>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="action p-1 rounded hover:bg-muted transition-colors"
+                onClick={handleRowShareLink}
+                onMouseDown={(e) => e.preventDefault()}
+                aria-label="Copy link to output"
+              >
+                {linked ? <Check className="size-4" /> : <Link className="size-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Copy link to output</TooltipContent>
+          </Tooltip>
+        </>
+      )}
+      <Tooltip disableHoverableContent>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={`action p-1 rounded hover:bg-muted transition-colors ${activeRating === true ? 'active text-emerald-600 dark:text-emerald-400' : ''}`}
+            onClick={() => handleRating(true)}
+            aria-pressed={activeRating === true}
+            aria-label="Mark test passed"
+          >
+            <ThumbsUp
+              className={`size-4 ${activeRating === true ? 'stroke-emerald-700 dark:stroke-emerald-300' : ''}`}
+              fill={activeRating === true ? 'currentColor' : 'none'}
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Mark test passed (score 1.0)</TooltipContent>
+      </Tooltip>
+      <Tooltip disableHoverableContent>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={`action p-1 rounded hover:bg-muted transition-colors ${activeRating === false ? 'active text-red-600 dark:text-red-400' : ''}`}
+            onClick={() => handleRating(false)}
+            aria-pressed={activeRating === false}
+            aria-label="Mark test failed"
+          >
+            <ThumbsDown
+              className={`size-4 ${activeRating === false ? 'stroke-red-700 dark:stroke-red-300' : ''}`}
+              fill={activeRating === false ? 'currentColor' : 'none'}
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Mark test failed (score 0.0)</TooltipContent>
+      </Tooltip>
+      <Tooltip disableHoverableContent>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="action p-1 rounded hover:bg-muted transition-colors"
+            onClick={handleSetScore}
+            aria-label="Set test score"
+          >
+            <Hash className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Set test score</TooltipContent>
+      </Tooltip>
+      <Tooltip disableHoverableContent>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="action p-1 rounded hover:bg-muted transition-colors"
+            onClick={handleCommentOpen}
+            aria-label="Edit comment"
+          >
+            <Pencil className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Edit comment</TooltipContent>
+      </Tooltip>
+      {output.prompt && (
+        <>
+          <Tooltip disableHoverableContent>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="action p-1 rounded hover:bg-muted transition-colors"
+                onClick={handlePromptOpen}
+                aria-label="View output and test details"
+              >
+                <Search className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>View output and test details</TooltipContent>
+          </Tooltip>
+          {openPrompt && (
+            <EvalOutputPromptDialog
+              open={openPrompt}
+              onClose={handlePromptClose}
+              prompt={output.prompt}
+              provider={output.provider}
+              gradingResults={output.gradingResult?.componentResults}
+              output={text}
+              metadata={output.metadata}
+              providerPrompt={getActualPrompt(output.response, { formatted: true })}
+              evaluationId={evaluationId}
+              testCaseId={testCaseId || output.id}
+              testIndex={rowIndex}
+              promptIndex={promptIndex}
+              variables={output.metadata?.inputVars || output.testCase?.vars}
+              onAddFilter={addFilter}
+              onResetFilters={resetFilters}
+              onReplay={replayEvaluation}
+              fetchTraces={fetchTraces}
+              cloudConfig={cloudConfig}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export interface EvalOutputCellProps {
   output: EvaluateTableOutput;
   maxTextLength: number;
@@ -301,10 +1276,7 @@ function EvalOutputCell({
   const primaryRenderedImageSrc = getPrimaryRenderedImageSrc(text, inlineImageSrc);
   const primaryRenderedAsImage = Boolean(primaryRenderedImageSrc);
   const outputAudioSource = resolveAudioSource(output.audio);
-  let node: React.ReactNode | undefined;
-  let renderedMarkdownOutput = false;
-  let failReasons: string[] = [];
-  let passReasons: string[] = [];
+  const { failReasons, passReasons } = getFailAndPassReasons(output);
 
   // Extract response audio from the last turn of redteamHistory for display in the cell
   const redteamHistory = output.metadata?.redteamHistory || output.metadata?.redteamTreeHistory;
@@ -314,236 +1286,22 @@ function EvalOutputCell({
     | undefined;
   const responseAudioSource = resolveAudioSource(responseAudio);
 
-  // Extract failure and pass reasons from component results
-  if (output.gradingResult?.componentResults) {
-    failReasons = output.gradingResult.componentResults
-      .filter((result) => (result ? !result.pass : false))
-      .map((result) => result.reason)
-      .filter((reason) => reason); // Filter out empty/undefined reasons
-
-    passReasons = output.gradingResult.componentResults
-      .filter((result) => (result ? result.pass : false))
-      .map((result) => result.reason)
-      .filter((reason) => reason); // Filter out empty/undefined reasons
-  }
-
-  // Include provider-level error if present (e.g., from Python provider returning error)
-  // Only add for true provider errors (ERROR), not assertion failures (ASSERT) which are already in componentResults
-  if (output.error && output.failureReason === ResultFailureReason.ERROR) {
-    failReasons.unshift(output.error);
-  }
-
-  if (showDiffs && firstOutput) {
-    const firstOutputText =
-      typeof firstOutput.text === 'string' ? firstOutput.text : JSON.stringify(firstOutput.text);
-
-    let diffResult;
-    try {
-      // Try parsing the texts as JSON
-      JSON.parse(firstOutputText);
-      JSON.parse(text);
-      // If no errors are thrown, the texts are valid JSON
-      diffResult = diffJson(firstOutputText, text);
-    } catch {
-      // If an error is thrown, the texts are not valid JSON
-      if (firstOutputText.includes('. ') && text.includes('. ')) {
-        // If the texts contain a period, they are considered as prose
-        diffResult = diffSentences(firstOutputText, text);
-      } else {
-        // If the texts do not contain a period, use diffWords
-        diffResult = diffWords(firstOutputText, text);
-      }
-    }
-    node = diffResult.map(
-      (part: { added?: boolean; removed?: boolean; value: string }, index: number) =>
-        part.added ? (
-          <ins key={index}>{part.value}</ins>
-        ) : part.removed ? (
-          <del key={index}>{part.value}</del>
-        ) : (
-          <span key={index}>{part.value}</span>
-        ),
-    );
-  }
-
-  if (searchText && shouldHighlightSearchText) {
-    // Highlight search matches
-    try {
-      const regex = new RegExp(searchText, 'gi');
-      const matches: { start: number; end: number }[] = [];
-      let match;
-      while ((match = regex.exec(text)) !== null) {
-        matches.push({
-          start: match.index,
-          end: regex.lastIndex,
-        });
-      }
-      node =
-        matches.length > 0 ? (
-          <>
-            <span key="text-before">{text?.substring(0, matches[0].start)}</span>
-            {matches.map((range, index) => {
-              const matchText = text?.substring(range.start, range.end);
-              const afterText = text?.substring(
-                range.end,
-                matches[index + 1] ? matches[index + 1].start : text?.length,
-              );
-              return (
-                <React.Fragment key={`fragment-${index}`}>
-                  <span className="search-highlight" key={`match-${index}`}>
-                    {matchText}
-                  </span>
-                  <span key={`text-after-${index}`}>{afterText}</span>
-                </React.Fragment>
-              );
-            })}
-          </>
-        ) : (
-          <span key="no-match">{text}</span>
-        );
-    } catch (error) {
-      console.error('Invalid regular expression:', (error as Error).message);
-    }
-  } else if (primaryRenderedImageSrc) {
-    node = (
-      <img
-        src={primaryRenderedImageSrc}
-        alt={output.prompt}
-        style={{ width: '100%' }}
-        onClick={() => toggleLightbox(primaryRenderedImageSrc)}
-      />
-    );
-  } else if (output.audio) {
-    if (outputAudioSource) {
-      node = (
-        <div className="audio-output">
-          <audio controls style={{ width: '100%' }} data-testid="audio-player">
-            <source src={outputAudioSource.src} type={outputAudioSource.type || 'audio/mpeg'} />
-            Your browser does not support the audio element.
-          </audio>
-          {output.audio.transcript && (
-            <div className="transcript">
-              <strong>Transcript:</strong> {output.audio.transcript}
-            </div>
-          )}
-        </div>
-      );
-    } else if (output.audio.transcript) {
-      node = (
-        <div className="transcript">
-          <strong>Transcript:</strong> {output.audio.transcript}
-        </div>
-      );
-    }
-  } else if (output.video || output.response?.video) {
-    // Support both top-level video (new format) and response.video (fallback)
-    // Video can use blob storage (blobRef), storage refs (storageRef), or legacy URL paths
-    const videoData = output.video || output.response?.video;
-    const videoSource = resolveVideoSource(videoData);
-    if (videoSource) {
-      node = (
-        <div className="video-output">
-          <video
-            controls
-            style={{ width: '100%', maxWidth: '640px', borderRadius: '4px' }}
-            poster={videoSource.poster}
-            data-testid="video-player"
-          >
-            <source src={videoSource.src} type={videoSource.type || 'video/mp4'} />
-            Your browser does not support the video element.
-          </video>
-          <div
-            className="video-metadata"
-            style={{ marginTop: '8px', fontSize: '0.85em', opacity: 0.8 }}
-          >
-            {videoData?.model && (
-              <span style={{ marginRight: '12px' }}>Model: {videoData.model}</span>
-            )}
-            {videoData?.size && <span style={{ marginRight: '12px' }}>Size: {videoData.size}</span>}
-            {videoData?.duration && <span>Duration: {videoData.duration}s</span>}
-          </div>
-        </div>
-      );
-    }
-  } else if ((prettifyJson || renderMarkdown) && !showDiffs) {
-    // When both prettifyJson and renderMarkdown are enabled,
-    // display as JSON if it's a valid object/array, otherwise render as Markdown
-    let isJsonHandled = false;
-    if (prettifyJson) {
-      try {
-        const parsed = JSON.parse(text);
-        if (typeof parsed === 'object' && parsed !== null) {
-          node = <pre>{JSON.stringify(parsed, null, 2)}</pre>;
-          isJsonHandled = true;
-        }
-      } catch {
-        // Not valid JSON, continue to Markdown if enabled
-      }
-    }
-    if (!isJsonHandled && renderMarkdown) {
-      renderedMarkdownOutput = true;
-      // Use stable constants and memoized components to prevent unnecessary
-      // re-renders when parent re-renders due to layout changes.
-      // @see https://github.com/promptfoo/promptfoo/issues/969
-      node = (
-        <ReactMarkdown
-          remarkPlugins={REMARK_PLUGINS}
-          urlTransform={IDENTITY_URL_TRANSFORM}
-          components={markdownComponents}
-        >
-          {normalizedText}
-        </ReactMarkdown>
-      );
-    }
-  }
-
-  if (output.images?.length) {
-    const renderedImageSrcs = new Set<string>();
-    if (primaryRenderedImageSrc) {
-      renderedImageSrcs.add(normalizeImageSrcForComparison(primaryRenderedImageSrc));
-    }
-    if (renderedMarkdownOutput) {
-      for (const source of extractMarkdownImageSources(normalizedText)) {
-        renderedImageSrcs.add(source);
-      }
-    }
-
-    // Keep the legacy "skip the first structured image" behavior when the primary
-    // output is already rendered as an image. Some providers repeat that same
-    // image first, but encode it differently enough that direct source comparison
-    // alone is not reliable after merging main.
-    const imagesToRender =
-      primaryRenderedAsImage && !renderedMarkdownOutput ? output.images.slice(1) : output.images;
-
-    const imageElements = imagesToRender
-      .map((img: ImageOutput, idx: number) => {
-        const src = resolveEvalImageOutputSource(img);
-        if (!src || renderedImageSrcs.has(normalizeImageSrcForComparison(src))) {
-          return null;
-        }
-        return (
-          <img
-            key={`img-${idx}`}
-            src={src}
-            alt={output.prompt || 'Generated image'}
-            loading="lazy"
-            style={{ display: 'block', width: '100%', cursor: 'pointer' }}
-            onClick={() => toggleLightbox(src)}
-          />
-        );
-      })
-      .filter((img): img is React.ReactElement => img !== null);
-    if (imageElements.length > 0) {
-      node = node ? (
-        <>
-          {node}
-          {imageElements}
-        </>
-      ) : (
-        imageElements
-      );
-    }
-  }
+  const node = renderOutputNode({
+    output,
+    firstOutput,
+    showDiffs,
+    searchText,
+    shouldHighlightSearchText,
+    text,
+    normalizedText,
+    renderMarkdown,
+    prettifyJson,
+    markdownComponents,
+    toggleLightbox,
+    outputAudioSource,
+    primaryRenderedImageSrc,
+    primaryRenderedAsImage,
+  });
 
   const handleRating = (isPass: boolean) => {
     const newRating = activeRating === isPass ? null : isPass;
@@ -594,447 +1352,46 @@ function EvalOutputCell({
       });
   };
 
-  let tokenUsageDisplay;
-  let latencyDisplay;
-  let tokPerSecDisplay;
-  let costDisplay;
-
-  if (output.latencyMs) {
-    const isCached = output.response?.cached;
-    latencyDisplay = (
-      <span>
-        {Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(output.latencyMs)} ms
-        {isCached ? ' (cached)' : ''}
-      </span>
-    );
-  }
-
-  // Check for token usage in both output.tokenUsage and output.response?.tokenUsage
+  const latencyDisplay = getLatencyDisplay(output);
+  // Check for token usage in both output.tokenUsage and output.response?.tokenUsage.
   const tokenUsage = output.tokenUsage || output.response?.tokenUsage;
+  const tokenUsageDisplay = formatTokenUsageDisplay(tokenUsage);
+  const tokPerSecDisplay = getTokensPerSecondDisplay({
+    tokenUsage,
+    latencyMs: output.latencyMs,
+  });
+  const costDisplay = getCostDisplay(output.cost);
+  const { cellStyle, contentStyle } = getCellStyles({
+    output,
+    maxImageWidth,
+    maxImageHeight,
+  });
+  const commentIsHighlighted = commentText.startsWith('!highlight');
 
-  if (tokenUsage?.completion && output.latencyMs && output.latencyMs > 0) {
-    const tokPerSec = tokenUsage.completion / (output.latencyMs / 1000);
-    tokPerSecDisplay = (
-      <span>{Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(tokPerSec)}</span>
-    );
-  }
-
-  if (output.cost) {
-    costDisplay = <span>${output.cost.toPrecision(2)}</span>;
-  }
-
-  if (tokenUsage?.cached) {
-    tokenUsageDisplay = (
-      <span>
-        {Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(tokenUsage.cached ?? 0)}{' '}
-        (cached)
-      </span>
-    );
-  } else if (tokenUsage?.total) {
-    const promptTokens = Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
-      tokenUsage.prompt ?? 0,
-    );
-    const completionTokens = Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
-      tokenUsage.completion ?? 0,
-    );
-    const totalTokens = Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
-      tokenUsage.total ?? 0,
-    );
-
-    if (tokenUsage.completionDetails?.reasoning) {
-      const reasoningTokens = Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
-        tokenUsage.completionDetails.reasoning ?? 0,
-      );
-
-      const tooltipText = `${promptTokens} prompt tokens + ${completionTokens} completion tokens & ${reasoningTokens} reasoning tokens = ${totalTokens} total`;
-      tokenUsageDisplay = (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span aria-label={tooltipText}>
-              {totalTokens}
-              {(promptTokens !== '0' || completionTokens !== '0') &&
-                ` (${promptTokens}+${completionTokens})`}
-              {` R${reasoningTokens}`}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{tooltipText}</TooltipContent>
-        </Tooltip>
-      );
-    } else {
-      tokenUsageDisplay = (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              {totalTokens}
-              {(promptTokens !== '0' || completionTokens !== '0') &&
-                ` (${promptTokens}+${completionTokens})`}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{`${promptTokens} prompt tokens + ${completionTokens} completion tokens = ${totalTokens} total`}</TooltipContent>
-        </Tooltip>
-      );
-    }
-  }
-
-  const cellStyle: CSSPropertiesWithCustomVars = {
-    ...(output.gradingResult?.comment?.startsWith('!highlight')
-      ? { backgroundColor: 'var(--cell-highlight-color)' }
-      : {}),
-    '--max-image-width': `${maxImageWidth}px`,
-    '--max-image-height': `${maxImageHeight}px`,
-  };
-
-  // Style for main content area when highlighted
-  const contentStyle = output.gradingResult?.comment?.startsWith('!highlight')
-    ? { color: 'var(--cell-highlight-text-color)' }
-    : {};
-
-  // Pass/fail badge creation
-  let passCount = 0;
-  let failCount = 0;
-  let errorCount = 0;
-  const gradingResult = output.gradingResult;
-
-  if (gradingResult) {
-    if (gradingResult.componentResults) {
-      gradingResult.componentResults.forEach((result) => {
-        if (result?.pass) {
-          passCount++;
-        } else {
-          failCount++;
-        }
-      });
-    } else {
-      passCount = gradingResult.pass ? 1 : 0;
-      failCount = gradingResult.pass ? 0 : 1;
-    }
-  } else if (output.pass) {
-    passCount = 1;
-  } else if (!output.pass) {
-    failCount = 1;
-  }
-
-  if (output.failureReason === ResultFailureReason.ERROR) {
-    errorCount = 1;
-  }
-
-  let passFailText;
-  if (errorCount === 1) {
-    passFailText = 'ERROR';
-  } else if (failCount === 1 && passCount === 1) {
-    passFailText = (
-      <>
-        {`${failCount} FAIL`} {`${passCount} PASS`}
-      </>
-    );
-  } else {
-    let failText = '';
-    if (failCount > 1 || (passCount > 1 && failCount > 0)) {
-      failText = `${failCount} FAIL`;
-    } else if (failCount === 1) {
-      failText = 'FAIL';
-    }
-
-    let passText = '';
-    if (passCount > 1 || (failCount > 1 && passCount > 0)) {
-      passText = `${passCount} PASS`;
-    } else if (passCount === 1 && failCount === 0) {
-      passText = 'PASS';
-    }
-    const separator = failText && passText ? ' ' : '';
-
-    passFailText = (
-      <>
-        {failText}
-        {separator}
-        {passText}
-      </>
-    );
-  }
+  const passFailText = getPassFailText(getPassFailCounts(output));
 
   const scoreString = scoreToString(output.score);
-
-  const getCombinedContextText = () => {
-    if (!output.gradingResult?.componentResults) {
-      return output.text;
-    }
-
-    return output.gradingResult.componentResults
-      .map((result, index) => {
-        const displayName = result.assertion?.metric || result.assertion?.type || 'unknown';
-        const value = result.assertion?.value || '';
-        return `Assertion ${index + 1} (${displayName}): ${value}`;
-      })
-      .join('\n\n');
-  };
-
-  // Compute provider override badge for test case-level model overrides
-  let providerOverride: React.ReactNode = null;
-  const testCaseProvider = output.testCase?.provider;
-  const providerId: string | null =
-    typeof testCaseProvider === 'string'
-      ? testCaseProvider
-      : typeof testCaseProvider === 'object' &&
-          testCaseProvider !== null &&
-          'id' in testCaseProvider &&
-          typeof testCaseProvider.id === 'string'
-        ? testCaseProvider.id
-        : null;
-  if (providerId) {
-    providerOverride = (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="provider pill">{providerId}</span>
-        </TooltipTrigger>
-        <TooltipContent side="top">Model override for this test</TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  const commentTextToDisplay = output.gradingResult?.comment?.startsWith('!highlight')
-    ? output.gradingResult.comment.slice('!highlight'.length).trim()
-    : output.gradingResult?.comment;
-
-  const comment = commentTextToDisplay ? (
-    <div className="comment" onClick={handleCommentOpen} style={contentStyle}>
-      {commentTextToDisplay}
-    </div>
-  ) : null;
-
-  const detail = showStats ? (
-    <div className="cell-detail">
-      {tokenUsageDisplay && (
-        <div className="stat-item">
-          <strong>Tokens:</strong> {tokenUsageDisplay}
-        </div>
-      )}
-      {latencyDisplay && (
-        <div className="stat-item">
-          <strong>Latency:</strong> {latencyDisplay}
-        </div>
-      )}
-      {tokPerSecDisplay && (
-        <div className="stat-item">
-          <strong>Tokens/Sec:</strong> {tokPerSecDisplay}
-        </div>
-      )}
-      {costDisplay && (
-        <div className="stat-item">
-          <strong>Cost:</strong> {costDisplay}
-        </div>
-      )}
-    </div>
-  ) : null;
+  const providerOverride = getProviderOverrideBadge(output);
+  const commentTextToDisplay = getCommentTextToDisplay(output.gradingResult?.comment);
 
   const shiftKeyPressed = useShiftKey();
   const [actionsHovered, setActionsHovered] = React.useState(false);
   const showExtraActions = shiftKeyPressed || actionsHovered;
 
-  const actions = (
-    <div
-      className="cell-actions"
-      onMouseEnter={() => setActionsHovered(true)}
-      onMouseLeave={() => setActionsHovered(false)}
-    >
-      {showExtraActions && (
-        <>
-          <Tooltip disableHoverableContent>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="action p-1 rounded hover:bg-muted transition-colors"
-                onClick={handleCopy}
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                {copied ? <Check className="size-4" /> : <ClipboardCopy className="size-4" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Copy output to clipboard</TooltipContent>
-          </Tooltip>
-          <Tooltip disableHoverableContent>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className={`action p-1 rounded hover:bg-muted transition-colors ${commentText.startsWith('!highlight') ? 'text-amber-500 dark:text-amber-400' : ''}`}
-                onClick={handleToggleHighlight}
-                onMouseDown={(e) => e.preventDefault()}
-                aria-label="Toggle test highlight"
-              >
-                <Star
-                  className={`size-4 ${commentText.startsWith('!highlight') ? 'stroke-amber-600 dark:stroke-amber-300' : ''}`}
-                  fill={commentText.startsWith('!highlight') ? 'currentColor' : 'none'}
-                />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Toggle test highlight</TooltipContent>
-          </Tooltip>
-          <Tooltip disableHoverableContent>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="action p-1 rounded hover:bg-muted transition-colors"
-                onClick={handleRowShareLink}
-                onMouseDown={(e) => e.preventDefault()}
-                aria-label="Copy link to output"
-              >
-                {linked ? <Check className="size-4" /> : <Link className="size-4" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Copy link to output</TooltipContent>
-          </Tooltip>
-        </>
-      )}
-      <Tooltip disableHoverableContent>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className={`action p-1 rounded hover:bg-muted transition-colors ${activeRating === true ? 'active text-emerald-600 dark:text-emerald-400' : ''}`}
-            onClick={() => handleRating(true)}
-            aria-pressed={activeRating === true}
-            aria-label="Mark test passed"
-          >
-            <ThumbsUp
-              className={`size-4 ${activeRating === true ? 'stroke-emerald-700 dark:stroke-emerald-300' : ''}`}
-              fill={activeRating === true ? 'currentColor' : 'none'}
-            />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Mark test passed (score 1.0)</TooltipContent>
-      </Tooltip>
-      <Tooltip disableHoverableContent>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className={`action p-1 rounded hover:bg-muted transition-colors ${activeRating === false ? 'active text-red-600 dark:text-red-400' : ''}`}
-            onClick={() => handleRating(false)}
-            aria-pressed={activeRating === false}
-            aria-label="Mark test failed"
-          >
-            <ThumbsDown
-              className={`size-4 ${activeRating === false ? 'stroke-red-700 dark:stroke-red-300' : ''}`}
-              fill={activeRating === false ? 'currentColor' : 'none'}
-            />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Mark test failed (score 0.0)</TooltipContent>
-      </Tooltip>
-      <Tooltip disableHoverableContent>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="action p-1 rounded hover:bg-muted transition-colors"
-            onClick={handleSetScore}
-            aria-label="Set test score"
-          >
-            <Hash className="size-4" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Set test score</TooltipContent>
-      </Tooltip>
-      <Tooltip disableHoverableContent>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="action p-1 rounded hover:bg-muted transition-colors"
-            onClick={handleCommentOpen}
-            aria-label="Edit comment"
-          >
-            <Pencil className="size-4" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Edit comment</TooltipContent>
-      </Tooltip>
-      {output.prompt && (
-        <>
-          <Tooltip disableHoverableContent>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="action p-1 rounded hover:bg-muted transition-colors"
-                onClick={handlePromptOpen}
-                aria-label="View output and test details"
-              >
-                <Search className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>View output and test details</TooltipContent>
-          </Tooltip>
-          {openPrompt && (
-            <EvalOutputPromptDialog
-              open={openPrompt}
-              onClose={handlePromptClose}
-              prompt={output.prompt}
-              provider={output.provider}
-              gradingResults={output.gradingResult?.componentResults}
-              output={text}
-              metadata={output.metadata}
-              providerPrompt={getActualPrompt(output.response, { formatted: true })}
-              evaluationId={evaluationId}
-              testCaseId={testCaseId || output.id}
-              testIndex={rowIndex}
-              promptIndex={promptIndex}
-              variables={output.metadata?.inputVars || output.testCase?.vars}
-              onAddFilter={addFilter}
-              onResetFilters={resetFilters}
-              onReplay={replayEvaluation}
-              fetchTraces={fetchTraces}
-              cloudConfig={cloudConfig}
-            />
-          )}
-        </>
-      )}
-    </div>
-  );
-
   return (
     <div id={`eval-output-cell-${outputCellId}`} className="cell" style={cellStyle}>
-      {showPassFail && (
-        <div className={`status ${output.pass ? 'pass' : 'fail'}`}>
-          <div className="status-row">
-            <div className="pill">
-              {passFailText}
-              {scoreString && <span className="score"> {scoreString}</span>}
-            </div>
-            {providerOverride}
-          </div>
-          <CustomMetrics lookup={output.namedScores} />
-          {failReasons.length > 0 && (
-            <span className="fail-reason">
-              <FailReasonCarousel failReasons={failReasons} />
-            </span>
-          )}
-          {showPassReasons && passReasons.length > 0 && (
-            <div className="pass-reasons">
-              {passReasons.map((reason, index) => (
-                <div key={index} className="pass-reason">
-                  {reason}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {showPrompts && firstOutput.prompt && (
-        <div className="prompt">
-          <span className="pill">Prompt</span>
-          {typeof output.prompt === 'string'
-            ? output.prompt
-            : JSON.stringify(output.prompt, null, 2)}
-        </div>
-      )}
-      {/* Show response audio from redteam history if available (target's audio response) */}
-      {responseAudioSource?.src && (
-        <div className="response-audio" style={{ marginBottom: '8px' }}>
-          <audio
-            controls
-            style={{ width: '100%', height: '32px' }}
-            data-testid="response-audio-player"
-          >
-            <source src={responseAudioSource.src} type={responseAudioSource.type || 'audio/mpeg'} />
-            Your browser does not support the audio element.
-          </audio>
-        </div>
-      )}
+      {renderStatusBlock({
+        showPassFail,
+        output,
+        passFailText,
+        scoreString,
+        providerOverride,
+        failReasons,
+        showPassReasons,
+        passReasons,
+      })}
+      {renderPromptBlock({ showPrompts, firstOutput, prompt: output.prompt })}
+      {renderResponseAudioPlayer(responseAudioSource)}
       <div
         className={!showPassFail && !showPrompts ? 'content-needs-action-clearance' : undefined}
         style={contentStyle}
@@ -1048,9 +1405,46 @@ function EvalOutputCell({
           }
         />
       </div>
-      {comment}
-      {detail}
-      {actions}
+      {renderCommentNode({
+        commentTextToDisplay,
+        handleCommentOpen,
+        contentStyle,
+      })}
+      {renderCellDetail({
+        showStats,
+        tokenUsageDisplay,
+        latencyDisplay,
+        tokPerSecDisplay,
+        costDisplay,
+      })}
+      {renderOutputActions({
+        showExtraActions,
+        copied,
+        linked,
+        isHighlighted: commentIsHighlighted,
+        activeRating,
+        openPrompt,
+        output,
+        text,
+        rowIndex,
+        promptIndex,
+        evaluationId,
+        testCaseId,
+        cloudConfig,
+        addFilter,
+        resetFilters,
+        replayEvaluation,
+        fetchTraces,
+        handleCopy,
+        handleToggleHighlight,
+        handleRowShareLink,
+        handleRating,
+        handleSetScore,
+        handleCommentOpen,
+        handlePromptOpen,
+        handlePromptClose,
+        setActionsHovered,
+      })}
       {lightboxOpen && lightboxImage && (
         <div className="lightbox" onClick={() => toggleLightbox()}>
           <img src={lightboxImage} alt="Lightbox" />
@@ -1059,7 +1453,7 @@ function EvalOutputCell({
       {commentDialogOpen && (
         <CommentDialog
           open={commentDialogOpen}
-          contextText={getCombinedContextText()}
+          contextText={getCombinedContextText(output)}
           commentText={commentText}
           onClose={handleCommentClose}
           onSave={handleCommentSave}
