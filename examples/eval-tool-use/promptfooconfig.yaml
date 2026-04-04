@@ -41,7 +41,7 @@ providers:
             required:
               - location
             additionalProperties: false
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     config:
       tools:
         - type: function
@@ -61,7 +61,7 @@ providers:
                     - fahrenheit
               required:
                 - location
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     label: External Tools
     config:
       tools: file://external_tools.yaml

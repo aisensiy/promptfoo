@@ -15,13 +15,12 @@ export OPENAI_API_KEY=your_api_key_here
 
 The OpenAI provider supports the following model formats:
 
-- `openai:<model name>` - uses any model name against the `/v1/chat/completions` endpoint
+- `openai:<model name>` or `openai:chat:<model name>` - use any chat model against the `/v1/chat/completions` endpoint (`openai:<model name>` is shorthand for `openai:chat:<model name>`)
 - `openai:responses:<model name>` - uses responses API models over HTTP connections
 - `openai:assistant:<assistant id>` - use an assistant
-- `openai:<model name>` - uses a specific model name (mapped automatically to chat or completion endpoint)
 - `openai:chat` - defaults to `gpt-4.1-2025-04-14`
 - `openai:responses` - defaults to `gpt-4.1-2025-04-14`
-- `openai:ft:gpt-5-mini:company-name:ID` - example of a fine-tuned chat completion model
+- `openai:chat:ft:gpt-5-mini:company-name:ID` - example of a fine-tuned chat completion model
 - `openai:completion` - defaults to `gpt-3.5-turbo-instruct`
 - `openai:completion:<model name>` - uses any model name against the `/v1/completions` endpoint
 - `openai:embeddings:<model name>` - uses any model name against the `/v1/embeddings` endpoint
@@ -37,11 +36,11 @@ The OpenAI provider supports the following model formats:
 The `openai:<endpoint>:<model name>` construction is useful if OpenAI releases a new model,
 or if you have a custom model.
 For example, if OpenAI releases `gpt-5` chat completion,
-you could begin using it immediately with `openai:gpt-5`.
+you could begin using it immediately with `openai:chat:gpt-5`.
 
 ```yaml title="GPT-5 only: verbosity and minimal reasoning"
 providers:
-  - id: openai:gpt-5
+  - id: openai:chat:gpt-5
     config:
       verbosity: high # low | medium | high
       reasoning_effort: minimal
@@ -186,7 +185,7 @@ Use `passthrough` to set OpenAI's `n` parameter for generating multiple response
 
 ```yaml
 providers:
-  - id: openai:gpt-4o
+  - id: openai:chat:gpt-4o
     config:
       passthrough:
         n: 3 # Generate 3 responses
@@ -197,7 +196,7 @@ When `n > 1`, the primary `output` contains the first choice's content, and all 
 ## Models
 
 OpenAI updates aliases, dated snapshots, and pricing frequently. Promptfoo supports explicit
-endpoint syntax like `openai:<model>` and `openai:responses:<model>` for newly released
+endpoint syntax like `openai:chat:<model>` and `openai:responses:<model>` for newly released
 models right away, while the tables below call out the common model IDs promptfoo knows about
 for routing and cost estimation. Check the official
 [OpenAI models docs](https://platform.openai.com/docs/models) and
@@ -221,7 +220,7 @@ Standard model:
 
 ```yaml
 providers:
-  - id: openai:gpt-4.1 # or openai:responses:gpt-4.1
+  - id: openai:chat:gpt-4.1 # or openai:responses:gpt-4.1
     config:
       temperature: 0.7
 ```
@@ -230,16 +229,16 @@ More affordable variants:
 
 ```yaml
 providers:
-  - id: openai:gpt-4.1-mini # or -nano variant
+  - id: openai:chat:gpt-4.1-mini # or -nano variant
 ```
 
 Specific snapshot versions are also available:
 
 ```yaml
 providers:
-  - id: openai:gpt-4.1-2025-04-14 # Standard
-  - id: openai:gpt-4.1-mini-2025-04-14 # Mini
-  - id: openai:gpt-4.1-nano-2025-04-14 # Nano
+  - id: openai:chat:gpt-4.1-2025-04-14 # Standard
+  - id: openai:chat:gpt-4.1-mini-2025-04-14 # Mini
+  - id: openai:chat:gpt-4.1-nano-2025-04-14 # Nano
 ```
 
 ### GPT-5.1
@@ -345,7 +344,7 @@ providers:
 ```
 
 :::warning
-GPT-5.1-Codex-Max is only available through the Responses API (`openai:responses:`). It does not work with the Chat Completions API (`openai:`).
+GPT-5.1-Codex-Max is only available through the Responses API (`openai:responses:`). It does not work with the Chat Completions API (`openai:chat:`).
 :::
 
 #### Reasoning Effort Levels
@@ -398,12 +397,12 @@ Standard GPT-5.2 variants are available via both the Chat Completions API and Re
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - id: openai:gpt-5.2-chat-latest
+  - id: openai:chat:gpt-5.2-chat-latest
     config:
       max_completion_tokens: 4096
 
   # With reasoning effort
-  - id: openai:gpt-5.2
+  - id: openai:chat:gpt-5.2
     config:
       reasoning_effort: 'medium'
       max_completion_tokens: 4096
@@ -430,7 +429,7 @@ Fast, low-latency responses (no reasoning):
 ```yaml title="promptfooconfig.yaml"
 providers:
   # Chat API
-  - id: openai:gpt-5.2
+  - id: openai:chat:gpt-5.2
     config:
       reasoning_effort: 'none'
       max_completion_tokens: 2048
@@ -489,7 +488,7 @@ GPT-5.3 Instant is exposed as `gpt-5.3-chat-latest`. Promptfoo also supports GPT
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - id: openai:gpt-5.3-chat-latest
+  - id: openai:chat:gpt-5.3-chat-latest
     config:
       max_completion_tokens: 2048
 
@@ -533,13 +532,13 @@ GPT-5.4 is a GPT-5 family model for complex professional work, agentic coding, a
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     config:
       max_completion_tokens: 2048
       reasoning_effort: 'none'
       verbosity: 'low'
 
-  - id: openai:gpt-5.4
+  - id: openai:chat:gpt-5.4
     config:
       max_completion_tokens: 4096
       reasoning_effort: 'low'
@@ -996,7 +995,7 @@ export async function getTools() {
 prompts:
   - file://prompt.txt
 providers:
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     // highlight-start
     config:
       # Load tools from external file
@@ -1118,7 +1117,7 @@ Use the `functions` config to define custom functions. Each function should be a
 prompts:
   - file://prompt.txt
 providers:
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     // highlight-start
     config:
       functions:
@@ -1206,7 +1205,7 @@ providers:
 Here's an example of how your `provider_with_function.yaml` might look:
 
 ```yaml title="provider_with_function.yaml"
-id: openai:gpt-5.4-mini
+id: openai:chat:gpt-5.4-mini
 config:
   functions:
     - name: get_current_weather
@@ -1249,7 +1248,7 @@ prompts:
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     config:
       response_format:
         type: json_schema
@@ -1538,7 +1537,7 @@ prompts:
     label: Audio Input
 
 providers:
-  - id: openai:gpt-4o-audio-preview
+  - id: openai:chat:gpt-4o-audio-preview
     config:
       modalities: ['text'] # also supports 'audio'
 
