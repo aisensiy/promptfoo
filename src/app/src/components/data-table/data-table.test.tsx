@@ -125,6 +125,31 @@ describe('DataTable', () => {
     expect(screen.getByText('Name')).toBeInTheDocument();
   });
 
+  it('should keep compact header padding for utility columns', () => {
+    const data: TestRow[] = [
+      { id: '1', name: 'Item 1' },
+      { id: '2', name: 'Item 2' },
+    ];
+
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        enableRowSelection
+        renderSubComponent={(row) => <div>Expanded {row.original.id}</div>}
+      />,
+    );
+
+    const headerCells = screen.getAllByRole('columnheader');
+
+    expect(headerCells[0]).toHaveClass('px-3');
+    expect(headerCells[1]).toHaveClass('px-3');
+    expect(headerCells[2]).toHaveClass('px-4');
+    expect(headerCells[2]).toHaveClass('overflow-hidden');
+    expect(headerCells[3]).toHaveClass('px-4');
+    expect(headerCells[3]).toHaveClass('overflow-hidden');
+  });
+
   it('should display loading state when isLoading is true', () => {
     render(<DataTable columns={columns} data={[]} isLoading />);
 
