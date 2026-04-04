@@ -27,7 +27,7 @@ log_step() {
 }
 
 trim_file() {
-  tr -d '[:space:]' < "$1"
+  tr -d '[:space:]' <"$1"
 }
 
 resolve_node_version() {
@@ -50,35 +50,35 @@ resolve_node_version() {
 port_cwd() {
   local port="$1"
 
-  if ! command -v lsof > /dev/null 2>&1; then
+  if ! command -v lsof >/dev/null 2>&1; then
     return 1
   fi
 
   local pid
-  pid="$(lsof -nP -tiTCP:"${port}" -sTCP:LISTEN 2> /dev/null | head -n 1 || true)"
+  pid="$(lsof -nP -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null | head -n 1 || true)"
   if [[ -z "${pid}" ]]; then
     return 1
   fi
 
-  lsof -a -p "${pid}" -d cwd -Fn 2> /dev/null | sed -n 's/^n//p' | head -n 1
+  lsof -a -p "${pid}" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1
 }
 
 port_in_use() {
   local port="$1"
 
-  if command -v lsof > /dev/null 2>&1; then
-    lsof -nP -iTCP:"${port}" -sTCP:LISTEN > /dev/null 2>&1
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
     return
   fi
 
-  if command -v ss > /dev/null 2>&1; then
-    ss -ltnH "( sport = :${port} )" 2> /dev/null | grep -q .
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnH "( sport = :${port} )" 2>/dev/null | grep -q .
     return
   fi
 
-  if command -v netstat > /dev/null 2>&1; then
-    netstat -an 2> /dev/null |
-      grep -E "[\.:]${port}[[:space:]].*LISTEN" > /dev/null
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -an 2>/dev/null |
+      grep -E "[\.:]${port}[[:space:]].*LISTEN" >/dev/null
     return
   fi
 
@@ -119,7 +119,7 @@ port_range_usable_for_worktree() {
     local port
     port="$((start_port + offset))"
     if port_in_use "${port}"; then
-      if ! command -v lsof > /dev/null 2>&1; then
+      if ! command -v lsof >/dev/null 2>&1; then
         echo "Port ${port} is already in use and ownership cannot be determined without lsof; install lsof or free the saved port block ${start_port}" >&2
         return 2
       fi
@@ -194,19 +194,19 @@ load_port_assignment() {
     value="${BASH_REMATCH[2]}"
 
     case "${key}" in
-      PORT_RANGE_START | APP_PORT | API_PORT)
-        printf -v "${key}" '%s' "${value}"
-        ;;
-      SERVER_PORT)
-        API_PORT="${value}"
-        uses_legacy_server_port=1
-        ;;
-      *)
-        echo "Unexpected port assignment key in ${WORKTREE_PORT_FILE}: ${key}" >&2
-        exit 1
-        ;;
+    PORT_RANGE_START | APP_PORT | API_PORT)
+      printf -v "${key}" '%s' "${value}"
+      ;;
+    SERVER_PORT)
+      API_PORT="${value}"
+      uses_legacy_server_port=1
+      ;;
+    *)
+      echo "Unexpected port assignment key in ${WORKTREE_PORT_FILE}: ${key}" >&2
+      exit 1
+      ;;
     esac
-  done < "${WORKTREE_PORT_FILE}"
+  done <"${WORKTREE_PORT_FILE}"
 
   if [[ -n "${PORT_RANGE_START:-}" ]] && ! is_valid_port_block_start "${PORT_RANGE_START}"; then
     echo "Invalid PORT_RANGE_START in ${WORKTREE_PORT_FILE}: ${PORT_RANGE_START}" >&2
@@ -230,7 +230,7 @@ save_port_assignment() {
   local api_port="$2"
 
   mkdir -p "$(dirname "${WORKTREE_PORT_FILE}")"
-  cat > "${WORKTREE_PORT_FILE}" << EOF
+  cat >"${WORKTREE_PORT_FILE}" <<EOF
 PORT_RANGE_START=${app_port}
 APP_PORT=${app_port}
 API_PORT=${api_port}
@@ -238,13 +238,14 @@ EOF
 }
 
 write_port_lock_metadata() {
-  printf '%s\n' "$$" > "${PORT_LOCK_PID_FILE}"
-  date +%s > "${PORT_LOCK_CREATED_AT_FILE}"
+  printf '%s\n' "$$" >"${PORT_LOCK_PID_FILE}"
+  date +%s >"${PORT_LOCK_CREATED_AT_FILE}"
 }
 
 port_lock_age_seconds() {
+  # Missing or unreadable metadata → treat as maximally stale so recovery kicks in
   if [[ ! -f "${PORT_LOCK_CREATED_AT_FILE}" ]]; then
-    printf '%s\n' "${PORT_LOCK_STALE_SECONDS}"
+    printf '%s\n' "$((PORT_LOCK_STALE_SECONDS + 1))"
     return
   fi
 
@@ -253,7 +254,7 @@ port_lock_age_seconds() {
   now="$(date +%s)"
 
   if [[ ! "${created_at}" =~ ^[0-9]+$ ]]; then
-    printf '%s\n' "${PORT_LOCK_STALE_SECONDS}"
+    printf '%s\n' "$((PORT_LOCK_STALE_SECONDS + 1))"
     return
   fi
 
@@ -261,16 +262,21 @@ port_lock_age_seconds() {
 }
 
 port_lock_is_stale() {
+  local age
+  age="$(port_lock_age_seconds)"
+
   if [[ -f "${PORT_LOCK_PID_FILE}" ]]; then
     local lock_pid
     lock_pid="$(trim_file "${PORT_LOCK_PID_FILE}")"
-    if [[ "${lock_pid}" =~ ^[0-9]+$ ]] && kill -0 "${lock_pid}" 2> /dev/null; then
+    # PID alive and lock is young — not stale
+    if [[ "${lock_pid}" =~ ^[0-9]+$ ]] && kill -0 "${lock_pid}" 2>/dev/null &&
+      ((age < PORT_LOCK_STALE_SECONDS)); then
       return 1
     fi
     return 0
   fi
 
-  (($(port_lock_age_seconds) >= PORT_LOCK_STALE_SECONDS))
+  ((age >= PORT_LOCK_STALE_SECONDS))
 }
 
 recover_stale_port_lock() {
@@ -288,7 +294,7 @@ acquire_port_lock() {
 
   local attempt
   for ((attempt = 0; attempt < 200; attempt += 1)); do
-    if mkdir "${PORT_LOCK_DIR}" 2> /dev/null; then
+    if mkdir "${PORT_LOCK_DIR}" 2>/dev/null; then
       write_port_lock_metadata
       return 0
     fi
@@ -302,8 +308,8 @@ acquire_port_lock() {
 }
 
 release_port_lock() {
-  rm -f "${PORT_LOCK_PID_FILE}" "${PORT_LOCK_CREATED_AT_FILE}" 2> /dev/null || true
-  rmdir "${PORT_LOCK_DIR}" 2> /dev/null || true
+  rm -f "${PORT_LOCK_PID_FILE}" "${PORT_LOCK_CREATED_AT_FILE}" 2>/dev/null || true
+  rmdir "${PORT_LOCK_DIR}" 2>/dev/null || true
 }
 
 allocate_port_range() {
@@ -311,9 +317,7 @@ allocate_port_range() {
 
   load_port_assignment
   if [[ -n "${APP_PORT:-}" ]] && [[ -n "${API_PORT:-}" ]]; then
-    if port_range_usable_for_worktree "${APP_PORT}"; then
-      return
-    fi
+    port_range_usable_for_worktree "${APP_PORT}" && return
     saved_assignment_status=$?
     if [[ "${saved_assignment_status}" -eq 2 ]]; then
       exit 1
@@ -357,9 +361,9 @@ allocate_port_range() {
 
   following_port="$((allocated_port + PORT_BLOCK_SIZE))"
   if is_valid_port_block_start "${following_port}"; then
-    printf '%s\n' "${following_port}" > "${NEXT_PORT_FILE}"
+    printf '%s\n' "${following_port}" >"${NEXT_PORT_FILE}"
   else
-    printf '%s\n' "${base_port}" > "${NEXT_PORT_FILE}"
+    printf '%s\n' "${base_port}" >"${NEXT_PORT_FILE}"
   fi
 
   release_port_lock

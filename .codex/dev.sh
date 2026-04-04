@@ -23,7 +23,7 @@ if [[ ! -s "${NVM_DIR}/nvm.sh" ]]; then
 fi
 # shellcheck source=/dev/null
 . "${NVM_DIR}/nvm.sh"
-nvm use "$(tr -d '[:space:]' < "${WORKTREE_ROOT}/.nvmrc")"
+nvm use "$(tr -d '[:space:]' <"${WORKTREE_ROOT}/.nvmrc")"
 
 if [[ ! "${APP_PORT}" =~ ^[0-9]+$ ]] || [[ ! "${API_PORT}" =~ ^[0-9]+$ ]]; then
   echo "Invalid app/API port assignment in ${WORKTREE_PORT_FILE}" >&2
