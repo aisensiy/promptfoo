@@ -487,7 +487,7 @@ function renderOutputNode({
   }
 
   if (searchText && shouldHighlightSearchText) {
-    node = renderHighlightedTextNode(text, searchText);
+    node = renderHighlightedTextNode(text, searchText) ?? node;
   } else {
     node =
       renderMediaNode({

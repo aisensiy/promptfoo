@@ -859,6 +859,29 @@ describe('EvalOutputCell', () => {
     expect(screen.getByText('Test output text')).toBeInTheDocument();
   });
 
+  it('preserves diff output when searchText is an invalid regex', () => {
+    mockTableStoreState.shouldHighlightSearchText = true;
+
+    const { container } = renderWithProviders(
+      <EvalOutputCell
+        {...defaultProps}
+        firstOutput={{
+          ...defaultProps.firstOutput,
+          text: 'alpha beta',
+        }}
+        output={{
+          ...defaultProps.output,
+          text: 'alpha gamma',
+        }}
+        showDiffs={true}
+        searchText="("
+      />,
+    );
+
+    expect(container.querySelector('del')?.textContent).toContain('beta');
+    expect(container.querySelector('ins')?.textContent).toContain('gamma');
+  });
+
   it('handles zero-length regex matches gracefully', () => {
     const propsWithZeroLengthSearch: MockEvalOutputCellProps = {
       ...defaultProps,
