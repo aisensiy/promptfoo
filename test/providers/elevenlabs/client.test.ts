@@ -74,14 +74,36 @@ describe('ElevenLabsClient', () => {
 
       expect(result).toEqual(mockResponse);
       const [url, options] = mockFetch.mock.calls[0];
-      const headers =
-        options?.headers instanceof Headers ? options.headers : new Headers(options?.headers);
+      const headers = new Headers(options?.headers);
 
       expect(url).toBe('https://api.elevenlabs.io/v1/test');
       expect(options?.method).toBe('POST');
       expect(options?.body).toBe(JSON.stringify({ foo: 'bar' }));
+      expect(options?.headers).not.toBeInstanceOf(Headers);
       expect(headers.get('xi-api-key')).toBe('test-api-key');
       expect(headers.get('Content-Type')).toBe('application/json');
+    });
+
+    it('should normalize caller Headers to a plain object before fetchWithProxy', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ success: true }),
+      } as Response);
+
+      await client.post<{ success: boolean }>(
+        '/test',
+        { foo: 'bar' },
+        { headers: new Headers({ 'Idempotency-Key': 'request-123' }) },
+      );
+
+      const [, options] = mockFetch.mock.calls[0];
+      expect(options?.headers).toEqual({
+        'idempotency-key': 'request-123',
+        'xi-api-key': 'test-api-key',
+        'content-type': 'application/json',
+      });
     });
 
     it('should handle binary response', async () => {

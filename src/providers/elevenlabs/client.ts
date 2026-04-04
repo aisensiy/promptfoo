@@ -9,6 +9,23 @@ export interface ElevenLabsClientConfig {
   retries?: number;
 }
 
+function toPlainHeaders(headers?: HeadersInit): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+
+  const entries =
+    headers instanceof Headers
+      ? headers.entries()
+      : Array.isArray(headers)
+        ? headers
+        : Object.entries(headers);
+
+  return Object.fromEntries(
+    Array.from(entries, ([key, value]) => [key.toLowerCase(), value]),
+  ) as Record<string, string>;
+}
+
 /**
  * HTTP client for ElevenLabs API with automatic retries, rate limiting, and error handling
  */
@@ -41,7 +58,7 @@ export class ElevenLabsClient {
     let lastError: Error | null = null;
 
     const { headers: optionsHeaders, ...restOptions } = options || {};
-    const headers = new Headers(optionsHeaders || {});
+    const headers = toPlainHeaders(optionsHeaders);
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {
       try {
@@ -50,13 +67,13 @@ export class ElevenLabsClient {
 
         // Handle FormData for multipart uploads
         const isFormData = body instanceof FormData;
-        headers.set('xi-api-key', this.apiKey);
+        headers['xi-api-key'] = this.apiKey;
 
         // Don't set Content-Type for FormData (fetch sets it automatically with boundary)
         if (isFormData) {
-          headers.delete('Content-Type');
+          delete headers['content-type'];
         } else {
-          headers.set('Content-Type', 'application/json');
+          headers['content-type'] = 'application/json';
         }
 
         const response = await fetchWithProxy(url, {
@@ -127,8 +144,8 @@ export class ElevenLabsClient {
       const response = await fetchWithProxy(url, {
         method: 'GET',
         headers: {
+          ...toPlainHeaders(options?.headers),
           'xi-api-key': this.apiKey,
-          ...options?.headers,
         },
         signal: controller.signal,
         ...options,
@@ -162,8 +179,8 @@ export class ElevenLabsClient {
       const response = await fetchWithProxy(url, {
         method: 'DELETE',
         headers: {
+          ...toPlainHeaders(options?.headers),
           'xi-api-key': this.apiKey,
-          ...options?.headers,
         },
         signal: controller.signal,
         ...options,
