@@ -116,6 +116,36 @@ describe('webSearchUtils', () => {
       expect(hasWebSearchCapability(provider as ApiProvider)).toBe(true);
     });
 
+    it('should return true for Codex SDK with live web search enabled', () => {
+      const provider: Partial<ApiProvider> = {
+        id: () => 'openai:codex-sdk',
+        config: {
+          web_search_mode: 'live',
+        },
+      };
+      expect(hasWebSearchCapability(provider as ApiProvider)).toBe(true);
+    });
+
+    it('should return true for Codex SDK with web_search_enabled set', () => {
+      const provider: Partial<ApiProvider> = {
+        id: () => 'openai:codex:gpt-5.4',
+        config: {
+          web_search_enabled: true,
+        },
+      };
+      expect(hasWebSearchCapability(provider as ApiProvider)).toBe(true);
+    });
+
+    it('should return false for Codex SDK when web search is disabled', () => {
+      const provider: Partial<ApiProvider> = {
+        id: () => 'openai:codex-sdk',
+        config: {
+          web_search_mode: 'disabled',
+        },
+      };
+      expect(hasWebSearchCapability(provider as ApiProvider)).toBe(false);
+    });
+
     it('should return false for OpenAI responses provider without web_search_preview', () => {
       const provider: Partial<ApiProvider> = {
         id: () => 'openai:responses:gpt-5.1',

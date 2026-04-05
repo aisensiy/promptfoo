@@ -40,6 +40,14 @@ export function hasWebSearchCapability(provider: ApiProvider | null | undefined)
     return true;
   }
 
+  // Codex SDK supports web search when explicitly enabled.
+  if (
+    id.includes('openai:codex') &&
+    (provider.config?.web_search_mode === 'live' || provider.config?.web_search_enabled === true)
+  ) {
+    return true;
+  }
+
   // Check for Anthropic with web_search tool
   if (
     id.includes('anthropic') &&

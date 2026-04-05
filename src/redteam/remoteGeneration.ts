@@ -2,6 +2,7 @@ import cliState from '../cliState';
 import { getEnvBool, getEnvString } from '../envars';
 import { isLoggedIntoCloud } from '../globalConfig/accounts';
 import { CloudConfig } from '../globalConfig/cloud';
+import { hasCodexDefaultCredentials } from '../providers/openai/codexDefaults';
 
 /**
  * Gets the remote generation API endpoint URL.
@@ -106,8 +107,10 @@ export function shouldGenerateRemote(): boolean {
     return true;
   }
 
-  // Generate remotely when the user has not disabled it and does not have an OpenAI key.
-  return !getEnvString('OPENAI_API_KEY') || (cliState.remote ?? false);
+  // Generate remotely when local OpenAI/Codex credentials are unavailable.
+  return (
+    (!getEnvString('OPENAI_API_KEY') && !hasCodexDefaultCredentials()) || (cliState.remote ?? false)
+  );
 }
 
 /**
