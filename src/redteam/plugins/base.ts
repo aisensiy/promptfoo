@@ -213,7 +213,7 @@ export abstract class RedteamPluginBase {
     const hasMultipleInputs = this.config.inputs && Object.keys(this.config.inputs).length > 0;
 
     return Promise.all(
-      prompts.sort().map(async (promptObj) => {
+      prompts.sort().map(async (promptObj, materializationIndex) => {
         // Extract input vars from the prompt for multi-input mode
         const inputVars = hasMultipleInputs
           ? extractInputVarsFromPrompt(promptObj.__prompt, this.config.inputs)
@@ -221,6 +221,7 @@ export abstract class RedteamPluginBase {
         const materializedInputVars =
           inputVars && this.config.inputs
             ? await materializeInputVariablesWithMetadata(inputVars, this.config.inputs, {
+                materializationIndex,
                 pluginId: getShortPluginId(this.id),
                 provider: this.provider,
                 purpose: this.purpose,

@@ -84,6 +84,7 @@ async function rematerializeStrategyInputVars(
   injectVar: string,
   provider: ApiProvider,
   purpose: string,
+  materializationIndex: number,
 ): Promise<{
   inputMaterialization: Record<string, unknown> | undefined;
   vars: TestCase['vars'];
@@ -106,6 +107,7 @@ async function rematerializeStrategyInputVars(
       parsed,
       inputs,
       {
+        materializationIndex,
         pluginId: String(testCase.metadata?.pluginId || 'unknown-plugin'),
         provider,
         purpose,
@@ -511,12 +513,13 @@ async function applyStrategies(
 
     newTestCases.push(
       ...(await Promise.all(
-        resultTestCases.map(async (t) => {
+        resultTestCases.map(async (t, materializationIndex) => {
           const { inputMaterialization, vars } = await rematerializeStrategyInputVars(
             t,
             injectVar,
             provider,
             purpose,
+            materializationIndex,
           );
 
           return {

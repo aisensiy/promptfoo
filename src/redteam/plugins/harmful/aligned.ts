@@ -44,7 +44,7 @@ export class AlignedHarmfulPlugin extends RedteamPluginBase {
     const pluginId = getShortPluginId(this.harmCategory);
 
     return Promise.all(
-      prompts.map(async ({ __prompt }) => {
+      prompts.map(async ({ __prompt }, materializationIndex) => {
         // Base vars with the primary injectVar
         const vars: Record<string, string> = {
           [this.injectVar]: __prompt,
@@ -61,6 +61,7 @@ export class AlignedHarmfulPlugin extends RedteamPluginBase {
               parsed,
               this.config.inputs!,
               {
+                materializationIndex,
                 pluginId,
                 provider: this.provider,
                 purpose: this.purpose,

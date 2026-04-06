@@ -182,7 +182,7 @@ async function materializeRemoteTestCaseInputs({
   }
 
   return Promise.all(
-    testCases.map(async (testCase) => {
+    testCases.map(async (testCase, materializationIndex) => {
       const inputVars = extractInputVarsFromPrompt(
         String(testCase.vars?.[injectVar] ?? ''),
         inputs,
@@ -192,6 +192,7 @@ async function materializeRemoteTestCaseInputs({
       }
 
       const materializedVars = await materializeInputVariablesWithMetadata(inputVars, inputs, {
+        materializationIndex,
         pluginId,
         provider,
         purpose,

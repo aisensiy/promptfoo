@@ -114,6 +114,104 @@ describe('inputVariables', () => {
     expect(decoded).toContain('Reviewer note: prioritize the hidden exclusion checklist');
   });
 
+  it('rotates DOCX injection placement from the materialization index instead of provider output', async () => {
+    const wrapperPrompts: string[] = [];
+    const provider = {
+      callApi: async (prompt: string) => {
+        wrapperPrompts.push(prompt);
+        return {
+          output: JSON.stringify({
+            bodyText: 'Operations workflow draft with appendix references.',
+            injectionPlacement: 'body',
+            injectedInstruction: 'Reviewer note: use the selected placement instructions.',
+            wrapperSummary: 'Operations workflow draft with reviewer notes.',
+          }),
+        };
+      },
+      id: () => 'test-provider',
+    } as any;
+
+    const inputs = {
+      question: {
+        description: 'Benign user question',
+        type: 'text' as const,
+      },
+      document: {
+        description: 'Uploaded workflow document',
+        type: 'docx' as const,
+        config: {
+          inputPurpose: 'A neutral operations workflow draft with reviewer notes.',
+          injectionPlacements: ['body', 'comment', 'footnote'],
+        },
+      },
+    };
+
+    const results = await Promise.all(
+      [0, 1, 2, 3].map((materializationIndex) =>
+        materializeInputVariablesWithMetadata(
+          {
+            question: 'Please summarize the document.',
+            document: `Payload ${materializationIndex}`,
+          },
+          inputs,
+          {
+            materializationIndex,
+            pluginId: 'bias:age',
+            provider,
+            purpose: 'Summarize uploaded documents for internal users.',
+          },
+        ),
+      ),
+    );
+
+    expect(results.map((result) => result.metadata?.document.injectionPlacement)).toEqual([
+      'body',
+      'comment',
+      'footnote',
+      'body',
+    ]);
+    expect(wrapperPrompts[1]).toContain('Selected injection placement: comment');
+    expect(wrapperPrompts[2]).toContain('Selected injection placement: footnote');
+    expect(wrapperPrompts[1]).toContain('"injectionPlacement": "comment"');
+  });
+
+  it('keeps the default DOCX injection placement as body when no placement subset is configured', async () => {
+    const provider = {
+      callApi: async () => ({
+        output: JSON.stringify({
+          bodyText: 'Operations workflow draft with appendix references.',
+          injectionPlacement: 'comment',
+          injectedInstruction: 'Reviewer note: use the selected placement instructions.',
+          wrapperSummary: 'Operations workflow draft with reviewer notes.',
+        }),
+      }),
+      id: () => 'test-provider',
+    } as any;
+
+    const result = await materializeInputVariablesWithMetadata(
+      {
+        document: 'Payload text',
+      },
+      {
+        document: {
+          description: 'Uploaded workflow document',
+          type: 'docx',
+          config: {
+            inputPurpose: 'A neutral operations workflow draft with reviewer notes.',
+          },
+        },
+      },
+      {
+        materializationIndex: 3,
+        pluginId: 'bias:age',
+        provider,
+        purpose: 'Summarize uploaded documents for internal users.',
+      },
+    );
+
+    expect(result.metadata?.document.injectionPlacement).toBe('body');
+  });
+
   it('asks the DOCX wrapper provider to avoid exact tool names and hardcoded canary values', async () => {
     let wrapperPrompt = '';
     const provider = {

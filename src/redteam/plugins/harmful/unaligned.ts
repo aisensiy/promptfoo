@@ -23,6 +23,7 @@ async function processPromptForInputs(
   plugin: keyof typeof UNALIGNED_PROVIDER_HARM_PLUGINS,
   provider: PromptfooHarmfulCompletionProvider,
   purpose: string,
+  materializationIndex: number,
 ): Promise<{
   additionalMetadata?: Record<string, unknown>;
   additionalVars: Record<string, string>;
@@ -46,6 +47,7 @@ async function processPromptForInputs(
         parsed,
         inputs,
         {
+          materializationIndex,
           pluginId: plugin,
           provider,
           purpose,
@@ -88,13 +90,14 @@ export async function getHarmfulTests(
   const inputs = config?.inputs as Inputs | undefined;
 
   return Promise.all(
-    sampleArray(allPrompts, n).map(async (prompt) => {
+    sampleArray(allPrompts, n).map(async (prompt, materializationIndex) => {
       const { processedPrompt, additionalVars, additionalMetadata } = await processPromptForInputs(
         prompt,
         inputs,
         plugin,
         unalignedProvider,
         purpose,
+        materializationIndex,
       );
       const testCase = createTestCase(injectVar, processedPrompt, plugin);
 

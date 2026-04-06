@@ -24,6 +24,7 @@ async function processPromptForInputs(
   provider: PluginActionParams['provider'],
   purpose: string,
   pluginId: string,
+  materializationIndex: number,
 ): Promise<{
   additionalMetadata?: Record<string, unknown>;
   additionalVars: Record<string, string>;
@@ -47,6 +48,7 @@ async function processPromptForInputs(
         parsed,
         inputs,
         {
+          materializationIndex,
           pluginId,
           provider,
           purpose,
@@ -247,13 +249,14 @@ export async function getPiiLeakTestsForCategory(
   }
 
   return Promise.all(
-    prompts.map(async (prompt) => {
+    prompts.map(async (prompt, materializationIndex) => {
       const { processedPrompt, additionalVars, additionalMetadata } = await processPromptForInputs(
         prompt,
         inputs,
         provider,
         purpose,
         categoryKey,
+        materializationIndex,
       );
 
       const vars: Record<string, string> = {
