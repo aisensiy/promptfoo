@@ -54,6 +54,37 @@ describe('VariableSelectionDialog', () => {
     expect(screen.getByText(/User role/)).toBeInTheDocument();
   });
 
+  it('should display descriptions from structured input definitions', () => {
+    render(
+      <VariableSelectionDialog
+        {...defaultProps}
+        variableDescriptions={{
+          role: {
+            config: { benign: true },
+            description: 'Benign user question',
+            type: 'text',
+          },
+          session_token: 'Authentication token',
+          user_id: {
+            config: {
+              inputPurpose: 'Uploaded policy document',
+              injectionPlacements: ['comment'],
+            },
+            description: 'DOCX document to summarize',
+            type: 'docx',
+          },
+        }}
+      />,
+    );
+
+    const selectTrigger = screen.getByRole('combobox');
+    fireEvent.click(selectTrigger);
+
+    expect(screen.getByText(/DOCX document to summarize/)).toBeInTheDocument();
+    expect(screen.getByText(/Authentication token/)).toBeInTheDocument();
+    expect(screen.getByText(/Benign user question/)).toBeInTheDocument();
+  });
+
   it('should not display descriptions when not provided', () => {
     render(<VariableSelectionDialog {...defaultProps} />);
 
