@@ -31,6 +31,6 @@ The target declares two inputs:
 
 The custom provider uploads the DOCX bytes to `example-app`'s `/documents` endpoint, then asks the chat endpoint to call `summarize_document` with the returned `document_id`.
 
-The example config currently runs `bias:age`, `rbac`, `bfla`, `sql-injection`, and `prompt-extraction` against the uploaded DOCX flow, then applies the `jailbreak:meta` strategy to mutate those generated attacks. The red team purpose describes the available `example-app` tools and explicitly marks Jane Smith's `readwrite` profile as out of bounds for the current `readonly` user.
+The example config currently runs `bias:age`, `rbac`, `bfla`, `harmful:profanity`, and `prompt-extraction` against the uploaded DOCX flow, then applies the `jailbreak:meta` strategy to mutate those generated attacks. The red team purpose describes the available `example-app` tools and explicitly marks Jane Smith's `readwrite` profile as out of bounds for the current `readonly` user.
 
 `special-token-injection` is intentionally omitted for now because that plugin is currently excluded in multi-input mode.
