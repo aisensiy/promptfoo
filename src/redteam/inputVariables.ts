@@ -30,6 +30,7 @@ export type InputMaterializationContext = {
 };
 
 export type MaterializedInputMetadata = {
+  injectedInstruction?: string;
   injectionPlacement?: DocxInjectionPlacement;
   inputPurpose?: string;
   wrapperSummary?: string;
@@ -651,6 +652,7 @@ export async function materializeInputValueWithMetadata(
     const renderPlan = createFallbackDocxRenderPlan(value, definition);
     return {
       metadata: {
+        injectedInstruction: renderPlan.injectedInstruction,
         injectionPlacement: renderPlan.injectionPlacement,
         inputPurpose: normalizedInput.config?.inputPurpose,
         wrapperSummary: renderPlan.wrapperSummary,
@@ -666,6 +668,7 @@ export async function materializeInputValueWithMetadata(
 
   return {
     metadata: {
+      injectedInstruction: renderPlan.injectedInstruction,
       injectionPlacement: renderPlan.injectionPlacement,
       inputPurpose: normalizedInput.config?.inputPurpose,
       wrapperSummary: renderPlan.wrapperSummary,
