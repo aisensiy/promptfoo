@@ -4,6 +4,12 @@ This example uses the repo's top-level `example-app/` service to test indirect p
 
 ## Setup
 
+Copy this example into a new working directory:
+
+```bash
+npx promptfoo@latest init --example redteam-docx-document-upload
+```
+
 From the repository root, start the example app:
 
 ```bash
