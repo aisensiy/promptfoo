@@ -1,5 +1,6 @@
 import {
   buildInputPromptDescription,
+  DocumentMediaInjectionPlacementSchema,
   type DocxInjectionPlacement,
   DocxInjectionPlacementSchema,
   getInputDescription,
@@ -111,12 +112,30 @@ function getDocxInjectionPlacements(config?: InputConfig): DocxInjectionPlacemen
   return placements && placements.length > 0 ? placements : [DEFAULT_DOCX_INJECTION_PLACEMENT];
 }
 
-function getDocxInjectionPlacementForIndex(
+function getInputInjectionPlacements(inputDefinition: InputDefinition): DocxInjectionPlacement[] {
+  const normalizedInput = normalizeInputDefinition(inputDefinition);
+
+  if (normalizedInput.type === 'docx') {
+    return getDocxInjectionPlacements(normalizedInput.config);
+  }
+
+  if (normalizedInput.type !== 'pdf' && normalizedInput.type !== 'image') {
+    return [DEFAULT_DOCX_INJECTION_PLACEMENT];
+  }
+
+  const placements = normalizedInput.config?.injectionPlacements
+    ?.map((placement) => DocumentMediaInjectionPlacementSchema.safeParse(placement))
+    .filter((result) => result.success)
+    .map((result) => result.data);
+
+  return placements && placements.length > 0 ? placements : [DEFAULT_DOCX_INJECTION_PLACEMENT];
+}
+
+function getInputInjectionPlacementForIndex(
   inputDefinition: InputDefinition,
   materializationIndex = 0,
 ): DocxInjectionPlacement {
-  const normalizedInput = normalizeInputDefinition(inputDefinition);
-  const placements = getDocxInjectionPlacements(normalizedInput.config);
+  const placements = getInputInjectionPlacements(inputDefinition);
   const placementIndex = Math.abs(materializationIndex) % placements.length;
 
   return placements[placementIndex] || DEFAULT_DOCX_INJECTION_PLACEMENT;
@@ -249,19 +268,36 @@ function toDataUri(mimeType: string, content: string | Buffer): string {
   return `data:${mimeType};base64,${buffer.toString('base64')}`;
 }
 
-function buildSvgImage(text: string): string {
+function getVisualDocumentPlacement(
+  injectionPlacement: DocxInjectionPlacement,
+): 'body' | 'header' | 'footer' {
+  const placementParseResult = DocumentMediaInjectionPlacementSchema.safeParse(injectionPlacement);
+  return placementParseResult.success ? placementParseResult.data : 'body';
+}
+
+function buildSvgImage(
+  text: string,
+  injectionPlacement: DocxInjectionPlacement = DEFAULT_DOCX_INJECTION_PLACEMENT,
+): string {
   const lines = normalizeDocumentText(text);
-  const height = SVG_PADDING * 2 + Math.max(lines.length, 1) * SVG_LINE_HEIGHT;
+  const placement = getVisualDocumentPlacement(injectionPlacement);
+  const height = Math.max(480, SVG_PADDING * 2 + Math.max(lines.length, 1) * SVG_LINE_HEIGHT);
+  const firstLineY =
+    placement === 'footer'
+      ? height - SVG_PADDING - (Math.max(lines.length, 1) - 1) * SVG_LINE_HEIGHT
+      : placement === 'header'
+        ? SVG_LINE_HEIGHT
+        : SVG_PADDING + SVG_LINE_HEIGHT;
 
   const textNodes =
     lines.length > 0
       ? lines
           .map(
             (line, index) =>
-              `<text x="${SVG_PADDING}" y="${SVG_PADDING + (index + 1) * SVG_LINE_HEIGHT}" font-family="Arial, sans-serif" font-size="22" fill="#111827">${escapeXml(line || ' ')}</text>`,
+              `<text x="${SVG_PADDING}" y="${firstLineY + index * SVG_LINE_HEIGHT}" font-family="Arial, sans-serif" font-size="22" fill="#111827">${escapeXml(line || ' ')}</text>`,
           )
           .join('')
-      : `<text x="${SVG_PADDING}" y="${SVG_PADDING + SVG_LINE_HEIGHT}" font-family="Arial, sans-serif" font-size="22" fill="#111827"> </text>`;
+      : `<text x="${SVG_PADDING}" y="${firstLineY}" font-family="Arial, sans-serif" font-size="22" fill="#111827"> </text>`;
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -272,13 +308,23 @@ function buildSvgImage(text: string): string {
   ].join('');
 }
 
-function buildPdfData(text: string): Buffer {
+function buildPdfData(
+  text: string,
+  injectionPlacement: DocxInjectionPlacement = DEFAULT_DOCX_INJECTION_PLACEMENT,
+): Buffer {
   const lines = normalizeDocumentText(text);
+  const placement = getVisualDocumentPlacement(injectionPlacement);
+  const firstLineY =
+    placement === 'footer'
+      ? 72 + (Math.max(lines.length, 1) - 1) * PDF_LINE_HEIGHT
+      : placement === 'header'
+        ? PDF_MARGIN_TOP - PDF_LINE_HEIGHT
+        : PDF_MARGIN_TOP;
   const textCommands = lines
     .map((line, index) => {
       const position =
         index === 0
-          ? `BT /F1 12 Tf ${PDF_MARGIN_LEFT} ${PDF_MARGIN_TOP} Td`
+          ? `BT /F1 12 Tf ${PDF_MARGIN_LEFT} ${firstLineY} Td`
           : `0 -${PDF_LINE_HEIGHT} Td`;
       return `${position} (${escapePdfText(line || ' ')}) Tj`;
     })
@@ -650,21 +696,31 @@ export async function materializeInputValueWithMetadata(
   context: InputMaterializationContext = {},
 ): Promise<{ metadata?: MaterializedInputMetadata; value: string }> {
   const normalizedInput = normalizeInputDefinition(definition);
+  const injectionPlacement = getInputInjectionPlacementForIndex(
+    definition,
+    context.materializationIndex,
+  );
 
   if (
     normalizedInput.type !== 'docx' ||
     !shouldApplyDocxWrapperPass(definition) ||
     !context.provider
   ) {
+    const shouldIncludeMetadata =
+      (normalizedInput.type === 'pdf' || normalizedInput.type === 'image') &&
+      Boolean(normalizedInput.config?.injectionPlacements?.length);
+
     return {
-      value: materializeInputValue(value, definition),
+      ...(shouldIncludeMetadata
+        ? {
+            metadata: {
+              injectionPlacement,
+            },
+          }
+        : {}),
+      value: materializeInputValue(value, definition, injectionPlacement),
     };
   }
-
-  const injectionPlacement = getDocxInjectionPlacementForIndex(
-    definition,
-    context.materializationIndex,
-  );
 
   let output: unknown;
   try {
@@ -701,16 +757,20 @@ export async function materializeInputValueWithMetadata(
   };
 }
 
-export function materializeInputValue(value: string, definition: InputDefinition): string {
+export function materializeInputValue(
+  value: string,
+  definition: InputDefinition,
+  injectionPlacement: DocxInjectionPlacement = DEFAULT_DOCX_INJECTION_PLACEMENT,
+): string {
   const inputType = getInputType(definition);
 
   switch (inputType) {
     case 'pdf':
-      return toDataUri('application/pdf', buildPdfData(value));
+      return toDataUri('application/pdf', buildPdfData(value, injectionPlacement));
     case 'docx':
       return toDataUri(DOCX_MIME_TYPE, buildDocxData(value));
     case 'image':
-      return toDataUri('image/svg+xml', buildSvgImage(value));
+      return toDataUri('image/svg+xml', buildSvgImage(value, injectionPlacement));
     case 'text':
     default:
       return value;
@@ -745,14 +805,15 @@ export async function materializeInputVariablesWithMetadata(
       continue;
     }
 
-    const shouldRotateDocxPlacement =
-      normalizeInputDefinition(definition).type === 'docx' &&
-      shouldApplyDocxWrapperPass(definition);
+    const normalizedInput = normalizeInputDefinition(definition);
+    const shouldRotatePlacement =
+      normalizedInput.type !== 'text' &&
+      Boolean(normalizedInput.config?.injectionPlacements?.length);
     const materializedValue = await materializeInputValueWithMetadata(value, definition, {
       ...context,
       materializationIndex: (context.materializationIndex ?? 0) + inputIndex,
     });
-    if (shouldRotateDocxPlacement) {
+    if (shouldRotatePlacement) {
       inputIndex += 1;
     }
     vars[key] = materializedValue.value;

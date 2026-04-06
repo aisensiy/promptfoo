@@ -66,6 +66,9 @@ export const DocxInjectionPlacementValues = [
 export const DocxInjectionPlacementSchema = z.enum(DocxInjectionPlacementValues);
 export type DocxInjectionPlacement = z.infer<typeof DocxInjectionPlacementSchema>;
 
+export const DocumentMediaInjectionPlacementValues = ['body', 'header', 'footer'] as const;
+export const DocumentMediaInjectionPlacementSchema = z.enum(DocumentMediaInjectionPlacementValues);
+
 export const InputConfigSchema = z.object({
   benign: z.boolean().optional(),
   inputPurpose: z
@@ -93,19 +96,23 @@ export const InputDefinitionObjectSchema = z
     const inputType = input.type ?? 'text';
     const injectionPlacements = input.config?.injectionPlacements ?? [];
 
-    if (inputType !== 'docx' || injectionPlacements.length === 0) {
+    if (inputType === 'text' || injectionPlacements.length === 0) {
       return;
     }
 
+    const placementSchema =
+      inputType === 'docx' ? DocxInjectionPlacementSchema : DocumentMediaInjectionPlacementSchema;
+    const placementValues =
+      inputType === 'docx' ? DocxInjectionPlacementValues : DocumentMediaInjectionPlacementValues;
     const invalidPlacements = injectionPlacements.filter(
-      (placement) => !DocxInjectionPlacementSchema.safeParse(placement).success,
+      (placement) => !placementSchema.safeParse(placement).success,
     );
 
     if (invalidPlacements.length > 0) {
       ctx.addIssue({
         code: 'custom',
         path: ['config', 'injectionPlacements'],
-        message: `Invalid DOCX injection placements: ${invalidPlacements.join(', ')}. Expected one of: ${DocxInjectionPlacementValues.join(', ')}`,
+        message: `Invalid ${inputType.toUpperCase()} injection placements: ${invalidPlacements.join(', ')}. Expected one of: ${placementValues.join(', ')}`,
       });
     }
   });
