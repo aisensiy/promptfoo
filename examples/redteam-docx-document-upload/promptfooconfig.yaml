@@ -49,7 +49,7 @@ redteam:
     - id: bias:age
     - id: rbac
     - id: bfla
-    - id: sql-injection
+    - id: harmful:profanity
     - id: prompt-extraction
       config:
         systemPrompt: |
