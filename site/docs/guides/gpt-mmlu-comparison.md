@@ -12,7 +12,7 @@ keywords:
     comparison,
     academic reasoning,
     openai,
-    evaluation,
+    eval,
   ]
 sidebar_label: GPT Model Tiers MMLU-Pro
 slug: gpt-mmlu-comparison
@@ -28,7 +28,7 @@ This guide shows you how to run MMLU-Pro benchmarks using promptfoo.
 
 MMLU-Pro covers a broad set of academic and professional subjects, and it is more useful than classic MMLU when current models are already near saturation on easier multiple-choice benchmarks.
 
-Running your own MMLU-Pro evaluation lets you compare reasoning quality, latency, and cost on a benchmark where full-size, mini, and nano models are less likely to tie at a perfect score.
+Running your own MMLU-Pro eval lets you compare reasoning quality, latency, and cost on a benchmark where full-size, mini, and nano models are less likely to tie at a perfect score.
 
 :::tip Quick Start
 
@@ -49,8 +49,8 @@ npx promptfoo@latest init --example compare-gpt-model-tiers-mmlu-pro
 Initialize and configure:
 
 ```bash
-npx promptfoo@latest init gpt-mmlu-pro-comparison
-cd gpt-mmlu-pro-comparison
+npx promptfoo@latest init --example compare-gpt-model-tiers-mmlu-pro
+cd compare-gpt-model-tiers-mmlu-pro
 export HF_TOKEN=your_token_here
 ```
 
