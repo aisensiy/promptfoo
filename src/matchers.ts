@@ -22,6 +22,7 @@ import {
   OPENAI_CLOSED_QA_PROMPT,
   PROMPTFOO_FACTUALITY_PROMPT,
   SELECT_BEST_PROMPT,
+  TRAJECTORY_GOAL_SUCCESS_PROMPT,
 } from './prompts/index';
 import { getDefaultProviders } from './providers/defaults';
 import { loadApiProvider } from './providers/index';
@@ -34,7 +35,7 @@ import { getNunjucksEngineForFilePath, maybeLoadFromExternalFile } from './util/
 import { isJavascriptFile } from './util/fileExtensions';
 import { parseFileUrl } from './util/functions/loadFunction';
 import invariant from './util/invariant';
-import { extractFirstJsonObject, extractJsonObjects } from './util/json';
+import { extractFirstJsonObject, extractJsonObjects, safeJsonStringify } from './util/json';
 import { getNunjucksEngine } from './util/templates';
 import { accumulateTokenUsage } from './util/tokenUsageUtils';
 
@@ -135,6 +136,29 @@ async function loadFromProviderOptions(provider: ProviderOptions) {
   });
 }
 
+function isSimulatedUserProviderConfig(provider: GradingConfig['provider']): boolean {
+  if (typeof provider === 'string') {
+    return provider === 'promptfoo:simulated-user';
+  }
+
+  if (!provider || typeof provider !== 'object' || Array.isArray(provider)) {
+    return false;
+  }
+
+  if (typeof (provider as ApiProvider).id === 'function') {
+    return (provider as ApiProvider).id() === 'promptfoo:simulated-user';
+  }
+
+  const providerId = (provider as ProviderOptions).id;
+  if (typeof providerId === 'string') {
+    return providerId === 'promptfoo:simulated-user';
+  }
+
+  return Object.values(provider as ProviderTypeMap).some((providerTypeConfig) =>
+    isSimulatedUserProviderConfig(providerTypeConfig),
+  );
+}
+
 export async function getGradingProvider(
   type: ProviderType,
   provider: GradingConfig['provider'],
@@ -173,22 +197,33 @@ export async function getGradingProvider(
       );
     }
   } else {
-    // No provider specified - check defaultTest.options.provider as fallback
+    // No provider specified - check defaultTest providers as fallback
     const defaultTest = cliState.config?.defaultTest;
     const defaultTestObj = typeof defaultTest === 'object' ? (defaultTest as TestCase) : null;
-    const cfg =
-      defaultTestObj?.provider ||
-      defaultTestObj?.options?.provider?.text ||
-      defaultTestObj?.options?.provider ||
-      undefined;
+    const fallbackProviders = [
+      defaultTestObj?.provider || undefined,
+      defaultTestObj?.options?.provider?.text || undefined,
+      defaultTestObj?.options?.provider || undefined,
+    ];
+
+    const cfg = fallbackProviders.find((candidateProvider) => {
+      if (!candidateProvider) {
+        return false;
+      }
+
+      if (isSimulatedUserProviderConfig(candidateProvider)) {
+        logger.debug('[Grading] Skipping promptfoo:simulated-user as an implicit grader fallback');
+        return false;
+      }
+
+      return true;
+    });
 
     if (cfg) {
       // Recursively call getGradingProvider to handle all provider types (string, object, etc.)
       finalProvider = await getGradingProvider(type, cfg, defaultProvider);
       if (finalProvider) {
-        logger.debug(
-          `[Grading] Using provider from defaultTest.options.provider: ${finalProvider.id()}`,
-        );
+        logger.debug(`[Grading] Using provider from defaultTest fallback: ${finalProvider.id()}`);
       }
     } else {
       finalProvider = defaultProvider;
@@ -597,6 +632,155 @@ export async function renderLlmRubricPrompt(
   return nunjucks.renderString(rubricPrompt, processedContext);
 }
 
+function parseJsonGradingResponse(
+  label: string,
+  resp: ProviderResponse,
+): { parsed?: Partial<GradingResult>; failure?: Omit<GradingResult, 'assertion'> } {
+  let jsonObjects: unknown[] = [];
+  if (typeof resp.output === 'string') {
+    try {
+      jsonObjects = extractJsonObjects(resp.output);
+      if (jsonObjects.length === 0) {
+        return {
+          failure: fail(`Could not extract JSON from ${label} response`, resp.tokenUsage),
+        };
+      }
+    } catch (err) {
+      return {
+        failure: fail(
+          `${label} produced malformed response: ${err}\n\n${resp.output}`,
+          resp.tokenUsage,
+        ),
+      };
+    }
+  } else if (
+    typeof resp.output === 'object' &&
+    resp.output !== null &&
+    !Array.isArray(resp.output)
+  ) {
+    jsonObjects = [resp.output];
+  } else {
+    return {
+      failure: fail(
+        `${label} produced malformed response - output must be string or object. Output: ${JSON.stringify(resp.output)}`,
+        resp.tokenUsage,
+      ),
+    };
+  }
+
+  const parsed = jsonObjects[0];
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return {
+      failure: fail(
+        `${label} produced malformed response. We were not able to parse the response as JSON. Output: ${JSON.stringify(resp.output)}`,
+        resp.tokenUsage,
+      ),
+    };
+  }
+
+  return { parsed: parsed as Partial<GradingResult> };
+}
+
+async function runJsonGradingPrompt({
+  assertion,
+  checkName,
+  defaultPrompt,
+  grading,
+  label,
+  providerCallContext,
+  throwOnError,
+  vars,
+}: {
+  assertion?: Assertion;
+  checkName: string;
+  defaultPrompt: string;
+  grading: GradingConfig;
+  label: string;
+  providerCallContext?: CallApiContextParams;
+  throwOnError?: boolean;
+  vars: Record<string, VarValue>;
+}): Promise<GradingResult> {
+  const rubricPrompt = await loadRubricPrompt(grading.rubricPrompt, defaultPrompt);
+  const prompt = await renderLlmRubricPrompt(rubricPrompt, vars);
+
+  const defaultProviders = await getDefaultProviders();
+  const defaultProvider =
+    defaultProviders.llmRubricProvider || defaultProviders.gradingJsonProvider;
+  const finalProvider = await getAndCheckProvider(
+    'text',
+    grading.provider,
+    defaultProvider,
+    checkName,
+  );
+  const resp = await callProviderWithContext(
+    finalProvider,
+    prompt,
+    label,
+    vars,
+    providerCallContext,
+  );
+  if (resp.error || !resp.output) {
+    if (throwOnError) {
+      throw new Error(resp.error || 'No output');
+    }
+    return fail(resp.error || 'No output', resp.tokenUsage);
+  }
+  const { parsed, failure } = parseJsonGradingResponse(label, resp);
+  if (!parsed) {
+    return failure as Omit<GradingResult, 'assertion'>;
+  }
+
+  let pass = parsed.pass ?? true;
+  if (typeof pass !== 'boolean') {
+    pass = /^(true|yes|pass|y)$/i.test(String(pass));
+  }
+
+  let score = parsed.score;
+  if (typeof score !== 'number') {
+    score = Number.isFinite(Number(score)) ? Number(score) : Number(pass);
+  }
+
+  const threshold =
+    typeof assertion?.threshold === 'string' ? Number(assertion.threshold) : assertion?.threshold;
+  if (typeof threshold === 'number' && Number.isFinite(threshold)) {
+    pass = pass && score >= threshold;
+  }
+
+  const reason =
+    parsed.reason || (pass ? 'Grading passed' : `Score ${score} below threshold ${threshold}`);
+
+  let responseMetadata: Record<string, unknown> = {};
+  if (resp.metadata && typeof resp.metadata === 'object' && !Array.isArray(resp.metadata)) {
+    const serializedMetadata = safeJsonStringify(resp.metadata);
+    responseMetadata = serializedMetadata
+      ? (JSON.parse(serializedMetadata) as Record<string, unknown>)
+      : {};
+  }
+
+  return {
+    assertion,
+    pass,
+    score,
+    reason,
+    tokensUsed: {
+      total: resp.tokenUsage?.total || 0,
+      prompt: resp.tokenUsage?.prompt || 0,
+      completion: resp.tokenUsage?.completion || 0,
+      cached: resp.tokenUsage?.cached || 0,
+      numRequests: resp.tokenUsage?.numRequests || 0,
+      completionDetails: parsed.tokensUsed?.completionDetails || {
+        reasoning: 0,
+        acceptedPrediction: 0,
+        rejectedPrediction: 0,
+      },
+    },
+    metadata: {
+      ...responseMetadata,
+      renderedGradingPrompt: prompt,
+    },
+  };
+}
+
 export async function matchesLlmRubric(
   rubric: string | object,
   llmOutput: string,
@@ -632,119 +816,58 @@ export async function matchesLlmRubric(
     };
   }
 
-  const rubricPrompt = await loadRubricPrompt(grading?.rubricPrompt, DEFAULT_GRADING_PROMPT);
-  const prompt = await renderLlmRubricPrompt(rubricPrompt, {
-    output: tryParse(llmOutput),
-    rubric,
-    ...(vars || {}),
-  });
-
-  const defaultProviders = await getDefaultProviders();
-  const defaultProvider =
-    defaultProviders.llmRubricProvider || defaultProviders.gradingJsonProvider;
-  const finalProvider = await getAndCheckProvider(
-    'text',
-    grading.provider,
-    defaultProvider,
-    'llm-rubric check',
-  );
-  const resp = await callProviderWithContext(
-    finalProvider,
-    prompt,
-    'llm-rubric',
-    {
-      output: tryParse(llmOutput),
-      rubric,
-      ...(vars || {}),
-    },
-    providerCallContext,
-  );
-  if (resp.error || !resp.output) {
-    if (options?.throwOnError) {
-      throw new LlmRubricProviderError(resp.error || 'No output');
-    }
-    return fail(resp.error || 'No output', resp.tokenUsage);
-  }
-
-  let jsonObjects: object[] = [];
-  if (typeof resp.output === 'string') {
-    try {
-      jsonObjects = extractJsonObjects(resp.output);
-      if (jsonObjects.length === 0) {
-        return fail('Could not extract JSON from llm-rubric response', resp.tokenUsage);
-      }
-    } catch (err) {
-      return fail(
-        `llm-rubric produced malformed response: ${err}\n\n${resp.output}`,
-        resp.tokenUsage,
-      );
-    }
-  } else if (typeof resp.output === 'object') {
-    jsonObjects = [resp.output];
-  } else {
-    return fail(
-      `llm-rubric produced malformed response - output must be string or object. Output: ${JSON.stringify(resp.output)}`,
-      resp.tokenUsage,
-    );
-  }
-
-  if (!Array.isArray(jsonObjects) || jsonObjects.length === 0) {
-    return fail(
-      `llm-rubric produced malformed response - We were not able to parse the response as JSON. Output: ${JSON.stringify(resp.output)}`,
-      resp.tokenUsage,
-    );
-  }
-
-  // expects properties pass, score, and reason
-  const parsed = jsonObjects[0] as Partial<GradingResult>;
-
-  if (typeof parsed !== 'object' || parsed === null || parsed === undefined) {
-    return fail(
-      `llm-rubric produced malformed response. We were not able to parse the response as JSON. Output: ${JSON.stringify(resp.output)}`,
-      resp.tokenUsage,
-    );
-  }
-
-  let pass = parsed.pass ?? true;
-  if (typeof pass !== 'boolean') {
-    pass = /^(true|yes|pass|y)$/i.test(String(pass));
-  }
-
-  let score = parsed.score;
-  if (typeof score !== 'number') {
-    score = Number.isFinite(Number(score)) ? Number(score) : Number(pass);
-  }
-
-  const threshold =
-    typeof assertion?.threshold === 'string' ? Number(assertion.threshold) : assertion?.threshold;
-  if (typeof threshold === 'number' && Number.isFinite(threshold)) {
-    pass = pass && score >= threshold;
-  }
-
-  const reason =
-    parsed.reason || (pass ? 'Grading passed' : `Score ${score} below threshold ${threshold}`);
-
-  return {
-    assertion,
-    pass,
-    score,
-    reason,
-    tokensUsed: {
-      total: resp.tokenUsage?.total || 0,
-      prompt: resp.tokenUsage?.prompt || 0,
-      completion: resp.tokenUsage?.completion || 0,
-      cached: resp.tokenUsage?.cached || 0,
-      numRequests: resp.tokenUsage?.numRequests || 0,
-      completionDetails: parsed.tokensUsed?.completionDetails || {
-        reasoning: 0,
-        acceptedPrediction: 0,
-        rejectedPrediction: 0,
+  try {
+    return await runJsonGradingPrompt({
+      assertion,
+      checkName: 'llm-rubric check',
+      defaultPrompt: DEFAULT_GRADING_PROMPT,
+      grading,
+      label: 'llm-rubric',
+      providerCallContext,
+      throwOnError: options?.throwOnError,
+      vars: {
+        output: tryParse(llmOutput),
+        rubric,
+        ...(vars || {}),
       },
+    });
+  } catch (error) {
+    if (options?.throwOnError) {
+      throw new LlmRubricProviderError((error as Error).message || 'No output');
+    }
+    throw error;
+  }
+}
+
+export async function matchesTrajectoryGoalSuccess(
+  goal: string,
+  trajectory: string,
+  llmOutput: string,
+  grading?: GradingConfig,
+  vars?: Record<string, VarValue>,
+  assertion?: Assertion,
+  providerCallContext?: CallApiContextParams,
+): Promise<GradingResult> {
+  if (!grading) {
+    throw new Error(
+      'Cannot grade output without grading config. Specify --grader option or grading config.',
+    );
+  }
+
+  return runJsonGradingPrompt({
+    assertion,
+    checkName: 'trajectory:goal-success check',
+    defaultPrompt: TRAJECTORY_GOAL_SUCCESS_PROMPT,
+    grading,
+    label: 'trajectory:goal-success',
+    providerCallContext,
+    vars: {
+      ...(vars || {}),
+      goal,
+      output: tryParse(llmOutput),
+      trajectory,
     },
-    metadata: {
-      renderedGradingPrompt: prompt,
-    },
-  };
+  });
 }
 
 export async function matchesPiScore(
@@ -1696,7 +1819,7 @@ export async function selectMaxScore(
     relevantResults.forEach((componentResult: GradingResult) => {
       const assertionType = componentResult.assertion?.type || 'unknown';
       const weight =
-        options.weights[assertionType] !== undefined ? options.weights[assertionType] : 1.0; // Default weight is 1
+        options.weights[assertionType] === undefined ? 1.0 : options.weights[assertionType]; // Default weight is 1
 
       const score = componentResult.score || 0;
       totalWeightedScore += score * weight;

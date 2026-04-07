@@ -6,6 +6,7 @@ import { BaseTokenUsageSchema } from '../types/shared';
 import { isJavascriptFile, JAVASCRIPT_EXTENSIONS } from '../util/fileExtensions';
 import { PromptConfigSchema, PromptSchema } from '../validators/prompts';
 import { ApiProviderSchema, ProviderOptionsSchema, ProvidersSchema } from '../validators/providers';
+
 export { ProvidersSchema };
 
 import { RedteamConfigSchema } from '../validators/redteam';
@@ -267,6 +268,7 @@ const PromptMetricsSchema = z.object({
   tokenUsage: BaseTokenUsageSchema,
   namedScores: z.record(z.string(), z.number()),
   namedScoresCount: z.record(z.string(), z.number()),
+  namedScoreWeights: z.record(z.string(), z.number()).optional(),
   redteam: z
     .object({
       pluginPassCount: z.record(z.string(), z.number()),
@@ -379,7 +381,7 @@ export interface EvaluateTableOutput {
     storageRef?: { key?: string }; // Storage reference for video file (Sora)
     url?: string; // Storage ref URL (e.g., storageRef:video/abc123.mp4) or blob URI
     format?: string; // 'mp4'
-    size?: string; // '1280x720' or '720x1280'
+    size?: string; // '1280x720', '720x1280', '1792x1024', or '1024x1792'
     duration?: number; // Seconds
     thumbnail?: string; // Storage ref URL for thumbnail (Sora)
     spritesheet?: string; // Storage ref URL for spritesheet (Sora)
@@ -463,6 +465,9 @@ export interface GradingResult {
   // Map of labeled metrics to values
   namedScores?: Record<string, number>;
 
+  // Total weight contributing to each named score
+  namedScoreWeights?: Record<string, number>;
+
   // Record of tokens usage for this assertion
   tokensUsed?: TokenUsage;
 
@@ -502,6 +507,8 @@ export function isGradingResult(result: any): result is GradingResult {
     typeof result.score === 'number' &&
     typeof result.reason === 'string' &&
     (typeof result.namedScores === 'undefined' || typeof result.namedScores === 'object') &&
+    (typeof result.namedScoreWeights === 'undefined' ||
+      typeof result.namedScoreWeights === 'object') &&
     (typeof result.tokensUsed === 'undefined' || typeof result.tokensUsed === 'object') &&
     (typeof result.componentResults === 'undefined' || Array.isArray(result.componentResults)) &&
     (typeof result.assertion === 'undefined' ||
@@ -565,6 +572,12 @@ export const BaseAssertionTypesSchema = z.enum([
   'similar:euclidean',
   'starts-with',
   'tool-call-f1',
+  'skill-used',
+  'trajectory:goal-success',
+  'trajectory:tool-args-match',
+  'trajectory:step-count',
+  'trajectory:tool-sequence',
+  'trajectory:tool-used',
   'trace-error-spans',
   'trace-span-count',
   'trace-span-duration',
@@ -1026,7 +1039,7 @@ export const TestSuiteSchema = z.object({
               enabled: z.boolean(),
               port: z.number(),
               host: z.string().optional(),
-              acceptFormats: z.array(z.string()),
+              acceptFormats: z.array(z.enum(['protobuf', 'json'])).optional(),
             })
             .optional(),
           grpc: z
@@ -1166,7 +1179,7 @@ export const TestSuiteConfigSchema = z.object({
               enabled: z.boolean().prefault(true),
               port: z.number().prefault(4318),
               host: z.string().prefault('0.0.0.0'),
-              acceptFormats: z.array(z.enum(['protobuf', 'json'])).prefault(['json']),
+              acceptFormats: z.array(z.enum(['protobuf', 'json'])).prefault(['json', 'protobuf']),
             })
             .optional(),
           grpc: z

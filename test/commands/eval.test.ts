@@ -40,6 +40,7 @@ vi.mock('../../src/globalConfig/cloud', async (importOriginal) => {
     cloudConfig: {
       isEnabled: vi.fn().mockReturnValue(false),
       getApiHost: vi.fn().mockReturnValue('https://api.promptfoo.app'),
+      getSharing: vi.fn().mockReturnValue(undefined),
     },
   };
 });
@@ -100,6 +101,8 @@ describe('evalCommand', () => {
   beforeEach(() => {
     program = new Command();
     vi.clearAllMocks();
+    vi.mocked(cloudConfig.getSharing).mockReset();
+    vi.mocked(cloudConfig.getSharing).mockReturnValue(undefined);
     vi.mocked(getEvalConfigFromCloud).mockReset();
     vi.mocked(resolveConfigs).mockResolvedValue({
       config: defaultConfig,
@@ -1318,7 +1321,7 @@ describe('Sharing Precedence - Comprehensive Test Coverage', () => {
             cmdObj.noShare = cmdNoShare;
           }
 
-          const config = (cfgShare !== undefined ? { sharing: cfgShare } : {}) as UnifiedConfig;
+          const config = (cfgShare === undefined ? {} : { sharing: cfgShare }) as UnifiedConfig;
           const evalRecord = new Eval(config);
 
           // Use mockReturnValue for synchronous returns, mockResolvedValue for async
@@ -1327,7 +1330,7 @@ describe('Sharing Precedence - Comprehensive Test Coverage', () => {
             config,
             testSuite: { prompts: [], providers: [] },
             basePath: path.resolve('/'),
-            commandLineOptions: cloShare !== undefined ? { share: cloShare } : undefined,
+            commandLineOptions: cloShare === undefined ? undefined : { share: cloShare },
           });
           vi.mocked(evaluate).mockResolvedValue(evalRecord);
 

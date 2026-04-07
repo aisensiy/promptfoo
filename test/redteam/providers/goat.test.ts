@@ -123,6 +123,26 @@ describe('RedteamGoatProvider', () => {
     });
   });
 
+  it('should preserve an explicit maxTurns value of 0', async () => {
+    const provider = new RedteamGoatProvider({
+      injectVar: 'goal',
+      maxTurns: 0,
+    });
+
+    const targetProvider = createMockTargetProvider();
+    const context = createMockContext(targetProvider);
+    const result = await provider.callApi('test prompt', context);
+
+    expect(provider.config.maxTurns).toBe(0);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(targetProvider.callApi).not.toHaveBeenCalled();
+    expect(result.output).toBe('');
+    expect(result.prompt).toBe('');
+    expect(result.metadata?.stopReason).toBe('Max turns reached');
+    expect(result.metadata?.successfulAttacks).toEqual([]);
+    expect(result.metadata?.totalSuccessfulAttacks).toBe(0);
+  });
+
   it('should default stateful to false when not specified', () => {
     const provider = new RedteamGoatProvider({
       injectVar: 'goal',
@@ -206,6 +226,28 @@ describe('RedteamGoatProvider', () => {
 
     const bodyObj = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body);
     expect(bodyObj.purpose).toBeUndefined();
+  });
+
+  it('should stop when target ends conversation', async () => {
+    const provider = new RedteamGoatProvider({
+      injectVar: 'goal',
+      maxTurns: 3,
+    });
+
+    const targetProvider = createMockTargetProvider(
+      '',
+      {},
+      {
+        conversationEnded: true,
+        conversationEndReason: 'thread_closed',
+      },
+    );
+
+    const context = createMockContext(targetProvider);
+    const result = await provider.callApi('test prompt', context);
+
+    expect(result.metadata?.stopReason).toBe('Target ended conversation');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('should handle grader integration and stop early on failure', async () => {

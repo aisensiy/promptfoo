@@ -4,7 +4,6 @@ import path from 'path';
 import { createCache } from 'cache-manager';
 import { Keyv } from 'keyv';
 import { KeyvFile } from 'keyv-file';
-import { runMigration, shouldRunMigration } from './cacheMigration';
 import { getEnvBool, getEnvInt, getEnvString } from './envars';
 import logger from './logger';
 import { REQUEST_TIMEOUT_MS } from './providers/shared';
@@ -36,7 +35,6 @@ export function getCache() {
   if (!cacheInstance) {
     let cachePath = '';
     const stores = [];
-    let migrationFailed = false;
 
     if (cacheType === 'disk' && enabled) {
       cachePath =
@@ -49,57 +47,23 @@ export function getCache() {
 
       const newCacheFile = path.join(cachePath, 'cache.json');
 
-      // Run migration if needed
-      if (shouldRunMigration(cachePath, newCacheFile)) {
-        logger.info('[Cache] Migrating cache from v4 to v7...');
+      try {
+        const store = new KeyvFile({
+          filename: newCacheFile,
+        });
 
-        try {
-          const result = runMigration(cachePath, newCacheFile);
+        const keyv = new Keyv({
+          store,
+          ttl: getCacheTtlMs(),
+        });
 
-          if (result.success) {
-            logger.info(
-              `[Cache] Migration completed: ${result.stats.successCount} entries migrated, ` +
-                `${result.stats.skippedExpired} expired`,
-            );
-            if (result.backupPath) {
-              logger.info(`[Cache] Backup kept at: ${result.backupPath}`);
-            }
-          } else {
-            logger.error(
-              `[Cache] Migration failed: ${result.stats.errors.join(', ')}. ` +
-                `Falling back to memory cache.`,
-            );
-            migrationFailed = true;
-          }
-        } catch (err) {
-          logger.error(
-            `[Cache] Migration error: ${(err as Error).message}. ` +
-              `Falling back to memory cache.`,
-          );
-          migrationFailed = true;
-        }
-      }
-
-      // Set up disk cache if migration succeeded or wasn't needed
-      if (!migrationFailed) {
-        try {
-          const store = new KeyvFile({
-            filename: newCacheFile,
-          });
-
-          const keyv = new Keyv({
-            store,
-            ttl: getCacheTtlMs(),
-          });
-
-          stores.push(keyv);
-        } catch (err) {
-          logger.warn(
-            `[Cache] Failed to initialize disk cache: ${(err as Error).message}. ` +
-              `Using memory cache instead.`,
-          );
-          // Falls through to memory cache
-        }
+        stores.push(keyv);
+      } catch (err) {
+        logger.warn(
+          `[Cache] Failed to initialize disk cache: ${(err as Error).message}. ` +
+            `Using memory cache instead.`,
+        );
+        // Falls through to memory cache
       }
     }
 
@@ -122,6 +86,52 @@ export type FetchWithCacheResult<T> = {
   latencyMs?: number;
   deleteFromCache?: () => Promise<void>;
 };
+
+type SerializedFetchResponse = string;
+
+type PreparedFetchResponse = {
+  response: SerializedFetchResponse;
+  cacheable: boolean;
+};
+
+const inflightFetchResponses = new Map<string, Promise<SerializedFetchResponse>>();
+
+function serializeFetchResponse(
+  data: unknown,
+  status: number,
+  statusText: string,
+  headers: Record<string, string>,
+  latencyMs: number | undefined,
+): SerializedFetchResponse {
+  return JSON.stringify({
+    data,
+    status,
+    statusText,
+    headers,
+    latencyMs,
+  });
+}
+
+function deserializeFetchResponse<T>(
+  response: SerializedFetchResponse,
+  cached: boolean,
+  cache: Cache,
+  cacheKey: string,
+) {
+  const parsedResponse = JSON.parse(response);
+  return {
+    cached,
+    data: parsedResponse.data as T,
+    status: parsedResponse.status,
+    statusText: parsedResponse.statusText,
+    headers: parsedResponse.headers,
+    latencyMs: parsedResponse.latencyMs,
+    deleteFromCache: async () => {
+      await cache.del(cacheKey);
+      logger.debug(`Evicted from cache: ${cacheKey}`);
+    },
+  };
+}
 
 async function fetchAndReadBody(
   url: RequestInfo,
@@ -157,6 +167,70 @@ async function fetchAndReadBody(
   }
   // Unreachable: loop always returns or throws, but TypeScript needs this
   throw new Error('Exhausted body retries without returning or throwing');
+}
+
+async function prepareFetchResponse(
+  url: RequestInfo,
+  options: RequestInit,
+  timeout: number,
+  maxRetries: number | undefined,
+  isIdempotent: boolean,
+  format: 'json' | 'text',
+): Promise<PreparedFetchResponse> {
+  const result = await fetchAndReadBody(url, options, timeout, maxRetries, isIdempotent);
+  const response = result.resp;
+  const responseText = result.respText;
+  const fetchLatencyMs = result.fetchLatencyMs;
+  const headers = Object.fromEntries(response.headers.entries());
+
+  try {
+    const parsedData = format === 'json' ? JSON.parse(responseText) : responseText;
+    const serializedResponse = serializeFetchResponse(
+      parsedData,
+      response.status,
+      response.statusText,
+      headers,
+      fetchLatencyMs,
+    );
+
+    if (!response.ok) {
+      return {
+        response:
+          responseText === ''
+            ? serializeFetchResponse(
+                `Empty Response: ${response.status}: ${response.statusText}`,
+                response.status,
+                response.statusText,
+                headers,
+                fetchLatencyMs,
+              )
+            : serializedResponse,
+        cacheable: false,
+      };
+    }
+
+    if (format === 'json' && parsedData?.error) {
+      logger.debug(`Not caching ${url} because it contains an 'error' key: ${parsedData.error}`);
+      return {
+        response: serializedResponse,
+        cacheable: false,
+      };
+    }
+
+    logger.debug(
+      `Storing ${url} response in cache with latencyMs=${fetchLatencyMs}: ${serializedResponse}`,
+    );
+    return {
+      response: serializedResponse,
+      cacheable: true,
+    };
+  } catch (err) {
+    throw new Error(
+      `Error parsing response from ${url}: ${
+        (err as Error).message
+      }. Received text: ${responseText}`,
+    );
+  }
 }
 
 export async function fetchWithCache<T = unknown>(
@@ -203,80 +277,35 @@ export async function fetchWithCache<T = unknown>(
   const cacheKey = `fetch:v2:${url}:${JSON.stringify(copy)}`;
   const cache = await getCache();
 
-  let cached = true;
-  let errorResponse = null;
-  let fetchLatencyMs: number | undefined;
-
-  // Use wrap to ensure that the fetch is only done once even for concurrent invocations
-  const cachedResponse = await cache.wrap(cacheKey, async () => {
-    cached = false;
-    const result = await fetchAndReadBody(url, options, timeout, maxRetries, isIdempotent);
-    const response = result.resp;
-    const responseText = result.respText;
-    fetchLatencyMs = result.fetchLatencyMs;
-    const headers = Object.fromEntries(response.headers.entries());
-
-    try {
-      const parsedData = format === 'json' ? JSON.parse(responseText) : responseText;
-      const data = JSON.stringify({
-        data: parsedData,
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-        latencyMs: fetchLatencyMs,
-      });
-      if (!response.ok) {
-        if (responseText == '') {
-          errorResponse = JSON.stringify({
-            data: `Empty Response: ${response.status}: ${response.statusText}`,
-            status: response.status,
-            statusText: response.statusText,
-            headers,
-            latencyMs: fetchLatencyMs,
-          });
-        } else {
-          errorResponse = data;
-        }
-        // Don't cache error responses
-        return;
-      }
-      if (!data) {
-        // Don't cache empty responses
-        return;
-      }
-      // Don't cache if the parsed data contains an error
-      if (format === 'json' && parsedData?.error) {
-        logger.debug(`Not caching ${url} because it contains an 'error' key: ${parsedData.error}`);
-        return data;
-      }
-      logger.debug(`Storing ${url} response in cache with latencyMs=${fetchLatencyMs}: ${data}`);
-      return data;
-    } catch (err) {
-      throw new Error(
-        `Error parsing response from ${url}: ${
-          (err as Error).message
-        }. Received text: ${responseText}`,
-      );
-    }
-  });
-
-  if (cached && cachedResponse) {
+  const cachedResponse = await cache.get<SerializedFetchResponse>(cacheKey);
+  if (cachedResponse != null) {
     logger.debug(`Returning cached response for ${url}: ${cachedResponse}`);
+    return deserializeFetchResponse<T>(cachedResponse, true, cache, cacheKey);
   }
 
-  const parsedResponse = JSON.parse((cachedResponse ?? errorResponse) as string);
-  return {
-    cached,
-    data: parsedResponse.data as T,
-    status: parsedResponse.status,
-    statusText: parsedResponse.statusText,
-    headers: parsedResponse.headers,
-    latencyMs: parsedResponse.latencyMs,
-    deleteFromCache: async () => {
-      await cache.del(cacheKey);
-      logger.debug(`Evicted from cache: ${cacheKey}`);
-    },
-  };
+  let inflightResponse = inflightFetchResponses.get(cacheKey);
+  if (!inflightResponse) {
+    inflightResponse = (async () => {
+      const preparedResponse = await prepareFetchResponse(
+        url,
+        options,
+        timeout,
+        maxRetries,
+        isIdempotent,
+        format,
+      );
+      if (preparedResponse.cacheable) {
+        await cache.set(cacheKey, preparedResponse.response);
+      }
+      return preparedResponse.response;
+    })().finally(() => {
+      inflightFetchResponses.delete(cacheKey);
+    });
+    inflightFetchResponses.set(cacheKey, inflightResponse);
+  }
+
+  const response = await inflightResponse;
+  return deserializeFetchResponse<T>(response, false, cache, cacheKey);
 }
 
 export function enableCache() {
@@ -288,6 +317,7 @@ export function disableCache() {
 }
 
 export async function clearCache() {
+  inflightFetchResponses.clear();
   return getCache().clear();
 }
 

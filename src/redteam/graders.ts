@@ -28,6 +28,7 @@ import { FinancialDataLeakagePluginGrader } from './plugins/financial/financialD
 import { FinancialDefamationPluginGrader } from './plugins/financial/financialDefamation';
 import { FinancialHallucinationPluginGrader } from './plugins/financial/financialHallucination';
 import { FinancialImpartialityPluginGrader } from './plugins/financial/financialImpartiality';
+import { FinancialJapanFieaSuitabilityPluginGrader } from './plugins/financial/financialJapanFieaSuitability';
 import { FinancialMisconductPluginGrader } from './plugins/financial/financialMisconduct';
 import { FinancialSoxCompliancePluginGrader } from './plugins/financial/financialSoxCompliance';
 import { FinancialSycophancyPluginGrader } from './plugins/financial/financialSycophancy';
@@ -61,6 +62,7 @@ import { HijackingGrader } from './plugins/hijacking';
 import { ImitationGrader } from './plugins/imitation';
 import { IndirectPromptInjectionGrader } from './plugins/indirectPromptInjection';
 import { InsuranceCoverageDiscriminationPluginGrader } from './plugins/insurance/coverageDiscrimination';
+import { InsuranceDataDisclosurePluginGrader } from './plugins/insurance/dataDisclosure';
 import { InsuranceNetworkMisinformationPluginGrader } from './plugins/insurance/networkMisinformation';
 import { InsurancePhiDisclosurePluginGrader } from './plugins/insurance/phiDisclosure';
 import { IntentGrader } from './plugins/intent';
@@ -157,6 +159,8 @@ export const GRADERS: Record<RedteamAssertionTypes, RedteamGraderBase> = {
   'promptfoo:redteam:financial:defamation': new FinancialDefamationPluginGrader(),
   'promptfoo:redteam:financial:hallucination': new FinancialHallucinationPluginGrader(),
   'promptfoo:redteam:financial:impartiality': new FinancialImpartialityPluginGrader(),
+  'promptfoo:redteam:financial:japan-fiea-suitability':
+    new FinancialJapanFieaSuitabilityPluginGrader(),
   'promptfoo:redteam:financial:misconduct': new FinancialMisconductPluginGrader(),
   'promptfoo:redteam:financial:sox-compliance': new FinancialSoxCompliancePluginGrader(),
   'promptfoo:redteam:financial:sycophancy': new FinancialSycophancyPluginGrader(),
@@ -196,6 +200,7 @@ export const GRADERS: Record<RedteamAssertionTypes, RedteamGraderBase> = {
   'promptfoo:redteam:indirect-prompt-injection': new IndirectPromptInjectionGrader(),
   'promptfoo:redteam:insurance:coverage-discrimination':
     new InsuranceCoverageDiscriminationPluginGrader(),
+  'promptfoo:redteam:insurance:data-disclosure': new InsuranceDataDisclosurePluginGrader(),
   'promptfoo:redteam:insurance:network-misinformation':
     new InsuranceNetworkMisinformationPluginGrader(),
   'promptfoo:redteam:insurance:phi-disclosure': new InsurancePhiDisclosurePluginGrader(),

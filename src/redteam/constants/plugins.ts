@@ -248,6 +248,7 @@ export const FINANCIAL_PLUGINS = [
   'financial:defamation',
   'financial:hallucination',
   'financial:impartiality',
+  'financial:japan-fiea-suitability',
   'financial:misconduct',
   'financial:sox-compliance',
   'financial:sycophancy',
@@ -261,6 +262,7 @@ export const PHARMACY_PLUGINS = [
 
 export const INSURANCE_PLUGINS = [
   'insurance:coverage-discrimination',
+  'insurance:data-disclosure',
   'insurance:network-misinformation',
   'insurance:phi-disclosure',
 ] as const;
@@ -352,6 +354,7 @@ export const ADDITIONAL_PLUGINS = [
   'financial:defamation',
   'financial:hallucination',
   'financial:impartiality',
+  'financial:japan-fiea-suitability',
   'financial:misconduct',
   'financial:sox-compliance',
   'financial:sycophancy',
@@ -361,6 +364,7 @@ export const ADDITIONAL_PLUGINS = [
   'ecommerce:price-manipulation',
   'goal-misalignment',
   'insurance:coverage-discrimination',
+  'insurance:data-disclosure',
   'insurance:network-misinformation',
   'insurance:phi-disclosure',
   'off-topic',
