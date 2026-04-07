@@ -541,7 +541,6 @@ async function handleEmailCollection(evalRecord: Eval): Promise<void> {
   if (evalRecord.author) {
     logger.debug(`[Share] Skipping email collection because author is already set`, {
       evalId: evalRecord.id,
-      author: evalRecord.author,
     });
     return;
   }

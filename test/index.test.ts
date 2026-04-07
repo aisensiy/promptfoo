@@ -424,6 +424,23 @@ describe('evaluate function', () => {
     createEvalSpy.mockRestore();
   });
 
+  it('should not persist evaluate-only author in config', async () => {
+    const createEvalSpy = vi.spyOn(Eval, 'create');
+
+    const testSuite = {
+      prompts: ['test'],
+      providers: [],
+      writeLatestResults: true,
+      author: 'author@example.com',
+    };
+
+    await evaluate(testSuite);
+
+    expect(createEvalSpy.mock.calls[0][0]).not.toHaveProperty('author');
+
+    createEvalSpy.mockRestore();
+  });
+
   it('should write output to file when outputPath is set', async () => {
     const testSuite = {
       prompts: ['test'],
