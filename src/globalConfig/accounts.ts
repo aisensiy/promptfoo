@@ -80,7 +80,7 @@ export function setUserEmailValidated(validated: boolean) {
   writeGlobalConfigPartial(config);
 }
 
-export function getAuthor(override?: string): string | null {
+export function getAuthor(override?: string | null): string | null {
   const userEmail = getUserEmail();
   if (isLoggedIntoCloud() && userEmail) {
     return userEmail;
