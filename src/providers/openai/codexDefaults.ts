@@ -11,7 +11,15 @@ import type { OpenAICodexSDKConfig } from './codex-sdk';
 
 const CODEX_AUTH_FILENAME = 'auth.json';
 const CODEX_SDK_PACKAGE_NAME = '@openai/codex-sdk';
-const CODEX_DEFAULT_WORKING_DIR = path.join(os.tmpdir(), 'promptfoo-codex-default');
+
+let codexDefaultWorkingDir: string | undefined;
+
+function getCodexDefaultWorkingDir(): string {
+  if (!codexDefaultWorkingDir) {
+    codexDefaultWorkingDir = path.join(os.tmpdir(), 'promptfoo-codex-default');
+  }
+  return codexDefaultWorkingDir;
+}
 
 const CODEX_GRADING_OUTPUT_SCHEMA = {
   type: 'object',
@@ -84,7 +92,8 @@ function getCodexDefaultProviderConfig(
   config?: OpenAICodexSDKConfig,
 ): OpenAICodexSDKConfig {
   const codexHome = env?.CODEX_HOME || process.env.CODEX_HOME;
-  fs.mkdirSync(CODEX_DEFAULT_WORKING_DIR, { recursive: true });
+  const workingDir = getCodexDefaultWorkingDir();
+  fs.mkdirSync(workingDir, { recursive: true });
   const cliEnv = {
     ...(codexHome ? { CODEX_HOME: path.resolve(codexHome) } : {}),
     ...config?.cli_env,
@@ -94,17 +103,18 @@ function getCodexDefaultProviderConfig(
     approval_policy: 'never',
     sandbox_mode: 'read-only',
     skip_git_repo_check: true,
-    working_dir: CODEX_DEFAULT_WORKING_DIR,
+    working_dir: workingDir,
     ...config,
     ...(Object.keys(cliEnv).length > 0 ? { cli_env: cliEnv } : {}),
   };
 }
 
 function getCodexDefaultProvidersCacheKey(env?: EnvOverrides): string {
+  // Use boolean presence flags instead of raw secret values to avoid leaking credentials in memory.
   return JSON.stringify({
-    CODEX_API_KEY: env?.CODEX_API_KEY,
-    CODEX_HOME: env?.CODEX_HOME || process.env.CODEX_HOME,
-    OPENAI_API_KEY: env?.OPENAI_API_KEY,
+    hasCodexApiKey: Boolean(env?.CODEX_API_KEY),
+    codexHome: env?.CODEX_HOME || process.env.CODEX_HOME,
+    hasOpenAiApiKey: Boolean(env?.OPENAI_API_KEY),
   });
 }
 
@@ -159,4 +169,5 @@ export function getCodexDefaultProviders(
 export function clearCodexDefaultProvidersForTesting(): void {
   codexDefaultProvidersByCacheKey.clear();
   codexSdkAvailabilityByBaseDir.clear();
+  codexDefaultWorkingDir = undefined;
 }

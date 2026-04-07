@@ -2,8 +2,6 @@ import cliState from '../cliState';
 import { getEnvBool, getEnvString } from '../envars';
 import { isLoggedIntoCloud } from '../globalConfig/accounts';
 import { CloudConfig } from '../globalConfig/cloud';
-import { hasCodexDefaultCredentials } from '../providers/openai/codexDefaults';
-
 /**
  * Gets the remote generation API endpoint URL.
  * Prioritizes: env var > cloud config > default endpoint.
@@ -107,10 +105,11 @@ export function shouldGenerateRemote(): boolean {
     return true;
   }
 
-  // Generate remotely when local OpenAI/Codex credentials are unavailable.
-  return (
-    (!getEnvString('OPENAI_API_KEY') && !hasCodexDefaultCredentials()) || (cliState.remote ?? false)
-  );
+  // Generate remotely when the user has not disabled it and does not have an OpenAI key.
+  // Note: Codex/ChatGPT login is NOT checked here because shouldGenerateRemote() also
+  // gates embedding-based operations (e.g. matchesSimilarity) that Codex cannot serve.
+  // Codex default providers are selected separately via getDefaultProviders().
+  return !getEnvString('OPENAI_API_KEY') || (cliState.remote ?? false);
 }
 
 /**

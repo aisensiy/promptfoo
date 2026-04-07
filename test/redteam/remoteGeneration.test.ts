@@ -3,7 +3,6 @@ import cliState from '../../src/cliState';
 import { getEnvBool, getEnvString } from '../../src/envars';
 import { isLoggedIntoCloud } from '../../src/globalConfig/accounts';
 import { readGlobalConfig } from '../../src/globalConfig/globalConfig';
-import { hasCodexDefaultCredentials } from '../../src/providers/openai/codexDefaults';
 import {
   getRemoteGenerationUrl,
   getRemoteGenerationUrlForUnaligned,
@@ -16,9 +15,6 @@ import {
 vi.mock('../../src/envars');
 vi.mock('../../src/globalConfig/accounts');
 vi.mock('../../src/globalConfig/globalConfig');
-vi.mock('../../src/providers/openai/codexDefaults', () => ({
-  hasCodexDefaultCredentials: vi.fn().mockReturnValue(false),
-}));
 vi.mock('../../src/cliState', () => ({
   default: {
     remote: undefined,
@@ -32,7 +28,6 @@ describe('shouldGenerateRemote', () => {
     vi.mocked(isLoggedIntoCloud).mockImplementation(function () {
       return false;
     });
-    vi.mocked(hasCodexDefaultCredentials).mockReturnValue(false);
   });
 
   it('should return false when remote generation is explicitly disabled, even for cloud users', () => {
@@ -110,19 +105,12 @@ describe('shouldGenerateRemote', () => {
     expect(shouldGenerateRemote()).toBe(false);
   });
 
-  it('should return false when Codex default credentials exist and no OpenAI key is set', () => {
+  it('should return true when no OpenAI key is set even if Codex credentials exist', () => {
     vi.mocked(getEnvBool).mockReturnValue(false);
     vi.mocked(getEnvString).mockReturnValue('');
-    vi.mocked(hasCodexDefaultCredentials).mockReturnValue(true);
 
-    expect(shouldGenerateRemote()).toBe(false);
-  });
-
-  it('should return true when neither OpenAI nor Codex credentials exist', () => {
-    vi.mocked(getEnvBool).mockReturnValue(false);
-    vi.mocked(getEnvString).mockReturnValue('');
-    vi.mocked(hasCodexDefaultCredentials).mockReturnValue(false);
-
+    // shouldGenerateRemote does NOT check Codex credentials because it also
+    // gates embedding-based operations that Codex cannot serve.
     expect(shouldGenerateRemote()).toBe(true);
   });
 
