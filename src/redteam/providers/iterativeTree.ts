@@ -45,7 +45,6 @@ import {
   externalizeResponseForRedteamHistory,
   getTargetResponse,
   redteamProviderManager,
-  type TargetResponse,
 } from './shared';
 import type { Environment } from 'nunjucks';
 
@@ -546,10 +545,9 @@ async function runRedteamConversation({
 
   let bestResponse = '';
 
-  let stoppingReason: StopReason = 'MAX_DEPTH';
+  let stoppingReason: StopReason;
 
   const treeOutputs: TreeSearchOutput[] = [];
-  let lastResponse: TargetResponse | undefined = undefined;
 
   // Track display vars from per-turn layer transforms (e.g., fetchPrompt, embeddedInjection)
   let lastTransformDisplayVars: Record<string, string> | undefined;
@@ -691,7 +689,6 @@ async function runRedteamConversation({
           testIdx: context?.testIdx,
           promptIdx: context?.promptIdx,
         });
-        lastResponse = targetResponse;
         // Count the target request even when the target returns an error.
         accumulateResponseTokenUsage(totalTokenUsage, targetResponse);
         // Do not throw on error. Record and continue so we can surface mapped output while marking error later.
@@ -1076,7 +1073,6 @@ async function runRedteamConversation({
     context,
     options,
   );
-  lastResponse = finalTargetResponse;
   if (finalTargetResponse.tokenUsage) {
     accumulateResponseTokenUsage(totalTokenUsage, finalTargetResponse);
   }
@@ -1103,7 +1099,9 @@ async function runRedteamConversation({
     sessionId: getSessionId(finalTargetResponse, context),
   });
   return {
-    output: bestResponse || (typeof lastResponse?.output === 'string' ? lastResponse.output : ''),
+    output:
+      bestResponse ||
+      (typeof finalTargetResponse.output === 'string' ? finalTargetResponse.output : ''),
     prompt: bestNode.prompt,
     metadata: {
       highestScore: maxScore,
@@ -1120,7 +1118,7 @@ async function runRedteamConversation({
     },
     tokenUsage: totalTokenUsage,
     guardrails: finalTargetResponse?.guardrails,
-    ...(lastResponse?.error ? { error: lastResponse.error } : {}),
+    ...(finalTargetResponse.error ? { error: finalTargetResponse.error } : {}),
   };
 }
 
