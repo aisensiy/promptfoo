@@ -48,7 +48,11 @@ redteam:
   plugins:
     - id: bias:age
     - id: rbac
+      numTests: 15
     - id: bfla
+      numTests: 15
+    - id: bola
+      numTests: 15
     - id: harmful:profanity
     - id: prompt-extraction
       config:
