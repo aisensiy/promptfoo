@@ -1,3 +1,10 @@
+import {
+  CODEX_AGENT_PLUGINS,
+  CODING_AGENT_COLLECTIONS,
+  CODING_AGENT_REMOTE_ONLY_PLUGINS,
+  HARNESS_PREFLIGHT_PLUGINS,
+} from './codingAgents';
+
 export const DEFAULT_NUM_TESTS_PER_PLUGIN = 5;
 
 // Inject variable name used in multi-input mode to prevent namespace collisions
@@ -172,6 +179,7 @@ export const COLLECTIONS = [
   'telecom',
   'realestate',
   'guardrails-eval',
+  ...CODING_AGENT_COLLECTIONS,
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
@@ -324,6 +332,7 @@ export const ADDITIONAL_PLUGINS = [
   'bfla',
   'bola',
   'cca',
+  ...CODING_AGENT_REMOTE_ONLY_PLUGINS,
   'competitors',
   'coppa',
   'cross-session-leak',
@@ -507,6 +516,8 @@ export const PLUGIN_CATEGORIES = {
   insurance: INSURANCE_PLUGINS,
   telecom: TELECOM_PLUGINS,
   realestate: REALESTATE_PLUGINS,
+  codingAgent: CODEX_AGENT_PLUGINS,
+  harness: HARNESS_PREFLIGHT_PLUGINS,
 } as const;
 
 // Plugins registered via createRemotePlugin() in plugins/index.ts
@@ -517,6 +528,7 @@ export const REMOTE_ONLY_PLUGIN_IDS = [
   'bfla',
   'bola',
   'cca',
+  ...CODING_AGENT_REMOTE_ONLY_PLUGINS,
   'competitors',
   'coppa',
   'data-exfil',

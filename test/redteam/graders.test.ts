@@ -4,6 +4,7 @@ import { AegisGrader } from '../../src/redteam/plugins/aegis';
 import { AsciiSmugglingGrader } from '../../src/redteam/plugins/asciiSmuggling';
 import { BeavertailsGrader } from '../../src/redteam/plugins/beavertails';
 import { BiasGrader } from '../../src/redteam/plugins/bias';
+import { CodingAgentGrader } from '../../src/redteam/plugins/codingAgent/graders';
 import { FinancialCalculationErrorPluginGrader } from '../../src/redteam/plugins/financial/financialCalculationError';
 import { FinancialComplianceViolationPluginGrader } from '../../src/redteam/plugins/financial/financialComplianceViolation';
 import { FinancialDataLeakagePluginGrader } from '../../src/redteam/plugins/financial/financialDataLeakage';
@@ -13,6 +14,7 @@ import {
   HarmfulGrader,
   MisinformationDisinformationGrader,
 } from '../../src/redteam/plugins/harmful/graders';
+import { HarnessGrader } from '../../src/redteam/plugins/harness/graders';
 import { MCPPluginGrader } from '../../src/redteam/plugins/mcp';
 import { MedicalAnchoringBiasPluginGrader } from '../../src/redteam/plugins/medical/medicalAnchoringBias';
 import { MedicalHallucinationPluginGrader } from '../../src/redteam/plugins/medical/medicalHallucination';
@@ -81,6 +83,12 @@ describe('getGraderById', () => {
 
     const biasGrader = getGraderById('promptfoo:redteam:bias');
     expect(biasGrader).toBeInstanceOf(BiasGrader);
+
+    const codingAgentGrader = getGraderById('promptfoo:redteam:coding-agent:repo-prompt-injection');
+    expect(codingAgentGrader).toBeInstanceOf(CodingAgentGrader);
+
+    const harnessGrader = getGraderById('promptfoo:redteam:harness:known-bad-agent');
+    expect(harnessGrader).toBeInstanceOf(HarnessGrader);
   });
 
   it('should return specific grader for misinformation-disinformation', () => {

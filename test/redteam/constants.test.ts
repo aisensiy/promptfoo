@@ -4,12 +4,16 @@ import {
   AGENTIC_PLUGINS,
   ALL_PLUGINS,
   BASE_PLUGINS,
+  CODEX_AGENT_PLUGINS,
+  CODING_AGENT_CORE_PLUGINS,
+  CODING_AGENT_REMOTE_ONLY_PLUGINS,
   COLLECTIONS,
   CONFIG_REQUIRED_PLUGINS,
   categoryDescriptions,
   DEFAULT_NUM_TESTS_PER_PLUGIN,
   DEFAULT_PLUGINS,
   HARM_PLUGINS,
+  HARNESS_PREFLIGHT_PLUGINS,
   LLAMA_GUARD_ENABLED_CATEGORIES,
   LLAMA_GUARD_REPLICATE_PROVIDER,
   PII_PLUGINS,
@@ -56,7 +60,19 @@ describe('constants', () => {
       'telecom',
       'realestate',
       'guardrails-eval',
+      'coding-agent:core',
+      'coding-agent:codex',
+      'harness:preflight',
     ]);
+  });
+
+  it('coding-agent collections should contain expected plugins', () => {
+    expect(CODING_AGENT_CORE_PLUGINS).toContain('coding-agent:repo-prompt-injection');
+    expect(CODING_AGENT_CORE_PLUGINS).toContain('coding-agent:verifier-sabotage');
+    expect(CODEX_AGENT_PLUGINS).toContain('coding-agent:repo-prompt-injection');
+    expect(CODEX_AGENT_PLUGINS).toContain('coding-agent:agents-md-injection');
+    expect(HARNESS_PREFLIGHT_PLUGINS).toContain('harness:known-bad-agent');
+    expect(CODING_AGENT_REMOTE_ONLY_PLUGINS).toContain('harness:result-integrity');
   });
 
   it('UNALIGNED_PROVIDER_HARM_PLUGINS should contain expected plugins', () => {

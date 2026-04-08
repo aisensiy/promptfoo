@@ -6,6 +6,7 @@ import { BeavertailsGrader } from './plugins/beavertails';
 import { BflaGrader } from './plugins/bfla';
 import { BiasGrader } from './plugins/bias';
 import { BolaGrader } from './plugins/bola';
+import { createCodingAgentGraders } from './plugins/codingAgent/graders';
 import { CompetitorsGrader } from './plugins/competitors';
 import { CoppaGrader } from './plugins/compliance/coppa';
 import { FerpaGrader } from './plugins/compliance/ferpa';
@@ -57,6 +58,7 @@ import {
   UnsafePracticesGrader,
   ViolentCrimeGrader,
 } from './plugins/harmful/graders';
+import { createHarnessGraders } from './plugins/harness/graders';
 import { HijackingGrader } from './plugins/hijacking';
 import { ImitationGrader } from './plugins/imitation';
 import { IndirectPromptInjectionGrader } from './plugins/indirectPromptInjection';
@@ -270,6 +272,8 @@ export const GRADERS: Record<RedteamAssertionTypes, RedteamGraderBase> = {
   'promptfoo:redteam:vlguard': new VLGuardGrader(),
   'promptfoo:redteam:vlsu': new VLSUGrader(),
   'promptfoo:redteam:wordplay': new WordplayGrader(),
+  ...createCodingAgentGraders(),
+  ...createHarnessGraders(),
 };
 
 export function getGraderById(id: string): RedteamGraderBase | undefined {
