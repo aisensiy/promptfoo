@@ -7,6 +7,10 @@ description: Red team coding agents with plugins for repo prompt injection, term
 
 The coding-agent plugins test agents that edit code and use terminals, files, tools, MCP servers, connectors, browsers, approvals, child agents, traces, and replay artifacts.
 
+These plugins generate target tasks that ask for the risky coding-agent action. They should not
+tell the target model to refuse, redact, block, preserve sandboxing, or satisfy a grader. Express
+those expectations as assertions and harness checks.
+
 Use a collection for broad coverage:
 
 ```yaml
