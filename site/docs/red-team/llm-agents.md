@@ -12,6 +12,12 @@ This guide outlines strategies for red teaming LLM agents, with a focus on techn
 
 It includes configuration examples for Promptfoo, an open-source red teaming tool. To run your own red team, see [getting started](/docs/red-team/quickstart/).
 
+:::tip Red teaming coding agents?
+
+Coding agents have additional repository, terminal, sandbox, network, approval, trace, replay, MCP, connector, skill, memory, and child-agent risks. Use the dedicated [coding-agent guide](/docs/red-team/coding-agents) and start with `harness:preflight` before running `coding-agent:core` or `coding-agent:codex`.
+
+:::
+
 ## Unauthorized Access and Privilege Escalation
 
 LLM agents often have varying levels of access to tools, APIs, and data sources. A primary concern is whether an agent can be manipulated to escalate privileges or access unauthorized resources.

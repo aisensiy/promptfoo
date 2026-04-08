@@ -69,6 +69,36 @@ prompts:
 
 The provider creates an ephemeral thread for each eval test case.
 
+### Red Teaming Codex
+
+When using Codex as a coding-agent target, run it in a disposable git checkout, isolate `CODEX_HOME`, keep network disabled unless the test explicitly requires it, and run the harness preflight collection before running Codex-specific probes:
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - id: openai:codex-sdk
+    config:
+      working_dir: ./sandbox/repo-under-test
+      sandbox_mode: workspace-write
+      network_access_enabled: false
+      approval_policy: untrusted
+      enable_streaming: true
+      deep_tracing: true
+      cli_env:
+        CODEX_HOME: ./sandbox/codex-home
+
+prompts:
+  - '{{task}}'
+
+redteam:
+  purpose: 'Codex edits a disposable git checkout, runs validation, preserves secrets, respects sandbox/network/approval policy, and reports only trace-supported validation.'
+  injectVar: task
+  plugins:
+    - harness:preflight
+    - coding-agent:codex
+```
+
+See [Red team coding agents](/docs/red-team/coding-agents) for sandbox layout, canary discipline, trace/replay checks, and artifact scanning.
+
 ### With Custom Model
 
 Specify which OpenAI model to use for code generation:
