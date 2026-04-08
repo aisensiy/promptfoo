@@ -1,13 +1,11 @@
 import { useCallback, useMemo } from 'react';
 
 import { type Plugin, type Strategy } from '@promptfoo/redteam/constants';
-import {
-  type PluginConfig,
-  type RedteamStrategyObject,
-  type StrategyConfig,
-} from '@promptfoo/redteam/types';
+import { type RedteamStrategyObject, type StrategyConfig } from '@promptfoo/redteam/types';
 import { useRedTeamConfig } from '../../hooks/useRedTeamConfig';
 import { useTestCaseGeneration } from '../TestCaseGenerationProvider';
+
+import type { TargetPlugin } from '../testCaseGenerationTypes';
 
 interface UseStrategyTestGenerationOptions {
   strategyId: Strategy;
@@ -15,7 +13,7 @@ interface UseStrategyTestGenerationOptions {
 
 interface UseStrategyTestGenerationResult {
   strategyConfig: StrategyConfig;
-  testGenerationPlugin: { id: Plugin; config: PluginConfig; isStatic: boolean };
+  testGenerationPlugin: Plugin;
   handleTestCaseGeneration: () => Promise<void>;
   isGenerating: boolean;
   isCurrentStrategy: boolean;
@@ -40,38 +38,44 @@ export function useStrategyTestGeneration({
     return (found?.config ?? {}) as StrategyConfig;
   }, [config.strategies, strategyId]);
 
-  const previewPlugins = useMemo(() => {
-    const plugins = config.plugins.map((configuredPlugin) =>
-      typeof configuredPlugin === 'string'
-        ? { id: configuredPlugin as Plugin, config: {}, isStatic: true }
-        : {
-            id: configuredPlugin.id as Plugin,
-            config: configuredPlugin.config ?? {},
-            isStatic: true,
-          },
-    );
+  // Select a random plugin from the user's configured plugins, preserving any plugin config.
+  const testGenerationTargetPlugin = useMemo<TargetPlugin>(() => {
+    const plugins = config.plugins ?? [];
+    if (plugins.length === 0) {
+      return {
+        id: DEFAULT_TEST_GENERATION_PLUGIN,
+        config: {},
+        isStatic: true,
+      };
+    }
 
-    return plugins.length > 0
-      ? plugins
-      : [{ id: DEFAULT_TEST_GENERATION_PLUGIN, config: {}, isStatic: true }];
+    const selectedPlugin = plugins[Math.floor(Math.random() * plugins.length)];
+    if (typeof selectedPlugin === 'string') {
+      return {
+        id: selectedPlugin as Plugin,
+        config: {},
+        isStatic: true,
+      };
+    }
+
+    return {
+      id: selectedPlugin.id as Plugin,
+      config: selectedPlugin.config ?? {},
+      isStatic: true,
+    };
   }, [config.plugins]);
 
-  // Select a random plugin from the user's configured plugins, or fall back to default
-  const testGenerationPlugin = useMemo(() => {
-    return previewPlugins[Math.floor(Math.random() * previewPlugins.length)];
-  }, [previewPlugins]);
-
   const handleTestCaseGeneration = useCallback(async () => {
-    await generateTestCase(testGenerationPlugin, {
+    await generateTestCase(testGenerationTargetPlugin, {
       id: strategyId,
       config: strategyConfig,
       isStatic: false,
     });
-  }, [strategyConfig, generateTestCase, strategyId, testGenerationPlugin]);
+  }, [strategyConfig, generateTestCase, strategyId, testGenerationTargetPlugin]);
 
   return {
     strategyConfig,
-    testGenerationPlugin,
+    testGenerationPlugin: testGenerationTargetPlugin.id,
     handleTestCaseGeneration,
     isGenerating,
     isCurrentStrategy: currentStrategy === strategyId,
