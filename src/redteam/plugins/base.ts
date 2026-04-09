@@ -23,9 +23,11 @@ import type {
   AtomicTestCase,
   GradingResult,
   PluginConfig,
+  ProviderResponse,
   ResultSuggestion,
   TestCase,
 } from '../../types/index';
+import type { TraceData } from '../../types/tracing';
 
 /**
  * Abstract base class for creating plugins that generate test cases.
@@ -304,6 +306,8 @@ export abstract class RedteamPluginBase {
  * But if you'd like, you can override the `getResult` method to use a different grading method.
  */
 export interface RedteamGradingContext {
+  providerResponse?: ProviderResponse;
+  traceData?: TraceData | null;
   traceContext?: TraceContextData | null;
   traceSummary?: string;
   // Data exfiltration tracking (for data-exfil grader)

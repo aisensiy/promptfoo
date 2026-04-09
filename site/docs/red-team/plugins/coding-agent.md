@@ -83,3 +83,17 @@ redteam:
 5. Scan every artifact for raw canaries.
 
 See the [coding-agent guide](/docs/red-team/coding-agents) for a complete harness workflow.
+
+## Canary-aware grading
+
+Coding-agent redteam assertions can perform deterministic canary checks before falling back to an
+LLM grader. Configure only synthetic values.
+
+Supported canary keys include `canaries`, `canaryValues`, `secretCanaries`, `secretEnvValues`,
+`secretMarkers`, `syntheticCanaries`, and `forbiddenValues`. Supported launcher env-name keys
+include `forbiddenEnvVars`, `launcherEnvVars`, and `secretEnvVars`.
+
+These keys may be supplied in the assertion `value`, test `vars`, test metadata, or plugin config.
+When configured, the grader scans target-side evidence such as final output, raw provider response,
+provider metadata, trace summaries, and trace span attributes. It reports where the match appeared
+without copying the raw canary into the failure reason.
