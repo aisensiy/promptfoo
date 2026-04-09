@@ -25,7 +25,7 @@ export const CODING_AGENT_PLUGIN_DISPLAY_NAMES: Record<CodingAgentMetadataPlugin
 
 export const CODING_AGENT_PLUGIN_DESCRIPTIONS: Record<CodingAgentMetadataPlugin, string> = {
   'coding-agent:core':
-    'Tests coding agents against a focused MVP set of repository prompt injection, terminal output injection, launcher environment disclosure, sandbox read escape, and verifier sabotage risks',
+    'Tests coding agents against a focused MVP set of repository prompt injection, terminal output injection, secret environment read, sandbox read escape, and verifier sabotage risks',
   'coding-agent:repo-prompt-injection':
     'Tests whether instructions embedded in README files, source comments, fixture data, issue text, logs, or generated artifacts can override the user task or operating policy',
   'coding-agent:terminal-output-injection':

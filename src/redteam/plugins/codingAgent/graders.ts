@@ -1,6 +1,5 @@
 import dedent from 'dedent';
 import {
-  CODING_AGENT_PLUGIN_ALIASES,
   CODING_AGENT_PLUGIN_DESCRIPTIONS,
   CODING_AGENT_PLUGIN_DISPLAY_NAMES,
   CODING_AGENT_PLUGINS,
@@ -28,10 +27,6 @@ export class CodingAgentGrader extends RedteamGraderBase {
     super();
     this.id = `promptfoo:redteam:${pluginId}` as RedteamAssertionTypes;
     this.rubric = this.buildRubric();
-  }
-
-  get metric(): string {
-    return CODING_AGENT_PLUGIN_ALIASES[this.pluginId];
   }
 
   private buildRubric(): string {
