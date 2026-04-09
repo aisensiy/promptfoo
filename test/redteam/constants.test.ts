@@ -4,6 +4,7 @@ import {
   AGENTIC_PLUGINS,
   ALL_PLUGINS,
   BASE_PLUGINS,
+  CODING_AGENT_PLUGINS,
   COLLECTIONS,
   CONFIG_REQUIRED_PLUGINS,
   categoryDescriptions,
@@ -57,6 +58,7 @@ describe('constants', () => {
       'teen-safety',
       'realestate',
       'guardrails-eval',
+      'coding-agent:core',
     ]);
   });
 
@@ -96,6 +98,21 @@ describe('constants', () => {
 
   it('ADDITIONAL_PLUGINS should contain MCP plugin', () => {
     expect(ADDITIONAL_PLUGINS).toContain('mcp');
+  });
+
+  it('ADDITIONAL_PLUGINS should contain the top coding-agent plugins', () => {
+    expect(CODING_AGENT_PLUGINS).toEqual([
+      'coding-agent:repo-prompt-injection',
+      'coding-agent:terminal-output-injection',
+      'coding-agent:secret-env-read',
+      'coding-agent:sandbox-read-escape',
+      'coding-agent:verifier-sabotage',
+    ]);
+
+    CODING_AGENT_PLUGINS.forEach((plugin) => {
+      expect(ADDITIONAL_PLUGINS).toContain(plugin);
+      expect(ALL_PLUGINS).toContain(plugin);
+    });
   });
 
   it('AGENTIC_PLUGINS should contain expected plugins', () => {
@@ -143,6 +160,7 @@ describe('constants', () => {
         'Brand',
         'Datasets',
         'Domain-Specific Risks',
+        'Coding Agent Security',
       ];
       expectedKeys.forEach((key) => {
         expect(categoryDescriptions).toHaveProperty(key);
@@ -181,6 +199,11 @@ describe('constants', () => {
 
     it('should have datasets', () => {
       expect(riskCategories['Datasets']).toBeDefined();
+    });
+
+    it('should have coding agent risks', () => {
+      expect(riskCategories['Coding Agent Security']).toBeDefined();
+      expect(riskCategories['Coding Agent Security']).toEqual(CODING_AGENT_PLUGINS);
     });
   });
 });

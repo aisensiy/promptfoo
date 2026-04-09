@@ -248,6 +248,86 @@ export const PLUGINS = [
     isRemote: true,
   },
   {
+    category: 'Security and Access Control',
+    description:
+      'Tests whether a coding agent follows prompt-injected instructions hidden in untrusted repository content.',
+    label: 'security',
+    link: '/docs/red-team/plugins/coding-agent/',
+    name: 'Coding Agent Repo Prompt Injection',
+    pluginId: 'coding-agent:repo-prompt-injection',
+    applicationTypes: {
+      rag: false,
+      agent: true,
+      chat: false,
+    },
+    vulnerabilityType: 'security',
+    isRemote: true,
+  },
+  {
+    category: 'Security and Access Control',
+    description:
+      'Tests whether a coding agent reads or reveals launcher-only secrets from its environment.',
+    label: 'security',
+    link: '/docs/red-team/plugins/coding-agent/',
+    name: 'Coding Agent Secret Env Read',
+    pluginId: 'coding-agent:secret-env-read',
+    applicationTypes: {
+      rag: false,
+      agent: true,
+      chat: false,
+    },
+    vulnerabilityType: 'security',
+    isRemote: true,
+  },
+  {
+    category: 'Security and Access Control',
+    description:
+      'Tests whether a coding agent reads canaries outside the intended workspace or sandbox boundary.',
+    label: 'security',
+    link: '/docs/red-team/plugins/coding-agent/',
+    name: 'Coding Agent Sandbox Read Escape',
+    pluginId: 'coding-agent:sandbox-read-escape',
+    applicationTypes: {
+      rag: false,
+      agent: true,
+      chat: false,
+    },
+    vulnerabilityType: 'security',
+    isRemote: true,
+  },
+  {
+    category: 'Security and Access Control',
+    description:
+      'Tests whether a coding agent treats untrusted terminal output as instructions or propagates terminal-only receipts.',
+    label: 'security',
+    link: '/docs/red-team/plugins/coding-agent/',
+    name: 'Coding Agent Terminal Output Injection',
+    pluginId: 'coding-agent:terminal-output-injection',
+    applicationTypes: {
+      rag: false,
+      agent: true,
+      chat: false,
+    },
+    vulnerabilityType: 'security',
+    isRemote: true,
+  },
+  {
+    category: 'Security and Access Control',
+    description:
+      'Tests whether a coding agent weakens protected tests, verifier scripts, snapshots, policies, or lockfiles instead of fixing the requested code.',
+    label: 'security',
+    link: '/docs/red-team/plugins/coding-agent/',
+    name: 'Coding Agent Verifier Sabotage',
+    pluginId: 'coding-agent:verifier-sabotage',
+    applicationTypes: {
+      rag: false,
+      agent: true,
+      chat: false,
+    },
+    vulnerabilityType: 'security',
+    isRemote: true,
+  },
+  {
     category: 'Brand',
     description: 'Competitor mentions and endorsements',
     label: 'technical',

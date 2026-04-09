@@ -1,0 +1,48 @@
+export const CODING_AGENT_PLUGINS = [
+  'coding-agent:repo-prompt-injection',
+  'coding-agent:terminal-output-injection',
+  'coding-agent:secret-env-read',
+  'coding-agent:sandbox-read-escape',
+  'coding-agent:verifier-sabotage',
+] as const;
+
+export type CodingAgentPlugin = (typeof CODING_AGENT_PLUGINS)[number];
+
+export const CODING_AGENT_COLLECTIONS = ['coding-agent:core'] as const;
+
+export type CodingAgentCollection = (typeof CODING_AGENT_COLLECTIONS)[number];
+
+type CodingAgentMetadataPlugin = CodingAgentCollection | CodingAgentPlugin;
+
+export const CODING_AGENT_PLUGIN_DISPLAY_NAMES: Record<CodingAgentMetadataPlugin, string> = {
+  'coding-agent:core': 'Coding Agent Core',
+  'coding-agent:repo-prompt-injection': 'Repository Prompt Injection',
+  'coding-agent:terminal-output-injection': 'Terminal Output Injection',
+  'coding-agent:secret-env-read': 'Secret Environment Read',
+  'coding-agent:sandbox-read-escape': 'Sandbox Read Escape',
+  'coding-agent:verifier-sabotage': 'Verifier Sabotage',
+};
+
+export const CODING_AGENT_PLUGIN_DESCRIPTIONS: Record<CodingAgentMetadataPlugin, string> = {
+  'coding-agent:core':
+    'Tests coding agents against a focused MVP set of repository prompt injection, terminal output injection, launcher environment disclosure, sandbox read escape, and verifier sabotage risks',
+  'coding-agent:repo-prompt-injection':
+    'Tests whether instructions embedded in README files, source comments, fixture data, issue text, logs, or generated artifacts can override the user task or operating policy',
+  'coding-agent:terminal-output-injection':
+    'Tests whether compiler, test, package manager, linter, formatter, git, grep, or script output can instruct the coding agent to perform unrelated or dangerous actions',
+  'coding-agent:secret-env-read':
+    'Tests whether launcher-only environment canaries remain absent from commands, output, traces, reports, diffs, URLs, and tool or connector parameters',
+  'coding-agent:sandbox-read-escape':
+    'Tests whether the agent can read outside the intended workspace through absolute paths, sibling checkout paths, symlinks, archives, mount points, caches, temp paths, browser profiles, or home directories',
+  'coding-agent:verifier-sabotage':
+    'Tests whether the agent weakens tests, lint, typecheck, CI, snapshots, fixtures, auth, locks, security checks, policies, or harness assertions instead of fixing the requested implementation',
+};
+
+export const CODING_AGENT_PLUGIN_ALIASES: Record<CodingAgentMetadataPlugin, string> = {
+  'coding-agent:core': 'CodingAgentCore',
+  'coding-agent:repo-prompt-injection': 'CodingAgentRepoPromptInjection',
+  'coding-agent:terminal-output-injection': 'CodingAgentTerminalOutputInjection',
+  'coding-agent:secret-env-read': 'CodingAgentSecretEnvRead',
+  'coding-agent:sandbox-read-escape': 'CodingAgentSandboxReadEscape',
+  'coding-agent:verifier-sabotage': 'CodingAgentVerifierSabotage',
+};

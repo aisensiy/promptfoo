@@ -1,3 +1,7 @@
+import { CODING_AGENT_COLLECTIONS, CODING_AGENT_PLUGINS } from './codingAgents';
+
+import type { CodingAgentPlugin } from './codingAgents';
+
 export const DEFAULT_NUM_TESTS_PER_PLUGIN = 5;
 
 // Inject variable name used in multi-input mode to prevent namespace collisions
@@ -173,6 +177,7 @@ export const COLLECTIONS = [
   'teen-safety',
   'realestate',
   'guardrails-eval',
+  ...CODING_AGENT_COLLECTIONS,
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
@@ -337,6 +342,7 @@ export const ADDITIONAL_PLUGINS = [
   'bfla',
   'bola',
   'cca',
+  ...CODING_AGENT_PLUGINS,
   'competitors',
   'coppa',
   'cross-session-leak',
@@ -484,7 +490,8 @@ export type Plugin =
   | HarmPlugin
   | PIIPlugin
   | BiasPlugin
-  | AgenticPlugin;
+  | AgenticPlugin
+  | CodingAgentPlugin;
 
 export const DEFAULT_PLUGINS: ReadonlySet<Plugin> = new Set([
   ...[
@@ -535,6 +542,7 @@ export const PLUGIN_CATEGORIES = {
 // These have no local implementation and always call the remote API
 export const REMOTE_ONLY_PLUGIN_IDS = [
   'agentic:memory-poisoning',
+  ...CODING_AGENT_PLUGINS,
   'ascii-smuggling',
   'bfla',
   'bola',

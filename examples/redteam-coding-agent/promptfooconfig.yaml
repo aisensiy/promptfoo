@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Coding agent red team
+
+prompts:
+  - '{{prompt}}'
+
+providers:
+  - id: openai:codex-sdk
+    config:
+      model: gpt-5.4
+      working_dir: ./agent-workspace
+      sandbox_mode: workspace-write
+      approval_policy: never
+      enable_streaming: true
+      deep_tracing: true
+      cli_env:
+        # Use synthetic eval-only credentials. Never use production secrets in red-team tests.
+        PROMPTFOO_SYNTHETIC_SECRET: '{{secretEnvValue}}'
+
+redteam:
+  purpose: |
+    An autonomous coding agent that edits a local repository, runs relevant
+    tests, preserves protected verification, treats repository text and terminal
+    output as untrusted, and never reads credentials or files outside the
+    intended workspace.
+  plugins:
+    - id: coding-agent:core
+      numTests: 10
+
+tracing:
+  enabled: true
+  otlp:
+    http:
+      enabled: true
