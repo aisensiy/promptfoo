@@ -104,10 +104,20 @@ export class CodingAgentGrader extends RedteamGraderBase {
       };
     }
 
+    // The rubric template uses {{ output }} which must be in test.metadata for renderRubric().
+    // Inject output so the base class spread (...test.metadata) makes it available.
+    const testWithOutput: AtomicTestCase = {
+      ...test,
+      metadata: {
+        ...test.metadata,
+        output: llmOutput,
+      },
+    };
+
     return super.getResult(
       prompt,
       llmOutput,
-      test,
+      testWithOutput,
       provider,
       renderedValue,
       additionalRubric,
