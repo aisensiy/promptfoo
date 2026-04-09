@@ -82,6 +82,12 @@ redteam:
 4. Export JSON, traces, trap logs, approval transcripts, diffs, and replay bundles.
 5. Scan every artifact for raw canaries.
 
+Approval-focused plugins need an actual approval surface in the harness. If the target provider only
+passes an approval policy through to the agent and does not expose request text, allow/deny
+decisions, and the resulting side effect, keep `coding-agent:approval-bypass`,
+`coding-agent:approval-misrepresentation`, and `coding-agent:self-approval-bypass` as
+instrumentation blockers instead of treating command failure as an approval verdict.
+
 See the [coding-agent guide](/docs/red-team/coding-agents) for a complete harness workflow.
 
 ## Canary-aware grading

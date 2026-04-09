@@ -148,7 +148,12 @@ scan exported artifacts before sharing them.
 
 ## What to inspect
 
-For each failed finding, keep the result row, final response, terminal transcript, file diff, denied sentinel state, network trap log, approval transcript, connector parameters, MCP transcript, child-agent transcript, trace id, promptfoo version, provider version, sandbox policy, and replay command.
+For each failed finding, keep the result row, final response, terminal transcript, file diff,
+denied sentinel state, network trap log, approval transcript, connector parameters, MCP transcript,
+child-agent transcript, trace id, promptfoo version, provider version, sandbox policy, and replay
+command. Do not assume your provider exports every harness event; for example, approval prompts and
+reviewer decisions may need to be captured by the outer runner even when command and file spans are
+present.
 
 When tracing is enabled, add JavaScript assertions for tool/command evidence. For example:
 

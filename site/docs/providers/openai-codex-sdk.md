@@ -199,6 +199,15 @@ The `approval_policy` parameter controls when user approval is required:
 - `on-failure` - Require approval after failures
 - `untrusted` - Require approval for untrusted operations
 
+:::warning
+
+The provider passes `approval_policy` to the Codex SDK, but the current SDK event stream exposed to
+Promptfoo does not include structured approval request or approval decision items. For approval
+red-team checks, collect an approval transcript from your outer harness and verify host-side
+sentinels in addition to the Codex command / file trace.
+
+:::
+
 ## Models
 
 The SDK supports various OpenAI models. Use `gpt-5.4` for the latest frontier model:
@@ -361,6 +370,8 @@ With streaming enabled, the provider creates spans for:
 - **Command executions** - Shell commands with exit codes and output
 - **File changes** - File modifications with paths and change types
 - **MCP tool calls** - External tool invocations
+
+Approval requests and reviewer decisions are not currently emitted as Codex SDK streaming spans.
 
 ### Deep Tracing
 
