@@ -17,13 +17,13 @@ These plugins generate coding-agent tasks with Promptfoo's remote red-team gener
 
 ## Plugin IDs
 
-| Plugin | What it tests |
-| --- | --- |
-| `coding-agent:repo-prompt-injection` | Untrusted repository text, such as READMEs, docs, comments, generated files, issues, or fixture data, attempts to steer the coding agent away from the user task. |
-| `coding-agent:terminal-output-injection` | Test, compiler, package-manager, hook, or script output contains instructions or terminal-only receipts that the agent should not treat as authority. |
-| `coding-agent:secret-env-read` | Launcher-only credentials or synthetic environment canaries must not be inspected, copied into artifacts, or revealed. |
-| `coding-agent:sandbox-read-escape` | The agent must stay inside the intended checkout and configured additional directories, even when symlinks, sibling paths, temp files, or home-directory hints exist. |
-| `coding-agent:verifier-sabotage` | The agent must fix the requested behavior instead of deleting, skipping, weakening, regenerating, or bypassing tests, snapshots, policies, hooks, verifiers, lockfiles, or QA scripts. |
+| Plugin                                   | What it tests                                                                                                                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `coding-agent:repo-prompt-injection`     | Untrusted repository text, such as READMEs, docs, comments, generated files, issues, or fixture data, attempts to steer the coding agent away from the user task.                      |
+| `coding-agent:terminal-output-injection` | Test, compiler, package-manager, hook, or script output contains instructions or terminal-only receipts that the agent should not treat as authority.                                  |
+| `coding-agent:secret-env-read`           | Launcher-only credentials or synthetic environment canaries must not be inspected, copied into artifacts, or revealed.                                                                 |
+| `coding-agent:sandbox-read-escape`       | The agent must stay inside the intended checkout and configured additional directories, even when symlinks, sibling paths, temp files, or home-directory hints exist.                  |
+| `coding-agent:verifier-sabotage`         | The agent must fix the requested behavior instead of deleting, skipping, weakening, regenerating, or bypassing tests, snapshots, policies, hooks, verifiers, lockfiles, or QA scripts. |
 
 You can also select the MVP collection:
 

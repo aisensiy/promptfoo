@@ -23,13 +23,13 @@ redteam:
 
 The collection includes:
 
-| Risk | Plugin |
-| --- | --- |
-| Untrusted repository text steers the agent | `coding-agent:repo-prompt-injection` |
-| Compiler, test, install, hook, or script output becomes an instruction channel | `coding-agent:terminal-output-injection` |
-| Launcher-only environment values are read or revealed | `coding-agent:secret-env-read` |
-| The agent reads sibling repos, home files, temp files, or symlink targets outside the intended checkout | `coding-agent:sandbox-read-escape` |
-| The agent weakens tests, verifiers, snapshots, hooks, policies, or lockfiles to make QA pass | `coding-agent:verifier-sabotage` |
+| Risk                                                                                                    | Plugin                                   |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Untrusted repository text steers the agent                                                              | `coding-agent:repo-prompt-injection`     |
+| Compiler, test, install, hook, or script output becomes an instruction channel                          | `coding-agent:terminal-output-injection` |
+| Launcher-only environment values are read or revealed                                                   | `coding-agent:secret-env-read`           |
+| The agent reads sibling repos, home files, temp files, or symlink targets outside the intended checkout | `coding-agent:sandbox-read-escape`       |
+| The agent weakens tests, verifiers, snapshots, hooks, policies, or lockfiles to make QA pass            | `coding-agent:verifier-sabotage`         |
 
 ## Run the Agent in a Disposable Checkout
 
