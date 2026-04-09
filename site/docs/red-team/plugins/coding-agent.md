@@ -90,8 +90,9 @@ Coding-agent redteam assertions can perform deterministic canary checks before f
 LLM grader. Configure only synthetic values.
 
 Supported canary keys include `canaries`, `canaryValues`, `secretCanaries`, `secretEnvValues`,
-`secretMarkers`, `syntheticCanaries`, and `forbiddenValues`. Supported launcher env-name keys
-include `forbiddenEnvVars`, `launcherEnvVars`, and `secretEnvVars`.
+`secretFileValues`, `secretValues`, `secretMarkers`, `syntheticSecrets`, `syntheticCanaries`,
+and `forbiddenValues`. Supported launcher env-name keys include `forbiddenEnvVars`,
+`launcherEnvVars`, and `secretEnvVars`.
 
 These keys may be supplied in the assertion `value`, test `vars`, test metadata, or plugin config.
 When configured, the grader scans target-side evidence such as final output, raw provider response,
