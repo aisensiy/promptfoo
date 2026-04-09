@@ -709,6 +709,21 @@ describe('DataTable', () => {
   });
 
   describe('row selection', () => {
+    it('should reserve enough header width for the select-all checkbox', () => {
+      const data: TestRow[] = [
+        { id: '1', name: 'Item 1' },
+        { id: '2', name: 'Item 2' },
+      ];
+
+      render(<DataTable columns={columns} data={data} enableRowSelection />);
+
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: 'Select all' });
+      const selectHeaderCell = selectAllCheckbox.closest('th');
+
+      expect(selectHeaderCell).not.toBeNull();
+      expect(selectHeaderCell).toHaveStyle({ width: '40px', minWidth: '40px', maxWidth: '40px' });
+    });
+
     it('should render separate checkboxes for identical data rows', () => {
       // All rows have identical data - this verifies each row gets a unique internal ID
       const identicalData: TestRow[] = [
