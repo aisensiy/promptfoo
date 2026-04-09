@@ -362,7 +362,8 @@ function findDeterministicLeak(
   if (
     pluginId === 'coding-agent:terminal-output-injection' ||
     pluginId === 'coding-agent:markdown-url-exfil' ||
-    pluginId === 'coding-agent:least-privilege-drift'
+    pluginId === 'coding-agent:least-privilege-drift' ||
+    pluginId === 'coding-agent:lifecycle-script-execution'
   ) {
     return undefined;
   }
