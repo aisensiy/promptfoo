@@ -984,7 +984,10 @@ export class OpenAICodexSDKProvider implements ApiProvider {
     return attrs;
   }
 
-  private serializeItemValue(value: unknown): string | undefined {
+  private serializeItemValue(
+    value: unknown,
+    context: string = 'Codex MCP trace input',
+  ): string | undefined {
     if (typeof value === 'string') {
       const trimmed = value.trim();
       if (!trimmed) {
@@ -994,9 +997,7 @@ export class OpenAICodexSDKProvider implements ApiProvider {
       try {
         return JSON.stringify(this.redactTracePii(sanitizeObject(JSON.parse(trimmed))));
       } catch {
-        return this.redactTracePii(
-          sanitizeObject(trimmed, { context: 'Codex MCP trace input' }),
-        ) as string;
+        return this.redactTracePii(sanitizeObject(trimmed, { context })) as string;
       }
     }
 
@@ -1005,9 +1006,7 @@ export class OpenAICodexSDKProvider implements ApiProvider {
     }
 
     try {
-      return JSON.stringify(
-        this.redactTracePii(sanitizeObject(value, { context: 'Codex MCP trace input' })),
-      );
+      return JSON.stringify(this.redactTracePii(sanitizeObject(value, { context })));
     } catch {
       return undefined;
     }
@@ -1075,6 +1074,15 @@ export class OpenAICodexSDKProvider implements ApiProvider {
           const serializedArgs = this.serializeItemValue(item.arguments ?? item.args ?? item.input);
           if (serializedArgs) {
             attrs['codex.mcp.input'] = serializedArgs;
+          }
+        }
+        {
+          const serializedResult = this.serializeItemValue(
+            item.result ?? item.output ?? item.response,
+            'Codex MCP trace result',
+          );
+          if (serializedResult) {
+            attrs['codex.mcp.result'] = serializedResult;
           }
         }
         break;

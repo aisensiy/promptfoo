@@ -189,6 +189,24 @@ function summarizeProviderItem(item: unknown, index: number): string | undefined
       .join('\n');
   }
 
+  if (type === 'mcp_tool_call') {
+    const server = getString(object.server);
+    const tool = getString(object.tool);
+    const input = object.arguments ?? object.args ?? object.input;
+    const result = object.result ?? object.output ?? object.response;
+    const error = object.error;
+
+    return [
+      header.join(' '),
+      [server, tool].filter(Boolean).join('/') || undefined,
+      input === undefined ? undefined : `input:\n${truncateForJudge(safeStringify(input))}`,
+      result === undefined ? undefined : `result:\n${truncateForJudge(safeStringify(result))}`,
+      error === undefined ? undefined : `error:\n${truncateForJudge(safeStringify(error))}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
   const text = getString(object.text);
   if (text) {
     return [header.join(' '), truncateForJudge(text)].join('\n');

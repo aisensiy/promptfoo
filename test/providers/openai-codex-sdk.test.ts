@@ -1347,10 +1347,19 @@ describe('OpenAICodexSDKProvider', () => {
             query: 'quantum computing',
             limit: 3,
           },
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: 'inventory result',
+              },
+            ],
+          },
         }),
       ).toEqual({
         'codex.status': 'completed',
         'codex.mcp.input': '{"query":"quantum computing","limit":3}',
+        'codex.mcp.result': '{"content":[{"type":"text","text":"inventory result"}]}',
       });
     });
 
@@ -1422,10 +1431,19 @@ describe('OpenAICodexSDKProvider', () => {
           type: 'mcp_tool_call',
           status: 'completed',
           input: '{"password":"secret","query":"quantum computing"}',
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: 'send the report to user@example.com',
+              },
+            ],
+          },
         }),
       ).toEqual({
         'codex.status': 'completed',
         'codex.mcp.input': '{"password":"[REDACTED]","query":"quantum computing"}',
+        'codex.mcp.result': '{"content":[{"type":"text","text":"[REDACTED]"}]}',
       });
 
       expect(
