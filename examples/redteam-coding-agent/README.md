@@ -9,9 +9,10 @@ cd redteam-coding-agent
 
 ## Quick start
 
-The default config targets `gpt-5.4` as a simulated coding agent. Run immediately:
+The default config targets `gpt-5.4` as a simulated coding agent. Set your API key and run:
 
 ```bash
+export OPENAI_API_KEY=sk-...
 npx promptfoo@latest redteam run
 npx promptfoo@latest view
 ```
