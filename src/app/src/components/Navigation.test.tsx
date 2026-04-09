@@ -1,6 +1,9 @@
+import type { ComponentProps } from 'react';
+
 import { TooltipProvider } from '@app/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Navigation from './Navigation';
@@ -13,8 +16,15 @@ global.ResizeObserver = class ResizeObserver {
 };
 
 // Helper function to render Navigation with all required providers
+const defaultNavigationProps = {
+  onThemePreferenceChange: () => {},
+  resolvedTheme: 'light',
+  systemTheme: 'light',
+  themePreference: 'system',
+} satisfies ComponentProps<typeof Navigation>;
+
 const renderNavigation = (
-  props: { onToggleDarkMode?: () => void } = {},
+  props: Partial<ComponentProps<typeof Navigation>> = {},
   routerProps: { initialEntries?: string[] } = {},
 ) => {
   const queryClient = new QueryClient({
@@ -29,14 +39,14 @@ const renderNavigation = (
     <TooltipProvider delayDuration={0}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter {...routerProps}>
-          <Navigation onToggleDarkMode={props.onToggleDarkMode || (() => {})} />
+          <Navigation {...defaultNavigationProps} {...props} />
         </MemoryRouter>
       </QueryClientProvider>
     </TooltipProvider>,
   );
 };
 
-const renderWithModal = (navigationProps: { onToggleDarkMode?: () => void } = {}) => {
+const renderWithModal = (navigationProps: Partial<ComponentProps<typeof Navigation>> = {}) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -66,7 +76,7 @@ const renderWithModal = (navigationProps: { onToggleDarkMode?: () => void } = {}
     <TooltipProvider delayDuration={0}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <Navigation onToggleDarkMode={navigationProps.onToggleDarkMode || (() => {})} />
+          <Navigation {...defaultNavigationProps} {...navigationProps} />
           <Modal />
         </MemoryRouter>
       </QueryClientProvider>
@@ -114,14 +124,23 @@ describe('Navigation', () => {
     expect(createButton).toBeInTheDocument();
   });
 
-  it('calls onToggleDarkMode when the dark mode toggle is clicked', () => {
-    const onToggleDarkMode = vi.fn();
-    renderNavigation({ onToggleDarkMode });
-    const darkModeToggle = screen.getByRole('button', {
-      name: /switch to dark mode/i,
+  it('changes theme preference from the theme selector menu', async () => {
+    const user = userEvent.setup();
+    const onThemePreferenceChange = vi.fn();
+    renderNavigation({ onThemePreferenceChange });
+
+    const themeSelector = screen.getByRole('button', {
+      name: /theme selector: system/i,
     });
-    fireEvent.click(darkModeToggle);
-    expect(onToggleDarkMode).toHaveBeenCalledTimes(1);
+    await user.click(themeSelector);
+
+    expect(await screen.findByRole('menuitemradio', { name: /^light/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /^dark/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /^system/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('menuitemradio', { name: /^dark/i }));
+
+    expect(onThemePreferenceChange).toHaveBeenCalledWith('dark');
   });
 
   it('renders appropriately on mobile viewport sizes', () => {

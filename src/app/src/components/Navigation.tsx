@@ -17,6 +17,7 @@ import ApiSettingsModal from './ApiSettingsModal';
 import DarkMode from './DarkMode';
 import InfoModal from './InfoModal';
 import Logo from './Logo';
+import type { ResolvedTheme, ThemePreference } from '@app/hooks/useThemePreference';
 
 interface NavLinkProps {
   href: string;
@@ -153,7 +154,19 @@ const resultsMenuItems: MenuItem[] = [
   },
 ];
 
-export default function Navigation({ onToggleDarkMode }: { onToggleDarkMode: () => void }) {
+interface NavigationProps {
+  resolvedTheme: ResolvedTheme;
+  systemTheme: ResolvedTheme;
+  themePreference: ThemePreference;
+  onThemePreferenceChange: (themePreference: ThemePreference) => void;
+}
+
+export default function Navigation({
+  resolvedTheme,
+  systemTheme,
+  themePreference,
+  onThemePreferenceChange,
+}: NavigationProps) {
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
   const [showApiSettingsModal, setShowApiSettingsModal] = useState<boolean>(false);
 
@@ -229,7 +242,12 @@ export default function Navigation({ onToggleDarkMode }: { onToggleDarkMode: () 
               </Tooltip>
             )}
 
-            <DarkMode onToggleDarkMode={onToggleDarkMode} />
+            <DarkMode
+              resolvedTheme={resolvedTheme}
+              systemTheme={systemTheme}
+              themePreference={themePreference}
+              onThemePreferenceChange={onThemePreferenceChange}
+            />
           </div>
         </div>
       </header>

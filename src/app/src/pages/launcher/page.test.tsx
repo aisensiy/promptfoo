@@ -97,21 +97,20 @@ describe('LauncherPage', () => {
     });
   });
 
-  it('toggles dark mode when button is clicked', async () => {
+  it('sets dark mode from the theme selector', async () => {
     mockLocalStorage.getItem.mockReturnValue('false');
     document.documentElement.removeAttribute('data-theme'); // Ensure light mode at start
     renderLauncher();
 
-    // Wait for the page to finish loading and render the dark mode toggle
+    // Wait for the page to finish loading and render the theme selector
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /Switch to (dark|light) mode/i }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /theme selector: light/i })).toBeInTheDocument();
     });
 
-    const darkModeButton = screen.getByRole('button', { name: /Switch to (dark|light) mode/i });
+    const darkModeButton = screen.getByRole('button', { name: /theme selector: light/i });
     await act(async () => {
       await userEvent.click(darkModeButton);
+      await userEvent.click(screen.getByRole('menuitemradio', { name: /dark/i }));
     });
 
     expect(mockLocalStorage.setItem).toHaveBeenCalledWith('darkMode', 'true');

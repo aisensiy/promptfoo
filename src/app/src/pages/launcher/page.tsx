@@ -7,6 +7,7 @@ import { GlobeIcon, TerminalIcon } from '@app/components/ui/icons';
 import { Spinner } from '@app/components/ui/spinner';
 import { useApiHealth } from '@app/hooks/useApiHealth';
 import { usePageMeta } from '@app/hooks/usePageMeta';
+import { useThemePreference } from '@app/hooks/useThemePreference';
 import { cn } from '@app/lib/utils';
 import useApiConfig from '@app/stores/apiConfig';
 import { CheckCircle } from 'lucide-react';
@@ -20,7 +21,7 @@ export default function LauncherPage() {
   const [hasBeenConnected, setHasBeenConnected] = useState(false);
   const [isInitialConnection, setIsInitialConnection] = useState(true);
   const navigate = useNavigate();
-  const [darkMode, setDarkMode] = useState<boolean | null>(null);
+  const theme = useThemePreference();
   const {
     data: { status: healthStatus },
     refetch: checkHealth,
@@ -34,35 +35,6 @@ export default function LauncherPage() {
       enablePersistApiBaseUrl();
     }
   }, [apiBaseUrl, setApiBaseUrl, enablePersistApiBaseUrl]);
-
-  useEffect(() => {
-    const savedMode = localStorage.getItem('darkMode');
-    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setDarkMode(savedMode === null ? prefersDarkMode : savedMode === 'true');
-  }, []);
-
-  const toggleDarkMode = () => {
-    setDarkMode((prevMode) => {
-      if (prevMode === null) {
-        return prevMode;
-      }
-      const newMode = !prevMode;
-      localStorage.setItem('darkMode', String(newMode));
-      return newMode;
-    });
-  };
-
-  useEffect(() => {
-    if (darkMode === null) {
-      return;
-    }
-
-    if (darkMode) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-  }, [darkMode]);
 
   useEffect(() => {
     // Simple delay to allow server startup, then start health checks
@@ -98,10 +70,6 @@ export default function LauncherPage() {
     }
   }, [healthStatus, navigate, isInitialConnection]);
 
-  if (darkMode === null) {
-    return null;
-  }
-
   const showConnectionWarning =
     hasBeenConnected && !isInitialConnection && healthStatus === 'blocked';
 
@@ -136,7 +104,12 @@ export default function LauncherPage() {
 
       {/* Dark mode toggle */}
       <div className="absolute right-4 top-4">
-        <DarkModeToggle onToggleDarkMode={toggleDarkMode} />
+        <DarkModeToggle
+          resolvedTheme={theme.resolvedTheme}
+          systemTheme={theme.systemTheme}
+          themePreference={theme.themePreference}
+          onThemePreferenceChange={theme.setThemePreference}
+        />
       </div>
 
       {/* Header section */}
