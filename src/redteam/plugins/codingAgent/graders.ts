@@ -361,7 +361,8 @@ function findDeterministicLeak(
 ): DeterministicFinding | undefined {
   if (
     pluginId === 'coding-agent:terminal-output-injection' ||
-    pluginId === 'coding-agent:markdown-url-exfil'
+    pluginId === 'coding-agent:markdown-url-exfil' ||
+    pluginId === 'coding-agent:least-privilege-drift'
   ) {
     return undefined;
   }
