@@ -521,6 +521,80 @@ export class OpenAICodexSDKProvider implements ApiProvider {
     };
   }
 
+  private buildPolicySummary(config: OpenAICodexSDKConfig): Record<string, unknown> {
+    return {
+      model: config.model,
+      working_dir: config.working_dir,
+      additional_directories: config.additional_directories ?? [],
+      skip_git_repo_check: config.skip_git_repo_check ?? false,
+      sandbox_mode: config.sandbox_mode,
+      model_reasoning_effort: config.model_reasoning_effort,
+      network_access_enabled: config.network_access_enabled,
+      web_search_enabled: config.web_search_enabled,
+      web_search_mode: config.web_search_mode,
+      approval_policy: config.approval_policy,
+      enable_streaming: config.enable_streaming ?? false,
+      deep_tracing: config.deep_tracing ?? false,
+      persist_threads: config.persist_threads ?? false,
+      thread_id_provided: Boolean(config.thread_id),
+      thread_pool_size: config.thread_pool_size,
+      cli_env_overrides_provided: config.cli_env !== undefined,
+      cli_env_override_count: config.cli_env ? Object.keys(config.cli_env).length : 0,
+      output_schema_provided: config.output_schema !== undefined,
+    };
+  }
+
+  private buildPolicyTraceAttributes(
+    config: OpenAICodexSDKConfig,
+  ): Record<string, string | number | boolean> {
+    const attrs: Record<string, string | number | boolean> = {
+      'codex.policy.skip_git_repo_check': config.skip_git_repo_check ?? false,
+      'codex.policy.enable_streaming': config.enable_streaming ?? false,
+      'codex.policy.deep_tracing': config.deep_tracing ?? false,
+      'codex.policy.persist_threads': config.persist_threads ?? false,
+      'codex.policy.thread_id_provided': Boolean(config.thread_id),
+      'codex.policy.cli_env_overrides_provided': config.cli_env !== undefined,
+      'codex.policy.cli_env_override_count': config.cli_env
+        ? Object.keys(config.cli_env).length
+        : 0,
+      'codex.policy.output_schema_provided': config.output_schema !== undefined,
+    };
+
+    if (config.model) {
+      attrs['codex.policy.model'] = config.model;
+    }
+    if (config.working_dir) {
+      attrs['codex.policy.working_dir'] = config.working_dir;
+    }
+    if (config.additional_directories?.length) {
+      attrs['codex.policy.additional_directories'] = JSON.stringify(config.additional_directories);
+      attrs['codex.policy.additional_directories_count'] = config.additional_directories.length;
+    }
+    if (config.sandbox_mode) {
+      attrs['codex.policy.sandbox_mode'] = config.sandbox_mode;
+    }
+    if (config.model_reasoning_effort) {
+      attrs['codex.policy.model_reasoning_effort'] = config.model_reasoning_effort;
+    }
+    if (config.network_access_enabled !== undefined) {
+      attrs['codex.policy.network_access_enabled'] = config.network_access_enabled;
+    }
+    if (config.web_search_enabled !== undefined) {
+      attrs['codex.policy.web_search_enabled'] = config.web_search_enabled;
+    }
+    if (config.web_search_mode) {
+      attrs['codex.policy.web_search_mode'] = config.web_search_mode;
+    }
+    if (config.approval_policy) {
+      attrs['codex.policy.approval_policy'] = config.approval_policy;
+    }
+    if (config.thread_pool_size !== undefined) {
+      attrs['codex.policy.thread_pool_size'] = config.thread_pool_size;
+    }
+
+    return attrs;
+  }
+
   private async getOrCreateThread(
     config: OpenAICodexSDKConfig,
     cacheKey: string | undefined,
@@ -1074,7 +1148,9 @@ export class OpenAICodexSDKProvider implements ApiProvider {
 
     // Result extractor for span attributes
     const resultExtractor = (response: ProviderResponse): GenAISpanResult => {
-      const result: GenAISpanResult = {};
+      const result: GenAISpanResult = {
+        additionalAttributes: this.buildPolicyTraceAttributes(config),
+      };
 
       if (response.tokenUsage) {
         result.tokenUsage = response.tokenUsage;
@@ -1110,6 +1186,7 @@ export class OpenAICodexSDKProvider implements ApiProvider {
           // Include reasoning in additional attributes
           if (rawData.reasoningTexts?.length > 0) {
             result.additionalAttributes = {
+              ...result.additionalAttributes,
               'codex.reasoning.count': rawData.reasoningTexts.length,
               'codex.reasoning.summary': rawData.reasoningTexts.join('\n---\n').slice(0, 2000),
             };
@@ -1266,7 +1343,11 @@ export class OpenAICodexSDKProvider implements ApiProvider {
 
       // Extract response
       const output = turn.finalResponse || '';
-      const raw = JSON.stringify(turn);
+      const codexPolicy = this.buildPolicySummary(config);
+      const raw = JSON.stringify({
+        ...turn,
+        promptfooCodexPolicy: codexPolicy,
+      });
 
       const tokenUsage: ProviderResponse['tokenUsage'] = turn.usage
         ? {
@@ -1300,6 +1381,9 @@ export class OpenAICodexSDKProvider implements ApiProvider {
         tokenUsage,
         cost,
         raw,
+        metadata: {
+          codexPolicy,
+        },
         sessionId: thread.id || 'unknown',
       };
     } catch (error: unknown) {

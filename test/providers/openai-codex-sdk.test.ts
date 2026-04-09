@@ -168,17 +168,30 @@ describe('OpenAICodexSDKProvider', () => {
         });
         const result = await provider.callApi('Test prompt');
 
-        expect(result).toEqual({
-          output: 'Test response',
-          tokenUsage: {
-            prompt: 10, // cached_input_tokens is already included in input_tokens
-            completion: 20,
-            total: 30, // 10 + 20
-            cached: 5,
-          },
-          cost: 0,
-          raw: expect.any(String),
-          sessionId: 'test-thread-123',
+        expect(result).toEqual(
+          expect.objectContaining({
+            output: 'Test response',
+            tokenUsage: {
+              prompt: 10, // cached_input_tokens is already included in input_tokens
+              completion: 20,
+              total: 30, // 10 + 20
+              cached: 5,
+            },
+            cost: 0,
+            raw: expect.any(String),
+            metadata: {
+              codexPolicy: expect.objectContaining({
+                enable_streaming: false,
+                skip_git_repo_check: false,
+              }),
+            },
+            sessionId: 'test-thread-123',
+          }),
+        );
+
+        expect(JSON.parse(result.raw as string).promptfooCodexPolicy).toMatchObject({
+          enable_streaming: false,
+          skip_git_repo_check: false,
         });
 
         expect(mockStartThread).toHaveBeenCalledWith({
@@ -1339,6 +1352,45 @@ describe('OpenAICodexSDKProvider', () => {
         'codex.status': 'completed',
         'codex.mcp.input': '{"query":"quantum computing","limit":3}',
       });
+    });
+
+    it('should summarize launch policy for raw output, metadata, and provider spans', async () => {
+      mockRun.mockResolvedValue(createMockResponse('Response'));
+
+      const provider = new OpenAICodexSDKProvider({
+        config: {
+          working_dir: '/workspace/repo',
+          sandbox_mode: 'workspace-write',
+          network_access_enabled: false,
+          approval_policy: 'untrusted',
+          cli_env: {
+            HOME: '/tmp/codex-home',
+          },
+        },
+        env: { OPENAI_API_KEY: 'test-api-key' },
+      });
+
+      const result = await provider.callApi('Test prompt');
+      const raw = JSON.parse(result.raw as string);
+
+      expect(result.metadata?.codexPolicy).toMatchObject({
+        working_dir: '/workspace/repo',
+        sandbox_mode: 'workspace-write',
+        network_access_enabled: false,
+        approval_policy: 'untrusted',
+        cli_env_overrides_provided: true,
+        cli_env_override_count: 1,
+      });
+      expect(raw.promptfooCodexPolicy).toEqual(result.metadata?.codexPolicy);
+      expect((provider as any).buildPolicyTraceAttributes(provider.config)).toMatchObject({
+        'codex.policy.working_dir': '/workspace/repo',
+        'codex.policy.sandbox_mode': 'workspace-write',
+        'codex.policy.network_access_enabled': false,
+        'codex.policy.approval_policy': 'untrusted',
+        'codex.policy.cli_env_overrides_provided': true,
+        'codex.policy.cli_env_override_count': 1,
+      });
+      expect(JSON.stringify(result.metadata?.codexPolicy)).not.toContain('/tmp/codex-home');
     });
 
     it('should redact sensitive MCP tool input before tracing', () => {

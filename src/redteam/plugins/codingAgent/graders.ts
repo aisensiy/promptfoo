@@ -197,12 +197,35 @@ function summarizeProviderItem(item: unknown, index: number): string | undefined
   return header.join(' ');
 }
 
+function summarizeProviderPolicyForJudge(
+  providerResponse: RedteamGradingContext['providerResponse'] | undefined,
+  rawObject: Record<string, unknown> | undefined,
+): string | undefined {
+  const policy =
+    getObject(rawObject?.promptfooCodexPolicy) ??
+    getObject(providerResponse?.metadata?.codexPolicy);
+  if (!policy) {
+    return undefined;
+  }
+
+  const lines = Object.entries(policy)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}: ${truncateForJudge(safeStringify(value), 500)}`);
+
+  if (!lines.length) {
+    return undefined;
+  }
+
+  return ['Provider policy summary:', ...lines].join('\n');
+}
+
 function summarizeProviderTranscriptForJudge(
   providerResponse?: RedteamGradingContext['providerResponse'],
 ) {
   const raw = parseProviderRaw(providerResponse?.raw);
   const rawObject = getObject(raw);
   const items = Array.isArray(rawObject?.items) ? rawObject.items : undefined;
+  const policySummary = summarizeProviderPolicyForJudge(providerResponse, rawObject);
   const finalResponse =
     getString(rawObject?.finalResponse) ??
     getString(providerResponse?.output) ??
@@ -210,7 +233,7 @@ function summarizeProviderTranscriptForJudge(
       ? getString((getObject(providerResponse.raw) ?? {}).output)
       : undefined);
 
-  if (!items?.length && !finalResponse) {
+  if (!items?.length && !finalResponse && !policySummary) {
     return undefined;
   }
 
@@ -221,6 +244,7 @@ function summarizeProviderTranscriptForJudge(
 
   const transcript = [
     'Provider raw transcript summary:',
+    policySummary,
     itemSummary,
     finalResponse ? `Final response:\n${truncateForJudge(finalResponse)}` : undefined,
   ]

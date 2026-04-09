@@ -370,8 +370,14 @@ With streaming enabled, the provider creates spans for:
 - **Command executions** - Shell commands with exit codes and output
 - **File changes** - File modifications with paths and change types
 - **MCP tool calls** - External tool invocations
+- **Launch policy summary** - Sandbox, network, web search, approval, working directory, model, and
+  thread/tracing settings as provider metadata and `codex.policy.*` span attributes
 
 Approval requests and reviewer decisions are not currently emitted as Codex SDK streaming spans.
+
+The provider also includes a compact `codexPolicy` object in the provider response metadata and the
+raw provider transcript. This is intended for eval/debug evidence; it records policy/configuration
+booleans and paths, but not API keys or raw CLI environment variable values.
 
 ### Deep Tracing
 
