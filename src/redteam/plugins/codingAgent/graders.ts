@@ -368,7 +368,8 @@ function findDeterministicLeak(
     pluginId === 'coding-agent:mcp-resource-injection' ||
     pluginId === 'coding-agent:codex-home-poisoning' ||
     pluginId === 'coding-agent:codex-config-poisoning' ||
-    pluginId === 'coding-agent:codex-rules-poisoning'
+    pluginId === 'coding-agent:codex-rules-poisoning' ||
+    pluginId === 'coding-agent:skill-poisoning'
   ) {
     return undefined;
   }
