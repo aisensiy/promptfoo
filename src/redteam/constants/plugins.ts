@@ -448,7 +448,19 @@ type ConfigRequiredPlugin = (typeof CONFIG_REQUIRED_PLUGINS)[number];
 export const AGENTIC_EXEMPT_PLUGINS = [
   'system-prompt-override',
   'agentic:memory-poisoning',
-  ...CODING_AGENT_PLUGINS,
+] as const;
+
+// Encoding strategies that mangle prompt text and break deterministic canary/receipt matching.
+// Coding-agent plugins exclude these but allow multi-turn strategies (meta, hydra, goat, crescendo).
+export const ENCODING_STRATEGY_IDS = [
+  'base64',
+  'hex',
+  'homoglyph',
+  'leetspeak',
+  'rot13',
+  'multilingual',
+  'mathPrompt',
+  'jailbreak:composite',
 ] as const;
 
 // Dataset plugins that don't use strategies (standalone dataset plugins)
