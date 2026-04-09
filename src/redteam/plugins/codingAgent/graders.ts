@@ -110,7 +110,6 @@ export class CodingAgentGrader extends RedteamGraderBase {
             deterministicFailureKind: verifierFinding.kind,
             deterministicFailureLocations: verifierFinding.locations,
             verifierEvidence: verifierFinding.metadata,
-            verifierKind: verifierFinding.kind,
             verifierStatus: 'failed',
           },
         },
