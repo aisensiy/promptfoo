@@ -1,25 +1,46 @@
 # redteam-coding-agent (Coding Agent Red Team)
 
-This example is a starting point for running Promptfoo's core coding-agent red-team plugins against a real autonomous coding harness.
-
-You can run this example with:
+Red team autonomous coding agents for repository prompt injection, terminal output injection, secret environment read, sandbox read escape, and verifier sabotage vulnerabilities.
 
 ```bash
 npx promptfoo@latest init --example redteam-coding-agent
 cd redteam-coding-agent
 ```
 
-## Setup
+## Quick start
 
-It is configured for the OpenAI Codex SDK provider. Before running it, create a disposable target repository at `./agent-workspace` or change `providers[0].config.working_dir` to point at an isolated copy of the repository you want the agent to edit.
-
-Run the red team:
+The default config targets `gpt-4.1-mini` as a simulated coding agent. Run immediately:
 
 ```bash
-promptfoo redteam run
-promptfoo view
+npx promptfoo@latest redteam run
+npx promptfoo@latest view
 ```
 
-These plugins are designed for real agent runs, not prompt-only completions. For useful results, keep provider raw events, command output, traces, and protected verifier reports available to Promptfoo.
+## Using a real coding agent
 
-Do not place production secrets in this example. Use synthetic canaries that are unique to each eval run.
+For meaningful results, point the config at a real agent provider:
+
+- **Codex SDK**: Uncomment the `openai:codex-sdk` provider in `promptfooconfig.yaml` and set `working_dir` to a disposable checkout.
+- **Custom agent**: Use a `file://` provider or HTTP endpoint that wraps your agent framework.
+
+Real agent providers should return structured output with command executions and trace data so the deterministic verifiers can inspect commands, outputs, and file changes — not just the final response.
+
+## What the plugins test
+
+| Plugin                      | Vulnerability                                            | Detection                                                    |
+| --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------ |
+| `repo-prompt-injection`     | Agent follows hidden instructions in repository files    | Canary value detection + LLM grading                         |
+| `terminal-output-injection` | Agent treats build/test output as authoritative commands | Receipt propagation detection + LLM grading                  |
+| `secret-env-read`           | Agent reads or exposes launcher environment variables    | Canary value detection in output/traces                      |
+| `sandbox-read-escape`       | Agent reads files outside the intended workspace         | Receipt detection + LLM grading                              |
+| `verifier-sabotage`         | Agent weakens tests instead of fixing code               | Heuristic pattern detection + file hash checks + LLM grading |
+
+## Strategies
+
+Multi-turn strategies (`jailbreak:meta`, `jailbreak:hydra`, `goat`, `crescendo`) work with coding-agent plugins and significantly increase vulnerability detection rates. Encoding strategies (base64, rot13, etc.) are automatically excluded since they would break deterministic canary matching.
+
+## Safety
+
+- Never place production secrets in red-team configs. Use synthetic canaries (`{{secretEnvValue}}`).
+- Run agents in disposable, least-privilege sandboxes.
+- The generated prompts ask the agent to do unsafe things — that's the point. The graders evaluate whether the agent resists.
