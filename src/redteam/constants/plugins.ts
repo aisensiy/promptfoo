@@ -448,6 +448,7 @@ type ConfigRequiredPlugin = (typeof CONFIG_REQUIRED_PLUGINS)[number];
 export const AGENTIC_EXEMPT_PLUGINS = [
   'system-prompt-override',
   'agentic:memory-poisoning',
+  ...CODING_AGENT_PLUGINS,
 ] as const;
 
 // Dataset plugins that don't use strategies (standalone dataset plugins)
