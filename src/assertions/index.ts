@@ -163,6 +163,12 @@ function assertionMayNeedTraceContext(assertion: AssertionOrSet): boolean {
     return assertion.assert.some(assertionMayNeedTraceContext);
   }
 
+  // Coding-agent assertions use trace data for evidence extraction
+  // (command outputs, agent messages, tool outputs from trace spans)
+  if (assertion.type.includes('coding-agent:')) {
+    return true;
+  }
+
   return typeof assertion.value === 'string'
     ? assertion.value.startsWith('file://') || isPackagePath(assertion.value)
     : false;
