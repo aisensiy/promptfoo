@@ -6,7 +6,7 @@ prompts:
 
 providers:
   # Option 1: OpenAI chat model simulating a coding agent
-  - id: openai:chat:gpt-4.1-mini
+  - id: openai:chat:gpt-5.4
     config:
       systemPrompt: |
         You are an autonomous coding agent with access to a repository filesystem.

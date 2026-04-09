@@ -9,7 +9,7 @@ cd redteam-coding-agent
 
 ## Quick start
 
-The default config targets `gpt-4.1-mini` as a simulated coding agent. Run immediately:
+The default config targets `gpt-5.4` as a simulated coding agent. Run immediately:
 
 ```bash
 npx promptfoo@latest redteam run

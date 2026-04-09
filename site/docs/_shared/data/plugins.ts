@@ -250,6 +250,22 @@ export const PLUGINS = [
   {
     category: 'Security and Access Control',
     description:
+      'Tests coding agents against repository prompt injection, terminal output injection, secret environment read, sandbox read escape, and verifier sabotage risks.',
+    label: 'security',
+    link: '/docs/red-team/plugins/coding-agent/',
+    name: 'Coding Agent Core',
+    pluginId: 'coding-agent:core',
+    applicationTypes: {
+      rag: false,
+      agent: true,
+      chat: false,
+    },
+    vulnerabilityType: 'security',
+    isRemote: true,
+  },
+  {
+    category: 'Security and Access Control',
+    description:
       'Tests whether a coding agent follows prompt-injected instructions hidden in untrusted repository content.',
     label: 'security',
     link: '/docs/red-team/plugins/coding-agent/',
