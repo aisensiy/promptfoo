@@ -9,12 +9,12 @@ import invariant from '../../util/invariant';
 import {
   BIAS_PLUGINS,
   CANARY_BREAKING_STRATEGY_IDS,
-  CODING_AGENT_PLUGINS,
   PII_PLUGINS,
   REDTEAM_PROVIDER_HARM_PLUGINS,
   REMOTE_ONLY_PLUGIN_IDS,
   UNALIGNED_PROVIDER_HARM_PLUGINS,
 } from '../constants';
+import { CODING_AGENT_PLUGINS } from '../constants/codingAgents';
 import {
   getRemoteGenerationUrl,
   getRemoteHealthUrl,

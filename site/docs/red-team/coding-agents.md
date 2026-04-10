@@ -1,4 +1,5 @@
 ---
+title: Red Team Coding Agents
 sidebar_label: Coding Agents
 sidebar_position: 10002
 description: Red team coding agents by testing repo prompt injection, terminal output injection, secret reads, sandbox escapes, and verifier sabotage

@@ -14,7 +14,6 @@ import { extractVariablesFromTemplates } from '../util/templates';
 import {
   ALIASED_PLUGIN_MAPPINGS,
   BIAS_PLUGINS,
-  CODING_AGENT_PLUGINS,
   DATASET_EXEMPT_PLUGINS,
   FINANCIAL_PLUGINS,
   FOUNDATION_PLUGINS,
@@ -34,6 +33,7 @@ import {
   TEEN_SAFETY_PLUGINS,
   TELECOM_PLUGINS,
 } from './constants';
+import { CODING_AGENT_PLUGINS } from './constants/codingAgents';
 import { extractEntities } from './extraction/entities';
 import { extractSystemPurpose } from './extraction/purpose';
 import { CustomPlugin } from './plugins/custom';

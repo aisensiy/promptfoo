@@ -4,8 +4,6 @@ import {
   AGENTIC_PLUGINS,
   ALL_PLUGINS,
   BASE_PLUGINS,
-  CODING_AGENT_COLLECTIONS,
-  CODING_AGENT_PLUGINS,
   COLLECTIONS,
   CONFIG_REQUIRED_PLUGINS,
   categoryDescriptions,
@@ -22,6 +20,10 @@ import {
   UI_DISABLED_WHEN_REMOTE_UNAVAILABLE,
   UNALIGNED_PROVIDER_HARM_PLUGINS,
 } from '../../src/redteam/constants';
+import {
+  CODING_AGENT_COLLECTIONS,
+  CODING_AGENT_PLUGINS,
+} from '../../src/redteam/constants/codingAgents';
 
 describe('constants', () => {
   it('DEFAULT_NUM_TESTS_PER_PLUGIN should be defined', () => {

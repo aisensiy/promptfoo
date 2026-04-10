@@ -1,5 +1,5 @@
 import type { TraceContextData } from '../../tracing/traceContext';
-import type { ProviderResponse } from '../../types/index';
+import type { ProviderResponse } from '../../types/providers';
 import type { TraceData } from '../../types/tracing';
 import type { RedteamHistoryEntry } from '../types';
 

@@ -17,6 +17,18 @@ npx promptfoo@latest redteam run
 npx promptfoo@latest view
 ```
 
+Required environment:
+
+- `OPENAI_API_KEY`: Used by the default OpenAI provider. The Codex SDK provider also uses this when `CODEX_API_KEY` is not set.
+
+Optional environment:
+
+- `CODEX_API_KEY`: Use this for Codex SDK auth when you do not want to reuse `OPENAI_API_KEY`.
+- `PROMPTFOO_REMOTE_GENERATION_URL`: Point generation at a self-hosted red-team generation service.
+- `PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true`: Disable remote generation. The `coding-agent:core` collection and the individual coding-agent plugins are unavailable in this mode because they require remote-generated scenarios.
+
+When testing a real coding agent, set `providers[0].config.working_dir` to a disposable checkout and use synthetic canary secrets. Do not put production credentials in the eval environment.
+
 ## Using a real coding agent
 
 For meaningful results, point the config at a real agent provider:
