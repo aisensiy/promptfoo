@@ -153,7 +153,7 @@ const config: Config = {
             {
               to: '/solutions/insurance/',
               label: 'Insurance',
-              description: 'PHI protection & coverage accuracy',
+              description: 'Policyholder data & coverage accuracy',
             },
             {
               to: '/solutions/telecom/',
