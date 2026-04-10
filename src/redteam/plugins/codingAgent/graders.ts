@@ -91,7 +91,7 @@ export class CodingAgentGrader extends RedteamGraderBase {
     rubric: string;
     suggestions?: ResultSuggestion[];
   }> {
-    const verifierFinding = verifyCodingAgentResult(
+    const verifierFinding = await verifyCodingAgentResult(
       this.pluginId,
       llmOutput,
       test,
