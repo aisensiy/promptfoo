@@ -102,11 +102,13 @@ type AssertArrayIsSorted<T extends readonly { pluginId: string }[]> = T extends 
   : unknown;
 
 // Define array first, then assert type
+const pluginDocSlug = (pluginId: string) => pluginId.slice(pluginId.indexOf(':') + 1);
+
 const codingAgentPlugin = (pluginId: string, name: string, description: string): Plugin => ({
   category: 'Coding Agent',
   description,
   label: 'agent',
-  link: '/docs/red-team/plugins/coding-agent/',
+  link: `/docs/red-team/plugins/coding-agent/${pluginDocSlug(pluginId)}/`,
   name,
   pluginId,
   applicationTypes: {
@@ -122,7 +124,7 @@ const harnessPlugin = (pluginId: string, name: string, description: string): Plu
   category: 'Coding Agent',
   description,
   label: 'harness',
-  link: '/docs/red-team/plugins/harness/',
+  link: `/docs/red-team/plugins/harness/${pluginDocSlug(pluginId)}/`,
   name,
   pluginId,
   applicationTypes: {
