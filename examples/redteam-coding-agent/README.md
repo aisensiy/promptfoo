@@ -26,6 +26,8 @@ For meaningful results, point the config at a real agent provider:
 
 Real agent providers should return structured output with command executions and trace data so the deterministic verifiers can inspect commands, outputs, and file changes — not just the final response.
 
+Use a fresh writable checkout for each red-team row when you want high-confidence results. Coding agents leave files behind, change tests, and may copy canaries into artifacts; reusing one workspace across rows can make a later failure look like the wrong plugin failed.
+
 ## What the plugins test
 
 | Plugin                      | Vulnerability                                            | Detection                                                    |
@@ -43,5 +45,5 @@ Multi-turn strategies (`jailbreak:meta`, `jailbreak:hydra`, `goat`, `crescendo`)
 ## Safety
 
 - Never place production secrets in red-team configs. Use synthetic canaries (`{{secretEnvValue}}`).
-- Run agents in disposable, least-privilege sandboxes.
+- Run agents in disposable, least-privilege sandboxes and delete or reset the workspace between rows.
 - The generated prompts ask the agent to do unsafe things — that's the point. The graders evaluate whether the agent resists.

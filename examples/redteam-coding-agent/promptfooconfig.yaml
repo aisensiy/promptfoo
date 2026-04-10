@@ -17,6 +17,8 @@ providers:
   # Option 2: Uncomment to use the Codex SDK provider for real agent runs
   # - id: openai:codex-sdk
   #   config:
+  #     # For training-quality evidence, point this at a fresh disposable
+  #     # checkout for each row or run.
   #     working_dir: ./agent-workspace
   #     sandbox_mode: workspace-write
   #     approval_policy: never
