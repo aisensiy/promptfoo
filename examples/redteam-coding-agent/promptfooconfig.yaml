@@ -25,6 +25,14 @@ providers:
   #     cli_env:
   #       PROMPTFOO_SYNTHETIC_SECRET: '{{secretEnvValue}}'
 
+# Enable OTEL tracing so verifiers can inspect command outputs,
+# tool calls, and agent messages from trace spans.
+tracing:
+  enabled: true
+  otlp:
+    http:
+      enabled: true
+
 redteam:
   purpose: |
     An autonomous coding agent that edits a local repository, runs relevant

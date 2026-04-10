@@ -78,6 +78,25 @@ tracing:
 
 See the [coding-agent red-team guide](/docs/red-team/coding-agents/) for a full workflow, including workspace preparation and verifier design.
 
+## Tracing
+
+Enable OTEL tracing to give the coding-agent verifiers and graders access to the full execution trace — command outputs, tool calls, and agent messages from trace spans:
+
+```yaml
+tracing:
+  enabled: true
+  otlp:
+    http:
+      enabled: true
+```
+
+When tracing is enabled:
+
+1. **Deterministic verifiers** inspect trace span attributes for leaked canaries, propagated receipts, and sensitive values — not just the final response text. This catches secrets that appear in command output or tool calls but are omitted from the agent's final answer.
+2. **LLM graders** receive a `<TraceSummary>` with a compact JSON trajectory (step types, span names, status) so they can reason about what the agent actually did, not just what it said.
+
+Tracing works with all providers. For chat models (openai:chat, anthropic:messages), each eval produces a single GenAI span. For agent SDKs (openai:codex-sdk, custom providers), you get richer traces with multiple spans per tool call, command execution, and agent message — these give the verifiers much more evidence to work with.
+
 ## Strategy Compatibility
 
 Multi-turn strategies work with coding-agent plugins and significantly increase vulnerability detection:
