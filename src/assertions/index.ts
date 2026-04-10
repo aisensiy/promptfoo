@@ -163,9 +163,7 @@ function assertionMayNeedTraceContext(assertion: AssertionOrSet): boolean {
     return assertion.assert.some(assertionMayNeedTraceContext);
   }
 
-  // Coding-agent assertions use trace data for evidence extraction
-  // (command outputs, agent messages, tool outputs from trace spans)
-  if (assertion.type.includes('coding-agent:')) {
+  if (assertion.type.startsWith('promptfoo:redteam:coding-agent:')) {
     return true;
   }
 

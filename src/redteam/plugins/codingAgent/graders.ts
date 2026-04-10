@@ -117,9 +117,7 @@ export class CodingAgentGrader extends RedteamGraderBase {
       };
     }
 
-    // Inject required template variables into test.metadata so renderRubric() can resolve them:
-    // - output: the rubric template uses {{ output }} (same pattern as dataExfil.ts)
-    // - purpose: required by base class invariant; fall back to plugin description if missing
+    // Ensure template variables required by the rubric are present (same pattern as dataExfil.ts)
     const testWithInjectedVars: AtomicTestCase = {
       ...test,
       metadata: {
