@@ -555,6 +555,7 @@ export const PLUGIN_CATEGORIES = {
 // These have no local implementation and always call the remote API
 export const REMOTE_ONLY_PLUGIN_IDS = [
   'agentic:memory-poisoning',
+  ...CODING_AGENT_COLLECTIONS,
   ...CODING_AGENT_PLUGINS,
   'ascii-smuggling',
   'bfla',

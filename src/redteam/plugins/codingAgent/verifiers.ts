@@ -466,9 +466,13 @@ async function verifyVerifierSidecar(
   try {
     raw = await fs.readFile(reportPath, 'utf8');
   } catch (error: unknown) {
-    // File not found is expected when no sidecar is configured for this run.
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return undefined;
+      return {
+        kind: 'verifier-sidecar-failed',
+        locations: ['verifier sidecar report'],
+        metadata: { reportPath, problem: 'missing' },
+        reason: 'A configured assertion-owned verifier sidecar report is missing.',
+      };
     }
     // Any other I/O error (permission denied, etc.) is suspicious.
     return {
