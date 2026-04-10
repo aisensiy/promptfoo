@@ -14,9 +14,9 @@ import { cn } from '@app/lib/utils';
 import { Info, Settings } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ApiSettingsModal from './ApiSettingsModal';
-import DarkMode from './DarkMode';
 import InfoModal from './InfoModal';
 import Logo from './Logo';
+import ThemeSelector from './ThemeSelector';
 import type { ResolvedTheme, ThemePreference } from '@app/hooks/useThemePreference';
 
 interface NavLinkProps {
@@ -242,7 +242,7 @@ export default function Navigation({
               </Tooltip>
             )}
 
-            <DarkMode
+            <ThemeSelector
               resolvedTheme={resolvedTheme}
               systemTheme={systemTheme}
               themePreference={themePreference}

@@ -56,8 +56,6 @@ export function useThemePreference() {
   useEffect(() => {
     const systemPreference = window.matchMedia(SYSTEM_DARK_MODE_QUERY);
 
-    setSystemTheme(systemPreference.matches ? 'dark' : 'light');
-
     const handleSystemPreferenceChange = ({ matches }: { matches: boolean }) => {
       setSystemTheme(matches ? 'dark' : 'light');
     };

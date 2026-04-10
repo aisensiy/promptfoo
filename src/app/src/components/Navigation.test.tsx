@@ -8,13 +8,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Navigation from './Navigation';
 
-// Mock ResizeObserver for Radix NavigationMenu
-global.ResizeObserver = class ResizeObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
-
 // Helper function to render Navigation with all required providers
 const defaultNavigationProps = {
   onThemePreferenceChange: () => {},

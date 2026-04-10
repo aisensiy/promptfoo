@@ -12,7 +12,7 @@ import { cn } from '@app/lib/utils';
 import useApiConfig from '@app/stores/apiConfig';
 import { CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import DarkModeToggle from '../../components/DarkMode';
+import ThemeSelector from '../../components/ThemeSelector';
 
 const DEFAULT_LOCAL_API_URL = 'http://localhost:15500';
 
@@ -104,7 +104,7 @@ export default function LauncherPage() {
 
       {/* Dark mode toggle */}
       <div className="absolute right-4 top-4">
-        <DarkModeToggle
+        <ThemeSelector
           resolvedTheme={theme.resolvedTheme}
           systemTheme={theme.systemTheme}
           themePreference={theme.themePreference}

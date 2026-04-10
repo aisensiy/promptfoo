@@ -1,5 +1,6 @@
 import { act } from 'react';
 
+import { restoreTestTimers, type TestTimers, useTestTimers } from '@app/tests/timers';
 import { renderWithProviders } from '@app/utils/testutils';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -121,6 +122,11 @@ describe('ResultsTable Metrics Display', () => {
   };
 
   beforeEach(() => {
+    vi.mocked(useResultsViewSettingsStore).mockImplementation(() => ({
+      inComparisonMode: false,
+      renderMarkdown: true,
+    }));
+
     vi.mocked(useTableStore).mockImplementation(() => ({
       config: {},
       evalId: '123',
@@ -211,6 +217,45 @@ describe('ResultsTable Metrics Display', () => {
     expect(screen.queryByText('Total Cost:')).not.toBeInTheDocument();
     expect(screen.queryByText('Total Tokens:')).not.toBeInTheDocument();
     expect(screen.queryByText('Avg Tokens:')).not.toBeInTheDocument();
+  });
+
+  it('renders sparse prompt outputs as empty cells', () => {
+    const mockTableWithSparseOutput = {
+      body: [
+        {
+          outputs: [null, { pass: true, score: 1, text: 'test output' }],
+          test: {},
+          vars: [],
+        },
+      ],
+      head: {
+        prompts: [{ provider: 'test-provider-1' }, { provider: 'test-provider-2' }],
+        vars: [],
+      },
+    };
+
+    vi.mocked(useTableStore).mockImplementation(() => ({
+      config: {},
+      evalId: '123',
+      inComparisonMode: false,
+      setTable: vi.fn(),
+      table: mockTableWithSparseOutput,
+      version: 4,
+      renderMarkdown: true,
+      fetchEvalData: vi.fn(),
+      filters: {
+        values: {},
+        appliedCount: 0,
+        options: {
+          metric: [],
+        },
+      },
+    }));
+
+    renderWithProviders(<ResultsTable {...defaultProps} />);
+
+    expect(screen.getByLabelText('No output for this prompt')).toBeInTheDocument();
+    expect(screen.getAllByTestId('eval-output-cell')).toHaveLength(1);
   });
 
   it('displays tokens per second when both latency and completion tokens are available', () => {
@@ -1961,6 +2006,34 @@ describe('ResultsTable Non-Numeric Input Handling', () => {
 });
 
 describe('ResultsTable Zoom and Scroll Position', () => {
+  const mockTable = {
+    body: [
+      {
+        outputs: [
+          {
+            pass: true,
+            score: 1,
+            text: 'test output',
+          },
+        ],
+        test: {},
+        vars: [],
+      },
+    ],
+    head: {
+      prompts: [
+        {
+          metrics: {
+            testPassCount: 1,
+            testFailCount: 0,
+          },
+          provider: 'test-provider',
+        },
+      ],
+      vars: [],
+    },
+  };
+
   const defaultProps = {
     columnVisibility: {},
     failureFilter: {},
@@ -1977,8 +2050,34 @@ describe('ResultsTable Zoom and Scroll Position', () => {
     atInitialVerticalScrollPosition: true,
   };
 
+  beforeEach(() => {
+    vi.mocked(useResultsViewSettingsStore).mockImplementation(() => ({
+      inComparisonMode: false,
+      renderMarkdown: true,
+    }));
+
+    vi.mocked(useTableStore).mockImplementation(() => ({
+      config: {},
+      evalId: '123',
+      setTable: vi.fn(),
+      table: mockTable,
+      version: 4,
+      fetchEvalData: vi.fn(),
+      filters: {
+        values: {},
+        appliedCount: 0,
+        options: {
+          metric: [],
+        },
+      },
+      filteredResultsCount: 1,
+      isFetching: false,
+      totalResultsCount: 1,
+    }));
+  });
+
   it('should maintain scroll position and focused element when zoom changes', () => {
-    const { container } = renderWithProviders(<ResultsTable {...defaultProps} />);
+    const { container, rerender } = renderWithProviders(<ResultsTable {...defaultProps} />);
     const tableContainer = container.querySelector('#results-table-container') as HTMLDivElement;
     const initialScrollTop = 100;
     tableContainer.scrollTop = initialScrollTop;
@@ -1989,7 +2088,7 @@ describe('ResultsTable Zoom and Scroll Position', () => {
     }
 
     act(() => {
-      renderWithProviders(<ResultsTable {...defaultProps} zoom={1.5} />, { container });
+      rerender(<ResultsTable {...defaultProps} zoom={1.5} />);
     });
 
     expect(tableContainer.scrollTop).toBe(initialScrollTop);
@@ -3393,9 +3492,10 @@ describe('ResultsTable minimal scroll room detection', () => {
   // Use mutable values with getters so they can be changed during tests
   let scrollHeightValue = 1000;
   let innerHeightValue = 700;
+  let timers: TestTimers;
 
   beforeEach(() => {
-    vi.useFakeTimers();
+    timers = useTestTimers();
 
     // Reset to default values (plenty of scroll room)
     scrollHeightValue = 1000;
@@ -3433,7 +3533,7 @@ describe('ResultsTable minimal scroll room detection', () => {
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    restoreTestTimers();
   });
 
   it('adds minimal-scroll-room class when scroll room is less than 150px', async () => {
@@ -3445,7 +3545,7 @@ describe('ResultsTable minimal scroll room detection', () => {
 
     // Run all timers to trigger the setTimeout in useEffect
     await act(async () => {
-      vi.runAllTimers();
+      timers.runAll();
     });
 
     const stickyContainer = screen.getByTestId('results-table-header');
@@ -3461,7 +3561,7 @@ describe('ResultsTable minimal scroll room detection', () => {
 
     // Run all timers to trigger the setTimeout in useEffect
     await act(async () => {
-      vi.runAllTimers();
+      timers.runAll();
     });
 
     const stickyContainer = screen.getByTestId('results-table-header');
@@ -3477,7 +3577,7 @@ describe('ResultsTable minimal scroll room detection', () => {
 
     // Run initial timers
     await act(async () => {
-      vi.runAllTimers();
+      timers.runAll();
     });
 
     // Verify no class initially
@@ -3503,7 +3603,7 @@ describe('ResultsTable minimal scroll room detection', () => {
     renderWithProviders(<ResultsTable {...defaultProps} />);
 
     await act(async () => {
-      vi.runAllTimers();
+      timers.runAll();
     });
 
     const stickyContainer = screen.getByTestId('results-table-header');
@@ -3519,7 +3619,7 @@ describe('ResultsTable minimal scroll room detection', () => {
     renderWithProviders(<ResultsTable {...defaultProps} />);
 
     await act(async () => {
-      vi.runAllTimers();
+      timers.runAll();
     });
 
     const stickyContainer = screen.getByTestId('results-table-header');
@@ -3536,7 +3636,7 @@ describe('ResultsTable minimal scroll room detection', () => {
     renderWithProviders(<ResultsTable {...defaultProps} />);
 
     await act(async () => {
-      vi.runAllTimers();
+      timers.runAll();
     });
 
     const stickyContainer = screen.getByTestId('results-table-header');
@@ -3554,7 +3654,7 @@ describe('ResultsTable minimal scroll room detection', () => {
     const { unmount } = renderWithProviders(<ResultsTable {...defaultProps} />);
 
     await act(async () => {
-      vi.runAllTimers();
+      timers.runAll();
     });
 
     unmount();
@@ -3572,7 +3672,7 @@ describe('ResultsTable minimal scroll room detection', () => {
     renderWithProviders(<ResultsTable {...defaultProps} />);
 
     await act(async () => {
-      vi.runAllTimers();
+      timers.runAll();
     });
 
     const stickyContainer = screen.getByTestId('results-table-header');
