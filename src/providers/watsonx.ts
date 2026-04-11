@@ -155,14 +155,18 @@ function sortObject(obj: any): any {
   return result;
 }
 
-const WATSONX_CACHE_KEY_HMAC_KEY = 'promptfoo-watsonx-cache-key-v1';
+const WATSONX_CACHE_KEY_SALT = 'promptfoo-watsonx-cache-key-v1';
 const WATSONX_SECRET_FIELD_NAMES = new Set(['apiKey', 'apiBearerToken']);
 
-function hmacWatsonXCacheValue(value: unknown): string {
+function hashWatsonXCacheValue(value: unknown): string {
   return crypto
-    .createHmac('sha256', WATSONX_CACHE_KEY_HMAC_KEY)
+    .createHash('sha256')
     .update(JSON.stringify(value) ?? '')
     .digest('hex');
+}
+
+function fingerprintWatsonXSecret(label: string, secret: string): string {
+  return crypto.scryptSync(secret, `${WATSONX_CACHE_KEY_SALT}:${label}`, 32).toString('hex');
 }
 
 function omitWatsonXSecretConfigFields(value: unknown): unknown {
@@ -181,11 +185,11 @@ function omitWatsonXSecretConfigFields(value: unknown): unknown {
 
 export function generateConfigHash(config: any): string {
   const sortedConfig = sortObject(omitWatsonXSecretConfigFields(config));
-  return hmacWatsonXCacheValue(sortedConfig);
+  return hashWatsonXCacheValue(sortedConfig);
 }
 
 function generatePromptHash(prompt: string): string {
-  return hmacWatsonXCacheValue(['prompt', prompt]);
+  return hashWatsonXCacheValue(['prompt', prompt]);
 }
 
 interface ModelSpec {
@@ -351,23 +355,23 @@ export class WatsonXProvider implements ApiProvider {
     return { type: 'none' };
   }
 
-  private getAuthCacheHash(): string {
+  protected getAuthCacheHash(): string {
     const authSelection = this.getAuthSelection();
     if (authSelection.type === 'iam') {
-      return hmacWatsonXCacheValue({
+      return hashWatsonXCacheValue({
         type: authSelection.type,
         forcedByAuthType: authSelection.forcedByAuthType,
-        apiKey: hmacWatsonXCacheValue(['apiKey', authSelection.apiKey]),
+        apiKey: fingerprintWatsonXSecret('apiKey', authSelection.apiKey),
       });
     }
     if (authSelection.type === 'bearertoken') {
-      return hmacWatsonXCacheValue({
+      return hashWatsonXCacheValue({
         type: authSelection.type,
         forcedByAuthType: authSelection.forcedByAuthType,
-        bearerToken: hmacWatsonXCacheValue(['apiBearerToken', authSelection.bearerToken]),
+        bearerToken: fingerprintWatsonXSecret('apiBearerToken', authSelection.bearerToken),
       });
     }
-    return hmacWatsonXCacheValue({ type: 'none' });
+    return hashWatsonXCacheValue({ type: 'none' });
   }
 
   async getAuth(): Promise<IamAuthenticator | BearerTokenAuthenticator> {
