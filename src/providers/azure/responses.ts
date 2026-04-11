@@ -24,6 +24,43 @@ import type { AzureChatResponsesOptions, AzureProviderOptions } from './types';
 // Azure Responses API uses the v1 preview API version
 const AZURE_RESPONSES_API_VERSION = 'preview';
 
+function getAzureResponsesRequestLogMetadata(body: Record<string, any>): Record<string, any> {
+  const input = body.input;
+  const tools = body.tools;
+  return {
+    model: body.model,
+    inputType: Array.isArray(input) ? 'array' : typeof input,
+    inputItemCount: Array.isArray(input) ? input.length : undefined,
+    hasInstructions: body.instructions != null,
+    hasMetadata: body.metadata != null,
+    toolCount: Array.isArray(tools) ? tools.length : tools ? 1 : 0,
+    toolChoice: body.tool_choice,
+    textFormat: body.text?.format?.type,
+    maxOutputTokens: body.max_output_tokens,
+    hasReasoning: body.reasoning != null,
+    stream: body.stream,
+    store: body.store,
+  };
+}
+
+function getAzureResponsesResponseLogMetadata(data: any): Record<string, any> {
+  const output = Array.isArray(data?.output) ? data.output : undefined;
+  return {
+    id: data?.id,
+    model: data?.model,
+    status: data?.status,
+    outputCount: output?.length ?? 0,
+    outputTypes: output?.map((item: any) => item?.type).filter(Boolean),
+    usage: data?.usage
+      ? {
+          inputTokens: data.usage.input_tokens,
+          outputTokens: data.usage.output_tokens,
+          totalTokens: data.usage.total_tokens,
+        }
+      : undefined,
+  };
+}
+
 export class AzureResponsesProvider extends AzureGenericProvider {
   declare config: AzureChatResponsesOptions;
 
@@ -208,7 +245,7 @@ export class AzureResponsesProvider extends AzureGenericProvider {
       ...(config.passthrough || {}),
     };
 
-    logger.debug('Azure Responses API request body', { body });
+    logger.debug('Azure Responses API request', getAzureResponsesRequestLogMetadata(body));
     return body;
   }
 
@@ -266,7 +303,7 @@ export class AzureResponsesProvider extends AzureGenericProvider {
       logger.debug(`Using timeout of ${timeout}ms for deep research model ${this.deploymentName}`);
     }
 
-    logger.debug('Calling Azure Responses API', { body });
+    logger.debug('Calling Azure Responses API', getAzureResponsesRequestLogMetadata(body));
 
     let data, status, statusText;
     let cached = false;
@@ -306,7 +343,7 @@ export class AzureResponsesProvider extends AzureGenericProvider {
       };
     }
 
-    logger.debug('\tAzure Responses API response', { data });
+    logger.debug('Azure Responses API response', getAzureResponsesResponseLogMetadata(data));
 
     // Use the shared response processor for all response processing
     return this.processor.processResponseOutput(data, body, cached);

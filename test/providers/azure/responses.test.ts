@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithCache } from '../../../src/cache';
+import logger from '../../../src/logger';
 import { AzureResponsesProvider } from '../../../src/providers/azure/responses';
 import { maybeLoadResponseFormatFromExternalFile } from '../../../src/util/file';
 import type { MockedFunction } from 'vitest';
@@ -519,6 +520,59 @@ describe('AzureResponsesProvider', () => {
         'json',
         undefined,
       );
+    });
+
+    it('should not log request or response content', async () => {
+      const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+      const mockResponse = {
+        id: 'resp_123',
+        model: 'gpt-4.1-test',
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text: 'secret-response-sentinel',
+              },
+            ],
+          },
+        ],
+        usage: {
+          input_tokens: 10,
+          output_tokens: 8,
+          total_tokens: 18,
+        },
+      };
+
+      mockFetchWithCache.mockResolvedValue({
+        data: mockResponse,
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      const provider = new AzureResponsesProvider('gpt-4.1-test', {
+        config: {
+          instructions: 'secret-instructions-sentinel',
+          metadata: { trace: 'secret-metadata-sentinel' },
+        } as any,
+      });
+      const result = await provider.callApi('secret-prompt-sentinel');
+
+      expect(result.output).toBe('secret-response-sentinel');
+      const azureDebugLogs = JSON.stringify(
+        debugSpy.mock.calls.filter(([message]) => String(message).includes('Azure Responses API')),
+      );
+      expect(azureDebugLogs).toContain('inputType');
+      expect(azureDebugLogs).toContain('outputCount');
+      expect(azureDebugLogs).toContain('inputTokens');
+      expect(azureDebugLogs).not.toContain('secret-prompt-sentinel');
+      expect(azureDebugLogs).not.toContain('secret-instructions-sentinel');
+      expect(azureDebugLogs).not.toContain('secret-metadata-sentinel');
+      expect(azureDebugLogs).not.toContain('secret-response-sentinel');
     });
 
     it('should handle API errors', async () => {
