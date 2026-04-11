@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import logger from '../../../src/logger';
 import RedteamGoatProvider from '../../../src/redteam/providers/goat';
 import { getRemoteGenerationUrl } from '../../../src/redteam/remoteGeneration';
 import type { Mock } from 'vitest';
@@ -241,6 +242,70 @@ describe('RedteamGoatProvider', () => {
 
     const bodyObj = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body);
     expect(bodyObj.purpose).toBeUndefined();
+  });
+
+  it('should not log GOAT prompts or target outputs', async () => {
+    const provider = new RedteamGoatProvider({
+      injectVar: 'goal',
+      maxTurns: 2,
+      excludeTargetOutputFromAgenticAttackGeneration: true,
+    });
+    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const targetProvider = createMockTargetProvider(
+      'secret-target-output-sentinel',
+      {},
+      {
+        metadata: {
+          sensitiveMetadata: 'secret-target-metadata-sentinel',
+        },
+      },
+    );
+    const context = createMockContext(targetProvider, { goal: 'secret-goal-sentinel' }, {
+      vars: {},
+      metadata: {
+        goal: 'secret-metadata-goal-sentinel',
+        modifiers: 'secret-modifier-sentinel',
+      },
+    } as AtomicTestCase);
+    context.prompt = { raw: 'secret-raw-prompt-sentinel', label: 'test' };
+    mockFetch
+      .mockResolvedValueOnce({
+        json: async () => ({
+          message: { role: 'assistant', content: 'secret-attacker-message-one-sentinel' },
+        }),
+        ok: true,
+      })
+      .mockResolvedValueOnce({
+        json: async () => ({ message: 'secret-failure-reason-sentinel' }),
+        ok: true,
+      })
+      .mockResolvedValueOnce({
+        json: async () => ({
+          message: { role: 'assistant', content: 'secret-attacker-message-two-sentinel' },
+        }),
+        ok: true,
+      });
+
+    try {
+      await provider.callApi('test prompt', context);
+
+      const goatLogs = JSON.stringify(
+        debugSpy.mock.calls.filter(([message]) => String(message).includes('[GOAT]')),
+      );
+      expect(goatLogs).toContain('messageCount');
+      expect(goatLogs).toContain('outputLength');
+      expect(goatLogs).not.toContain('secret-goal-sentinel');
+      expect(goatLogs).not.toContain('secret-metadata-goal-sentinel');
+      expect(goatLogs).not.toContain('secret-modifier-sentinel');
+      expect(goatLogs).not.toContain('secret-raw-prompt-sentinel');
+      expect(goatLogs).not.toContain('secret-attacker-message-one-sentinel');
+      expect(goatLogs).not.toContain('secret-attacker-message-two-sentinel');
+      expect(goatLogs).not.toContain('secret-failure-reason-sentinel');
+      expect(goatLogs).not.toContain('secret-target-output-sentinel');
+      expect(goatLogs).not.toContain('secret-target-metadata-sentinel');
+    } finally {
+      debugSpy.mockRestore();
+    }
   });
 
   it('should stop when target ends conversation', async () => {
