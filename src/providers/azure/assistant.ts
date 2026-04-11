@@ -1,5 +1,6 @@
 import { fetchWithCache, getCache, isCacheEnabled } from '../../cache';
 import logger from '../../logger';
+import { sha256 } from '../../util/createHash';
 import { maybeLoadToolsFromExternalFile } from '../../util/index';
 import invariant from '../../util/invariant';
 import { sleep } from '../../util/time';
@@ -129,21 +130,23 @@ export class AzureAssistantProvider extends AzureGenericProvider {
     const apiVersion = this.assistantConfig.apiVersion || '2024-04-01-preview';
 
     // Create a simple cache key based on the input and configuration
-    const cacheKey = `azure_assistant:${this.deploymentName}:${JSON.stringify({
-      apiVersion,
-      instructions: this.assistantConfig.instructions,
-      max_tokens: this.assistantConfig.max_tokens,
-      model: this.assistantConfig.modelName,
-      prompt,
-      response_format: this.assistantConfig.response_format,
-      temperature: this.assistantConfig.temperature,
-      tool_choice: this.assistantConfig.tool_choice,
-      tool_resources: this.assistantConfig.tool_resources,
-      tools: JSON.stringify(
-        await maybeLoadToolsFromExternalFile(this.assistantConfig.tools, context?.vars),
-      ),
-      top_p: this.assistantConfig.top_p,
-    })}`;
+    const cacheKey = `azure_assistant:${this.deploymentName}:${sha256(
+      JSON.stringify({
+        apiVersion,
+        instructions: this.assistantConfig.instructions,
+        max_tokens: this.assistantConfig.max_tokens,
+        model: this.assistantConfig.modelName,
+        prompt,
+        response_format: this.assistantConfig.response_format,
+        temperature: this.assistantConfig.temperature,
+        tool_choice: this.assistantConfig.tool_choice,
+        tool_resources: this.assistantConfig.tool_resources,
+        tools: JSON.stringify(
+          await maybeLoadToolsFromExternalFile(this.assistantConfig.tools, context?.vars),
+        ),
+        top_p: this.assistantConfig.top_p,
+      }),
+    )}`;
 
     // Check the cache if enabled
     if (isCacheEnabled()) {
