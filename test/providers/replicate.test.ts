@@ -48,6 +48,10 @@ describe('ReplicateProvider', () => {
 
     const result = await provider.callApi('test prompt');
     expect(result.output).toBe('test response');
+    const requestBody = JSON.parse(
+      (mockedFetchWithCache.mock.calls[0][1] as { body: string }).body,
+    );
+    expect(requestBody.input).not.toHaveProperty('apiKey');
     expect(mockedFetchWithCache).toHaveBeenCalledWith(
       'https://api.replicate.com/v1/models/test-model/predictions',
       expect.objectContaining({
@@ -323,6 +327,57 @@ describe('ReplicateProvider', () => {
       output: 'test response',
       tokenUsage: createEmptyTokenUsage(),
     });
+  });
+
+  it('should isolate hashed cache keys by API key', async () => {
+    mockedFetchWithCache
+      .mockResolvedValueOnce({
+        data: {
+          id: 'test-id-a',
+          status: 'succeeded',
+          output: 'tenant a response',
+        },
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      })
+      .mockResolvedValueOnce({
+        data: {
+          id: 'test-id-b',
+          status: 'succeeded',
+          output: 'tenant b response',
+        },
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      });
+    const mockCache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn(),
+    } as any;
+    vi.mocked(isCacheEnabled).mockReturnValue(true);
+    vi.mocked(getCache).mockResolvedValue(mockCache);
+
+    const providerA = new ReplicateProvider('test-model', {
+      config: { apiKey: 'replicate-tenant-a-secret' },
+    });
+    const providerB = new ReplicateProvider('test-model', {
+      config: { apiKey: 'replicate-tenant-b-secret' },
+    });
+
+    await providerA.callApi('Shared replicate prompt');
+    await providerB.callApi('Shared replicate prompt');
+
+    const [cacheKeyA, cacheKeyB] = mockCache.get.mock.calls.map(([key]) => key as string);
+    expect(cacheKeyA).toMatch(/^replicate:test-model:[a-f0-9]{64}$/);
+    expect(cacheKeyB).toMatch(/^replicate:test-model:[a-f0-9]{64}$/);
+    expect(cacheKeyA).not.toBe(cacheKeyB);
+    expect(mockedFetchWithCache).toHaveBeenCalledTimes(2);
+    for (const cacheKey of [cacheKeyA, cacheKeyB]) {
+      expect(cacheKey).not.toContain('Shared replicate prompt');
+      expect(cacheKey).not.toContain('replicate-tenant-a-secret');
+      expect(cacheKey).not.toContain('replicate-tenant-b-secret');
+    }
   });
 });
 

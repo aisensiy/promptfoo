@@ -1,9 +1,10 @@
+import { createHmac } from 'crypto';
+
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../envars';
 import logger from '../logger';
 import { REQUEST_TIMEOUT_MS } from '../providers/shared';
 import { type GenAISpanContext, type GenAISpanResult, withGenAISpan } from '../tracing/genaiTracer';
-import { sha256 } from '../util/createHash';
 import { safeJsonStringify } from '../util/json';
 import { ellipsize } from '../util/text';
 import { createEmptyTokenUsage } from '../util/tokenUsageUtils';
@@ -60,6 +61,29 @@ interface ReplicatePrediction {
   };
 }
 
+const REPLICATE_CACHE_KEY_HMAC_KEY = 'promptfoo-replicate-cache-key-v1';
+const REPLICATE_SECRET_FIELD_NAMES = new Set(['apiKey']);
+
+function hmacReplicateCacheValue(value: unknown) {
+  return createHmac('sha256', REPLICATE_CACHE_KEY_HMAC_KEY)
+    .update(safeJsonStringify(value) ?? '')
+    .digest('hex');
+}
+
+function omitReplicateSecretFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(omitReplicateSecretFields);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !REPLICATE_SECRET_FIELD_NAMES.has(key))
+      .map(([key, fieldValue]) => [key, omitReplicateSecretFields(fieldValue)]),
+  );
+}
+
 export class ReplicateProvider implements ApiProvider {
   modelName: string;
   apiKey?: string;
@@ -70,14 +94,15 @@ export class ReplicateProvider implements ApiProvider {
     options: { config?: ReplicateCompletionOptions; id?: string; env?: EnvOverrides } = {},
   ) {
     const { config, id, env } = options;
+    const { apiKey, ...restConfig } = config ?? {};
     this.modelName = modelName;
     this.apiKey =
-      config?.apiKey ||
+      apiKey ||
       env?.REPLICATE_API_KEY ||
       env?.REPLICATE_API_TOKEN ||
       getEnvString('REPLICATE_API_TOKEN') ||
       getEnvString('REPLICATE_API_KEY');
-    this.config = config || {};
+    this.config = restConfig;
     this.id = id ? () => id : this.id;
   }
 
@@ -147,9 +172,11 @@ export class ReplicateProvider implements ApiProvider {
     let cacheKey;
     if (isCacheEnabled()) {
       cache = await getCache();
-      cacheKey = `replicate:${this.modelName}:${sha256(
-        JSON.stringify({ config: this.config, prompt }),
-      )}`;
+      cacheKey = `replicate:${this.modelName}:${hmacReplicateCacheValue({
+        apiKey: hmacReplicateCacheValue(['apiKey', this.apiKey]),
+        config: this.config,
+        prompt,
+      })}`;
 
       // Try to get the cached response
       const cachedResponse = await cache.get(cacheKey);
@@ -394,9 +421,12 @@ export class ReplicateImageProvider extends ReplicateProvider {
     _callApiOptions?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
     const cache = getCache();
-    const cacheKey = `replicate:image:${this.modelName}:${sha256(
-      safeJsonStringify({ config: this.config, context, prompt }) ?? '',
-    )}`;
+    const cacheKey = `replicate:image:${this.modelName}:${hmacReplicateCacheValue({
+      apiKey: hmacReplicateCacheValue(['apiKey', this.apiKey]),
+      config: this.config,
+      context: omitReplicateSecretFields(context),
+      prompt,
+    })}`;
 
     if (!this.apiKey) {
       throw new Error(
