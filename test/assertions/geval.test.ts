@@ -145,6 +145,63 @@ describe('handleGEval', () => {
     });
   });
 
+  it('should fail with a clear reason when array renderedValue is empty', async () => {
+    const mockMatchesGEval = vi.mocked(matchesGEval);
+
+    const result = await handleGEval({
+      assertion: {
+        type: 'g-eval',
+        value: [],
+        threshold: 0.7,
+      },
+      renderedValue: [],
+      prompt: 'test prompt',
+      outputString: 'test output',
+      test: {
+        vars: {},
+        assert: [],
+        options: {},
+      },
+      baseType: 'g-eval',
+      assertionValueContext: {
+        prompt: 'test prompt',
+        vars: {},
+        test: {
+          vars: {},
+          assert: [],
+          options: {},
+        },
+        logProbs: undefined,
+        provider: {
+          id: () => 'test-provider',
+          callApi: async () => ({ output: 'test' }),
+        },
+        providerResponse: {
+          output: 'test output',
+          error: undefined,
+        },
+      },
+      inverse: false,
+      output: 'test output',
+      providerResponse: {
+        output: 'test output',
+        error: undefined,
+      },
+    });
+
+    expect(result).toEqual({
+      assertion: {
+        type: 'g-eval',
+        value: [],
+        threshold: 0.7,
+      },
+      pass: false,
+      score: 0,
+      reason: 'G-Eval assertion requires at least one criterion string in the value array.',
+    });
+    expect(mockMatchesGEval).not.toHaveBeenCalled();
+  });
+
   it('should use default threshold if not provided', async () => {
     const mockMatchesGEval = vi.mocked(matchesGEval);
     mockMatchesGEval.mockResolvedValue({
