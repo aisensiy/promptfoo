@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
 # Example of using the layer strategy to compose multiple transformations
 # This example shows how to chain strategies.
 
