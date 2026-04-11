@@ -473,6 +473,50 @@ describe('AnthropicMessagesProvider', () => {
       expect(setSpy).toHaveBeenCalledWith(cacheKey, expect.any(String));
     });
 
+    it('should include request headers in hashed cache keys without leaking them', async () => {
+      const providerA = createProvider('claude-3-5-sonnet-20241022', {
+        config: {
+          headers: {
+            'x-api-key': 'sk-ant-header-a',
+            'x-tenant': 'tenant-a-secret',
+          },
+        },
+      });
+      const providerB = createProvider('claude-3-5-sonnet-20241022', {
+        config: {
+          headers: {
+            'x-api-key': 'sk-ant-header-b',
+            'x-tenant': 'tenant-b-secret',
+          },
+        },
+      });
+      const cache = await getCache();
+      const getSpy = vi.spyOn(cache, 'get');
+      vi.spyOn(providerA.anthropic.messages, 'create').mockResolvedValue({
+        content: [{ type: 'text', text: 'Tenant A response' }],
+      } as Anthropic.Messages.Message);
+      vi.spyOn(providerB.anthropic.messages, 'create').mockResolvedValue({
+        content: [{ type: 'text', text: 'Tenant B response' }],
+      } as Anthropic.Messages.Message);
+
+      await providerA.callApi('Shared sensitive prompt');
+      await providerB.callApi('Shared sensitive prompt');
+
+      const [cacheKeyA, cacheKeyB] = getSpy.mock.calls.map(([key]) => key as string);
+      expect(cacheKeyA).toMatch(/^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}$/);
+      expect(cacheKeyB).toMatch(/^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}$/);
+      expect(cacheKeyA).not.toBe(cacheKeyB);
+      expect(providerA.anthropic.messages.create).toHaveBeenCalledTimes(1);
+      expect(providerB.anthropic.messages.create).toHaveBeenCalledTimes(1);
+      for (const cacheKey of [cacheKeyA, cacheKeyB]) {
+        expect(cacheKey).not.toContain('Shared sensitive prompt');
+        expect(cacheKey).not.toContain('sk-ant-header-a');
+        expect(cacheKey).not.toContain('sk-ant-header-b');
+        expect(cacheKey).not.toContain('tenant-a-secret');
+        expect(cacheKey).not.toContain('tenant-b-secret');
+      }
+    });
+
     it('should not use cache if caching is disabled for ToolUse requests', async () => {
       vi.spyOn(provider.anthropic.messages, 'create').mockResolvedValue({
         content: [

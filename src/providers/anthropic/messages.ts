@@ -50,6 +50,17 @@ function isThinkingEnabled(thinking: Anthropic.Messages.ThinkingConfigParam | un
   return thinking?.type === 'enabled' || thinking?.type === 'adaptive';
 }
 
+function normalizeHeadersForCacheKey(headers: Record<string, string>) {
+  return Object.keys(headers).length > 0
+    ? Object.fromEntries(
+        Object.entries(headers).sort(([nameA, valueA], [nameB, valueB]) => {
+          const nameComparison = nameA.localeCompare(nameB);
+          return nameComparison === 0 ? valueA.localeCompare(valueB) : nameComparison;
+        }),
+      )
+    : undefined;
+}
+
 export class AnthropicMessagesProvider extends AnthropicGenericProvider {
   declare config: AnthropicMessageOptions;
   private mcpClient: MCPClient | null = null;
@@ -327,8 +338,12 @@ export class AnthropicMessagesProvider extends AnthropicGenericProvider {
 
     const cache = await getCache();
     const { metadata: _metadata, ...cacheKeyParams } = params;
+    const cacheKeyHeaders = normalizeHeadersForCacheKey(headers);
     const cacheKey = `anthropic:messages:${this.modelName}:${sha256(
-      JSON.stringify(cacheKeyParams),
+      JSON.stringify({
+        ...cacheKeyParams,
+        ...(cacheKeyHeaders ? { headers: cacheKeyHeaders } : {}),
+      }),
     )}`;
 
     if (isCacheEnabled()) {
