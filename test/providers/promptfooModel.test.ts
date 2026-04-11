@@ -60,6 +60,49 @@ describe('PromptfooModelProvider', () => {
     });
   });
 
+  it('should not log prompt, config, or response content', async () => {
+    const provider = new PromptfooModelProvider('test-model', {
+      model: 'test-model',
+      config: { apiKey: 'secret-config-sentinel' },
+    });
+    const mockResponse = {
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          result: {
+            model: 'test-model',
+            provider: 'promptfoo',
+            choices: [
+              {
+                message: { content: 'secret-response-sentinel' },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: {
+              total_tokens: 10,
+              prompt_tokens: 5,
+              completion_tokens: 5,
+            },
+          },
+        }),
+    };
+    mockFetch.mockResolvedValue(mockResponse);
+
+    await provider.callApi('secret-prompt-sentinel');
+
+    const promptfooModelDebugCalls = mockLogger.mock.calls.filter(([message]) =>
+      String(message).startsWith('[PromptfooModel]'),
+    );
+    const debugLogs = JSON.stringify(promptfooModelDebugCalls);
+    expect(debugLogs).toContain('[PromptfooModel] Sending request');
+    expect(debugLogs).toContain('[PromptfooModel] Received response');
+    expect(debugLogs).toContain('messageCount');
+    expect(debugLogs).toContain('tokenUsage');
+    expect(debugLogs).not.toContain('secret-prompt-sentinel');
+    expect(debugLogs).not.toContain('secret-config-sentinel');
+    expect(debugLogs).not.toContain('secret-response-sentinel');
+  });
+
   it('should handle JSON array messages', async () => {
     const provider = new PromptfooModelProvider('test-model');
     const messages = JSON.stringify([

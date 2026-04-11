@@ -112,7 +112,12 @@ export class PromptfooModelProvider implements ApiProvider {
       }
 
       const body = JSON.stringify(payload);
-      logger.debug('[PromptfooModel] Sending request', { url, payload });
+      logger.debug('[PromptfooModel] Sending request', {
+        url,
+        model: this.model,
+        messageCount: messages.length,
+        configKeyCount: Object.keys(this.config).length,
+      });
       const response = await fetchWithProxy(url, {
         method: 'POST',
         headers: {
@@ -133,7 +138,17 @@ export class PromptfooModelProvider implements ApiProvider {
       }
 
       const modelResponse = data.result as ModelApiResponse;
-      logger.debug('[PromptfooModel] Received response', { modelResponse });
+      logger.debug('[PromptfooModel] Received response', {
+        model: modelResponse.model || this.model,
+        provider: modelResponse.provider,
+        choiceCount: modelResponse.choices?.length || 0,
+        finishReason: modelResponse.choices?.[0]?.finish_reason,
+        tokenUsage: {
+          total: modelResponse.usage?.total_tokens || 0,
+          prompt: modelResponse.usage?.prompt_tokens || 0,
+          completion: modelResponse.usage?.completion_tokens || 0,
+        },
+      });
 
       // Extract the completion from the choices
       const completionContent = modelResponse.choices?.[0]?.message?.content || '';
