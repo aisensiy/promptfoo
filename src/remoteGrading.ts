@@ -17,7 +17,7 @@ export async function doRemoteGrading(
   try {
     payload.email = getUserEmail();
     const body = JSON.stringify(payload);
-    logger.debug(`Performing remote grading: ${body}`);
+    logger.debug(`Performing remote grading: task=${payload.task}`);
     const { data, status, statusText } = await fetchWithCache(
       getRemoteGenerationUrl(),
       {
@@ -31,7 +31,7 @@ export async function doRemoteGrading(
     );
 
     logger.debug(
-      `Remote grading result: status=${status}, statusText=${statusText}, data=${JSON.stringify(data)}`,
+      `Remote grading result: status=${status}, statusText=${statusText}, hasResult=${Boolean((data as { result?: unknown })?.result)}`,
     );
 
     if (status !== 200) {
