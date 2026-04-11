@@ -379,10 +379,14 @@ describe('WatsonXProvider', () => {
         logProbs: undefined,
       });
 
-      expect(cache.set).toHaveBeenCalledWith(
-        `watsonx:${modelName}:${generateConfigHash(config)}:${prompt}`,
-        JSON.stringify(response),
+      const cacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(
+        new RegExp(`^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}$`),
       );
+      expect(cacheKey).not.toContain(prompt);
+      expect(cacheKey).not.toContain(config.apiKey);
+      expect(cache.get).toHaveBeenCalledWith(cacheKey);
+      expect(cache.set).toHaveBeenCalledWith(cacheKey, JSON.stringify(response));
     });
 
     it('should preserve an explicit maxNewTokens value of 0', async () => {
@@ -447,7 +451,6 @@ describe('WatsonXProvider', () => {
         cached: true,
       };
 
-      const cacheKey = `watsonx:${modelName}:${generateConfigHash(config)}:${prompt}`;
       const cache: Partial<any> = {
         get: vi.fn().mockResolvedValue(JSON.stringify(storedCachedData)),
         set: vi.fn(),
@@ -475,6 +478,12 @@ describe('WatsonXProvider', () => {
       const provider = new WatsonXProvider(modelName, { config });
       const generateTextSpy = vi.spyOn(await provider.getClient(), 'generateText');
       const response = await provider.callApi(prompt);
+      const cacheKey = vi.mocked(cache.get).mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(
+        new RegExp(`^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}$`),
+      );
+      expect(cacheKey).not.toContain(prompt);
+      expect(cacheKey).not.toContain(config.apiKey);
       expect(cache.get).toHaveBeenCalledWith(cacheKey);
       expect(response).toEqual(expectedResponse);
       expect(generateTextSpy).not.toHaveBeenCalled();
@@ -1103,14 +1112,21 @@ describe('WatsonXChatProvider', () => {
       return true;
     });
 
+    const chatPrompt = 'PFQA_WATSONX_CHAT_PROMPT_SENTINEL';
     const provider = new WatsonXChatProvider(modelName, { config });
-    await provider.callApi(prompt);
+    await provider.callApi(chatPrompt);
 
     expect(mockedWatsonXAIClient.textChat).toHaveBeenCalledWith(
       expect.objectContaining({
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: chatPrompt }],
       }),
     );
+    const cacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
+    expect(cacheKey).toMatch(
+      new RegExp(`^watsonx:chat:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}$`),
+    );
+    expect(cacheKey).not.toContain(chatPrompt);
+    expect(cacheKey).not.toContain(config.apiKey);
   });
 
   it('should handle API errors gracefully', async () => {

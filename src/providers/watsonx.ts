@@ -160,6 +160,10 @@ export function generateConfigHash(config: any): string {
   return crypto.createHash('md5').update(JSON.stringify(sortedConfig)).digest('hex');
 }
 
+function generatePromptHash(prompt: string): string {
+  return crypto.createHash('sha256').update(prompt).digest('hex');
+}
+
 interface ModelSpec {
   model_id: string;
   input_tier: string;
@@ -427,7 +431,7 @@ export class WatsonXProvider implements ApiProvider {
 
     const cache = getCache();
     const configHash = generateConfigHash(config);
-    const cacheKey = `watsonx:${this.modelName}:${configHash}:${prompt}`;
+    const cacheKey = `watsonx:${this.modelName}:${configHash}:${generatePromptHash(prompt)}`;
     const cacheEnabled = isCacheEnabled();
     if (cacheEnabled) {
       const cachedResponse = await cache.get(cacheKey);
@@ -542,7 +546,7 @@ export class WatsonXChatProvider extends WatsonXProvider {
 
     const cache = getCache();
     const configHash = generateConfigHash(config);
-    const cacheKey = `watsonx:chat:${this.modelName}:${configHash}:${prompt}`;
+    const cacheKey = `watsonx:chat:${this.modelName}:${configHash}:${generatePromptHash(prompt)}`;
     const cacheEnabled = isCacheEnabled();
     if (cacheEnabled) {
       const cachedResponse = await cache.get(cacheKey);
