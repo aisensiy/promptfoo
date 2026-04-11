@@ -452,6 +452,67 @@ describe('Fal Provider', () => {
         );
       });
 
+      it('should isolate hashed cache keys by API key without leaking credentials', async () => {
+        vi.mocked(isCacheEnabled).mockImplementation(function () {
+          return true;
+        });
+        const mockCache = {
+          get: vi.fn().mockResolvedValue(null),
+          set: vi.fn(),
+          wrap: vi.fn(),
+          del: vi.fn(),
+          clear: vi.fn(),
+          stores: [
+            {
+              get: vi.fn(),
+              set: vi.fn(),
+            },
+          ] as any,
+          mget: vi.fn(),
+          mset: vi.fn(),
+          mdel: vi.fn(),
+          reset: vi.fn(),
+          ttl: vi.fn(),
+          on: vi.fn(),
+          removeAllListeners: vi.fn(),
+        };
+        vi.mocked(getCache).mockReturnValue(mockCache as any);
+        mockSubscribe
+          .mockResolvedValueOnce({
+            data: {
+              images: [{ url: 'https://example.com/tenant-a.png' }],
+            },
+            requestId: 'tenant-a-request-id',
+          })
+          .mockResolvedValueOnce({
+            data: {
+              images: [{ url: 'https://example.com/tenant-b.png' }],
+            },
+            requestId: 'tenant-b-request-id',
+          });
+
+        const providerA = new FalImageGenerationProvider('fal-ai/flux/schnell', {
+          config: { apiKey: 'fal-tenant-a-secret' },
+        });
+        const providerB = new FalImageGenerationProvider('fal-ai/flux/schnell', {
+          config: { apiKey: 'fal-tenant-b-secret' },
+        });
+
+        await providerA.callApi('Shared fal prompt');
+        await providerB.callApi('Shared fal prompt');
+
+        const [cacheKeyA, cacheKeyB] = mockCache.get.mock.calls.map(([key]) => key as string);
+        expect(cacheKeyA).toMatch(/^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}$/);
+        expect(cacheKeyB).toMatch(/^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}$/);
+        expect(cacheKeyA).not.toBe(cacheKeyB);
+        expect(mockSubscribe).toHaveBeenCalledTimes(2);
+        for (const cacheKey of [cacheKeyA, cacheKeyB]) {
+          expect(cacheKey).not.toContain('Shared fal prompt');
+          expect(cacheKey).not.toContain('fal-tenant-a-secret');
+          expect(cacheKey).not.toContain('fal-tenant-b-secret');
+        }
+      });
+
       it('should handle cache set errors gracefully', async () => {
         vi.mocked(isCacheEnabled).mockImplementation(function () {
           return true;

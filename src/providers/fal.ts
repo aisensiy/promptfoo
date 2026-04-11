@@ -1,7 +1,8 @@
+import { createHmac } from 'crypto';
+
 import { getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
 import logger from '../logger';
-import { sha256 } from '../util/createHash';
 import { ellipsize } from '../util/text';
 import type { Cache } from 'cache-manager';
 
@@ -15,6 +16,12 @@ type FalProviderOptions = {
 interface FalResult<T = unknown> {
   data: T;
   requestId: string;
+}
+
+const FAL_CACHE_KEY_HMAC_KEY = 'promptfoo-fal-cache-key-v1';
+
+function hmacFalCacheValue(value: unknown) {
+  return createHmac('sha256', FAL_CACHE_KEY_HMAC_KEY).update(JSON.stringify(value)).digest('hex');
 }
 
 class FalProvider<Input = Record<string, unknown>> implements ApiProvider {
@@ -75,7 +82,10 @@ class FalProvider<Input = Record<string, unknown>> implements ApiProvider {
       ...this.input,
       ...(context?.prompt?.config ?? {}),
     };
-    const cacheKey = `fal:${this.modelName}:${sha256(JSON.stringify(input))}`;
+    const cacheKey = `fal:${this.modelName}:${hmacFalCacheValue({
+      apiKey: hmacFalCacheValue(['apiKey', this.apiKey]),
+      input,
+    })}`;
     if (isCacheEnabled()) {
       cache = getCache();
       const cachedResponse = await cache.get<string>(cacheKey);
