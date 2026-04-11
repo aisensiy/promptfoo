@@ -1,6 +1,7 @@
 import { getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
 import logger from '../logger';
+import { sha256 } from '../util/createHash';
 import { parseChatPrompt, REQUEST_TIMEOUT_MS } from './shared';
 
 import type { EnvOverrides } from '../types/env';
@@ -217,20 +218,22 @@ export class VercelAiProvider implements ApiProvider {
   }
 
   private getCacheKey(prompt: string): string {
-    return `vercel:${this.modelName}:${JSON.stringify({
-      prompt,
-      config: {
-        temperature: this.config.temperature,
-        maxTokens: this.config.maxTokens,
-        topP: this.config.topP,
-        topK: this.config.topK,
-        frequencyPenalty: this.config.frequencyPenalty,
-        presencePenalty: this.config.presencePenalty,
-        stopSequences: this.config.stopSequences,
-        streaming: this.config.streaming,
-        responseSchema: this.config.responseSchema,
-      },
-    })}`;
+    return `vercel:${this.modelName}:${sha256(
+      JSON.stringify({
+        prompt,
+        config: {
+          temperature: this.config.temperature,
+          maxTokens: this.config.maxTokens,
+          topP: this.config.topP,
+          topK: this.config.topK,
+          frequencyPenalty: this.config.frequencyPenalty,
+          presencePenalty: this.config.presencePenalty,
+          stopSequences: this.config.stopSequences,
+          streaming: this.config.streaming,
+          responseSchema: this.config.responseSchema,
+        },
+      }),
+    )}`;
   }
 
   /**
@@ -456,7 +459,7 @@ export class VercelAiEmbeddingProvider implements ApiEmbeddingProvider {
     context?: CallApiContextParams,
   ): Promise<ProviderEmbeddingResponse> {
     const cache = await getCache();
-    const cacheKey = `vercel:embedding:${this.modelName}:${input}`;
+    const cacheKey = `vercel:embedding:${this.modelName}:${sha256(input)}`;
 
     // Check cache first
     if (isCacheEnabled() && !(context?.bustCache ?? context?.debug)) {

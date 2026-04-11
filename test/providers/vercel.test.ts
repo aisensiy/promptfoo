@@ -391,8 +391,9 @@ describe('VercelAiProvider', () => {
         }),
       );
 
+      const prompt = 'PFQA_VERCEL_PROMPT_SENTINEL';
       const provider = new VercelAiProvider('openai/gpt-4o-mini');
-      const result = await provider.callApi('Hello');
+      const result = await provider.callApi(prompt);
 
       expect(result).toEqual({
         output: 'Cached response',
@@ -400,6 +401,9 @@ describe('VercelAiProvider', () => {
         finishReason: 'stop',
         cached: true,
       });
+      const cacheKey = mockCache.get.mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(/^vercel:openai\/gpt-4o-mini:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain(prompt);
     });
 
     it('should cache response after successful API call', async () => {
@@ -411,11 +415,16 @@ describe('VercelAiProvider', () => {
         finishReason: 'stop',
       } as any);
 
+      const prompt = 'PFQA_VERCEL_PROMPT_SENTINEL';
       const provider = new VercelAiProvider('openai/gpt-4o-mini');
-      await provider.callApi('Hello');
+      await provider.callApi(prompt);
 
+      const cacheKey = mockCache.set.mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(/^vercel:openai\/gpt-4o-mini:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain(prompt);
+      expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
       expect(mockCache.set).toHaveBeenCalledWith(
-        expect.any(String),
+        cacheKey,
         expect.stringContaining('Fresh response'),
       );
     });
@@ -677,13 +686,15 @@ describe('VercelAiEmbeddingProvider', () => {
         usage: { tokens: 5 },
       } as any);
 
+      const input = 'PFQA_VERCEL_EMBEDDING_INPUT_SENTINEL';
       const provider = new VercelAiEmbeddingProvider('openai/text-embedding-3-small');
-      await provider.callEmbeddingApi('Test text');
+      await provider.callEmbeddingApi(input);
 
-      expect(mockCache.set).toHaveBeenCalledWith(
-        expect.stringContaining('vercel:embedding:'),
-        expect.any(String),
-      );
+      const cacheKey = mockCache.set.mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(/^vercel:embedding:openai\/text-embedding-3-small:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain(input);
+      expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
+      expect(mockCache.set).toHaveBeenCalledWith(cacheKey, expect.any(String));
     });
 
     it('should return cached embedding when available', async () => {
@@ -695,14 +706,18 @@ describe('VercelAiEmbeddingProvider', () => {
         }),
       );
 
+      const input = 'PFQA_VERCEL_EMBEDDING_INPUT_SENTINEL';
       const provider = new VercelAiEmbeddingProvider('openai/text-embedding-3-small');
-      const result = await provider.callEmbeddingApi('Test text');
+      const result = await provider.callEmbeddingApi(input);
 
       expect(result).toEqual({
         embedding: [0.5, 0.6, 0.7],
         tokenUsage: { total: 8 },
         cached: true,
       });
+      const cacheKey = mockCache.get.mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(/^vercel:embedding:openai\/text-embedding-3-small:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain(input);
     });
   });
 });
