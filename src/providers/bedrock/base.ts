@@ -5,7 +5,7 @@
  * This is extracted to avoid circular dependency issues.
  */
 
-import { createHmac } from 'crypto';
+import { createHash, scryptSync } from 'crypto';
 
 import { getEnvInt, getEnvString } from '../../envars';
 import logger from '../../logger';
@@ -30,7 +30,13 @@ export interface BedrockOptions {
   endpoint?: string;
 }
 
-const BEDROCK_CACHE_KEY_HMAC_KEY = 'promptfoo-bedrock-cache-key-v1';
+const BEDROCK_CACHE_KEY_KDF_SALT = 'promptfoo-bedrock-cache-key-v2';
+const BEDROCK_CACHE_KEY_KDF_OPTIONS = {
+  N: 16384,
+  p: 1,
+  r: 8,
+  maxmem: 32 * 1024 * 1024,
+};
 const BEDROCK_CREDENTIAL_FIELD_NAMES = new Set([
   'accessKeyId',
   'apiKey',
@@ -38,10 +44,17 @@ const BEDROCK_CREDENTIAL_FIELD_NAMES = new Set([
   'sessionToken',
 ]);
 
-function hmacBedrockCacheValue(value: unknown) {
-  return createHmac('sha256', BEDROCK_CACHE_KEY_HMAC_KEY)
-    .update(JSON.stringify(value))
-    .digest('hex');
+function hashBedrockCacheValue(value: unknown) {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function fingerprintBedrockSecret(value: unknown) {
+  return scryptSync(
+    JSON.stringify(value),
+    BEDROCK_CACHE_KEY_KDF_SALT,
+    32,
+    BEDROCK_CACHE_KEY_KDF_OPTIONS,
+  ).toString('hex');
 }
 
 function omitBedrockCredentialFields(value: unknown): unknown {
@@ -69,21 +82,17 @@ export function createBedrockCacheKeyHash({
   params: unknown;
   region: string;
 }) {
-  return hmacBedrockCacheValue({
-    auth: {
-      ...(apiKey ? { apiKey: hmacBedrockCacheValue(['apiKey', apiKey]) } : {}),
-      ...(config.accessKeyId
-        ? { accessKeyId: hmacBedrockCacheValue(['accessKeyId', config.accessKeyId]) }
-        : {}),
-      ...(config.secretAccessKey
-        ? { secretAccessKey: hmacBedrockCacheValue(['secretAccessKey', config.secretAccessKey]) }
-        : {}),
-      ...(config.sessionToken
-        ? { sessionToken: hmacBedrockCacheValue(['sessionToken', config.sessionToken]) }
-        : {}),
-      ...(config.profile ? { profile: config.profile } : {}),
-      ...(config.endpoint ? { endpoint: config.endpoint } : {}),
-    },
+  const authFingerprint = fingerprintBedrockSecret({
+    ...(apiKey ? { apiKey } : {}),
+    ...(config.accessKeyId ? { accessKeyId: config.accessKeyId } : {}),
+    ...(config.secretAccessKey ? { secretAccessKey: config.secretAccessKey } : {}),
+    ...(config.sessionToken ? { sessionToken: config.sessionToken } : {}),
+    ...(config.profile ? { profile: config.profile } : {}),
+    ...(config.endpoint ? { endpoint: config.endpoint } : {}),
+  });
+
+  return hashBedrockCacheValue({
+    auth: authFingerprint,
     params: omitBedrockCredentialFields(params),
     region,
   });

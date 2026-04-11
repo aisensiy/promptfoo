@@ -3,7 +3,10 @@ import { NodeHttpHandler } from '@smithy/node-http-handler';
 import dedent from 'dedent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCache, isCacheEnabled } from '../../../src/cache';
-import { AwsBedrockGenericProvider } from '../../../src/providers/bedrock/base';
+import {
+  AwsBedrockGenericProvider,
+  createBedrockCacheKeyHash,
+} from '../../../src/providers/bedrock/base';
 import {
   AWS_BEDROCK_MODELS,
   AwsBedrockCompletionProvider,
@@ -3185,6 +3188,72 @@ describe('AwsBedrockCompletionProvider', () => {
     expect(otherCacheKey).not.toContain(prompt);
     expect(otherCacheKey).not.toContain(apiKey);
     expect(otherCacheKey).not.toContain(otherApiKey);
+  });
+
+  it('should separate cache keys across Bedrock auth material', () => {
+    const params = { prompt: 'PFQA_BEDROCK_PROMPT_SENTINEL' };
+    const region = 'us-east-1';
+    const baseConfig = {
+      region,
+      endpoint: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+      profile: 'promptfoo-profile-a',
+    } as BedrockClaudeMessagesCompletionOptions;
+
+    const cacheKeys = [
+      createBedrockCacheKeyHash({
+        apiKey: 'PFQA_BEDROCK_API_KEY_A',
+        config: baseConfig,
+        params,
+        region,
+      }),
+      createBedrockCacheKeyHash({
+        apiKey: 'PFQA_BEDROCK_API_KEY_B',
+        config: baseConfig,
+        params,
+        region,
+      }),
+      createBedrockCacheKeyHash({
+        config: {
+          ...baseConfig,
+          accessKeyId: 'PFQA_BEDROCK_ACCESS_KEY_A',
+          secretAccessKey: 'PFQA_BEDROCK_SECRET_ACCESS_KEY_A',
+        } as BedrockClaudeMessagesCompletionOptions,
+        params,
+        region,
+      }),
+      createBedrockCacheKeyHash({
+        config: {
+          ...baseConfig,
+          accessKeyId: 'PFQA_BEDROCK_ACCESS_KEY_B',
+          secretAccessKey: 'PFQA_BEDROCK_SECRET_ACCESS_KEY_B',
+        } as BedrockClaudeMessagesCompletionOptions,
+        params,
+        region,
+      }),
+      createBedrockCacheKeyHash({
+        config: {
+          ...baseConfig,
+          profile: 'promptfoo-profile-b',
+        } as BedrockClaudeMessagesCompletionOptions,
+        params,
+        region,
+      }),
+      createBedrockCacheKeyHash({
+        config: {
+          ...baseConfig,
+          endpoint: 'https://bedrock-runtime.us-west-2.amazonaws.com',
+        } as BedrockClaudeMessagesCompletionOptions,
+        params,
+        region,
+      }),
+    ];
+
+    expect(new Set(cacheKeys).size).toBe(cacheKeys.length);
+    for (const cacheKey of cacheKeys) {
+      expect(cacheKey).toMatch(/^[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain('PFQA_BEDROCK');
+      expect(cacheKey).not.toContain('promptfoo-profile');
+    }
   });
 });
 
