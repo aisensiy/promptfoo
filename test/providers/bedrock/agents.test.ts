@@ -103,6 +103,10 @@ describe('AwsBedrockAgentsProvider', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSend.mockReset();
+    mockGet.mockReset();
+    mockSet.mockReset();
+    mockIsCacheEnabled.mockReset().mockReturnValue(false);
     vi.unstubAllEnvs();
     vi.stubEnv('AWS_BEDROCK_MAX_RETRIES', '');
     vi.stubEnv('AWS_BEARER_TOKEN_BEDROCK', '');
