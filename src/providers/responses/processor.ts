@@ -70,6 +70,27 @@ function getTokenUsage(data: any, cached: boolean): Partial<TokenUsage> {
   return {};
 }
 
+function getResponseLogMetadata(data: any): Record<string, any> {
+  const output = Array.isArray(data?.output) ? data.output : [];
+
+  return {
+    responseId: data?.id,
+    model: data?.model,
+    status: data?.status,
+    outputCount: output.length,
+    outputTypes: output
+      .map((item: any) => item?.type)
+      .filter((type: unknown): type is string => typeof type === 'string'),
+    usage: data?.usage
+      ? {
+          inputTokens: data.usage.input_tokens ?? data.usage.prompt_tokens,
+          outputTokens: data.usage.output_tokens ?? data.usage.completion_tokens,
+          totalTokens: data.usage.total_tokens,
+        }
+      : undefined,
+  };
+}
+
 /**
  * Shared response processor for OpenAI and Azure Responses APIs.
  * Handles all response types with identical logic to ensure feature parity.
@@ -155,7 +176,7 @@ export class ResponsesProcessor {
   private async processOutput(output: any, context: ProcessorContext): Promise<ProcessedOutput> {
     // Log the structure for debugging deep research responses
     if (this.config.modelName.includes('deep-research')) {
-      logger.debug(`Deep research response structure: ${JSON.stringify(context.data, null, 2)}`);
+      logger.debug('Deep research response metadata', getResponseLogMetadata(context.data));
     }
 
     if (!output || !Array.isArray(output) || output.length === 0) {

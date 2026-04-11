@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import logger from '../../../src/logger';
 import { ResponsesProcessor } from '../../../src/providers/responses/processor';
 
 // Mock dependencies
@@ -299,6 +300,56 @@ describe('ResponsesProcessor', () => {
         model: 'o3-deep-research',
         annotations: [{ citation: 'Source 1' }],
       });
+    });
+
+    it('should not log deep research response content', async () => {
+      const deepResearchProcessor = new ResponsesProcessor({
+        modelName: 'o3-deep-research',
+        providerType: 'openai',
+        functionCallbackHandler: mockFunctionCallbackHandler,
+        costCalculator: mockCostCalculator,
+      });
+      const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+      const mockData = {
+        id: 'resp_research_logs',
+        model: 'o3-deep-research',
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text: 'secret-deep-response-sentinel',
+                annotations: [{ url: 'https://secret.example/sentinel' }],
+              },
+            ],
+          },
+          {
+            type: 'function_call',
+            name: 'search',
+            arguments: '{"query":"secret-tool-sentinel"}',
+            status: 'completed',
+          },
+        ],
+        usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 },
+      };
+
+      try {
+        mockFunctionCallbackHandler.processCalls.mockResolvedValue('tool result');
+        await deepResearchProcessor.processResponseOutput(mockData, {}, false);
+
+        const debugLogs = JSON.stringify(debugSpy.mock.calls);
+        expect(debugLogs).toContain('Deep research response metadata');
+        expect(debugLogs).toContain('outputTypes');
+        expect(debugLogs).toContain('inputTokens');
+        expect(debugLogs).not.toContain('secret-deep-response-sentinel');
+        expect(debugLogs).not.toContain('secret-tool-sentinel');
+        expect(debugLogs).not.toContain('secret.example');
+      } finally {
+        debugSpy.mockRestore();
+      }
     });
   });
 
