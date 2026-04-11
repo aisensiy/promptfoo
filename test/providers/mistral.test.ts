@@ -335,6 +335,73 @@ describe('Mistral', () => {
       );
     });
 
+    it('should isolate hashed cache keys by resolved API identity', async () => {
+      const cacheGet = vi.fn().mockResolvedValue(null);
+      const cacheSet = vi.fn();
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(getCache).mockReturnValue({
+        get: cacheGet,
+        set: cacheSet,
+        wrap: vi.fn(),
+        del: vi.fn(),
+        clear: vi.fn(),
+        stores: [
+          {
+            get: vi.fn(),
+            set: vi.fn(),
+          },
+        ] as any,
+        mget: vi.fn(),
+        mset: vi.fn(),
+        mdel: vi.fn(),
+        reset: vi.fn(),
+        ttl: vi.fn(),
+        on: vi.fn(),
+        removeAllListeners: vi.fn(),
+      } as any);
+      const providerA = new MistralChatCompletionProvider('mistral-tiny');
+      const providerB = new MistralChatCompletionProvider('mistral-tiny');
+      vi.spyOn(providerA, 'getApiKey').mockReturnValue('sk-mistral-tenant-a');
+      vi.spyOn(providerB, 'getApiKey').mockReturnValue('sk-mistral-tenant-b');
+      vi.spyOn(providerA, 'getApiUrl').mockReturnValue('https://tenant-a.mistral.example/v1');
+      vi.spyOn(providerB, 'getApiUrl').mockReturnValue('https://tenant-b.mistral.example/v1');
+      vi.mocked(fetchWithCache)
+        .mockResolvedValueOnce({
+          data: {
+            choices: [{ message: { content: 'Tenant A output' } }],
+            usage: { total_tokens: 10, prompt_tokens: 5, completion_tokens: 5 },
+          },
+          cached: false,
+          status: 200,
+          statusText: 'OK',
+        })
+        .mockResolvedValueOnce({
+          data: {
+            choices: [{ message: { content: 'Tenant B output' } }],
+            usage: { total_tokens: 10, prompt_tokens: 5, completion_tokens: 5 },
+          },
+          cached: false,
+          status: 200,
+          statusText: 'OK',
+        });
+
+      await providerA.callApi('Shared sensitive prompt');
+      await providerB.callApi('Shared sensitive prompt');
+
+      const [cacheKeyA, cacheKeyB] = cacheGet.mock.calls.map(([key]) => key as string);
+      expect(cacheKeyA).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}$/);
+      expect(cacheKeyB).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}$/);
+      expect(cacheKeyA).not.toBe(cacheKeyB);
+      expect(fetchWithCache).toHaveBeenCalledTimes(2);
+      for (const cacheKey of [cacheKeyA, cacheKeyB]) {
+        expect(cacheKey).not.toContain('Shared sensitive prompt');
+        expect(cacheKey).not.toContain('sk-mistral-tenant-a');
+        expect(cacheKey).not.toContain('sk-mistral-tenant-b');
+        expect(cacheKey).not.toContain('tenant-a.mistral.example');
+        expect(cacheKey).not.toContain('tenant-b.mistral.example');
+      }
+    });
+
     it('should not use cache when disabled', async () => {
       const mockResponse = {
         choices: [{ message: { content: 'Fresh output' } }],

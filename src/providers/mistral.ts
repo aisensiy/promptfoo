@@ -305,11 +305,13 @@ export class MistralChatCompletionProvider implements ApiProvider {
     context?: CallApiContextParams,
     config: MistralChatCompletionOptions = {},
   ): Promise<ProviderResponse> {
-    if (!this.getApiKey()) {
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
       throw new Error(
         'Mistral API key is not set. Set the MISTRAL_API_KEY environment variable or add `apiKey` or `apiKeyEnvar` to the provider config.',
       );
     }
+    const apiUrl = this.getApiUrl();
 
     const messages = parseChatPrompt(prompt, [{ role: 'user', content: prompt }]);
     const loadedTools = config.tools
@@ -335,7 +337,9 @@ export class MistralChatCompletionProvider implements ApiProvider {
       ...(config?.response_format ? { response_format: config.response_format } : {}),
     };
 
-    const cacheKey = `mistral:chat:${this.modelName}:${sha256(JSON.stringify(params))}`;
+    const cacheKey = `mistral:chat:${this.modelName}:${sha256(
+      JSON.stringify({ apiKey, apiUrl, params }),
+    )}`;
     if (isCacheEnabled()) {
       const cache = getCache();
       if (cache) {
@@ -354,7 +358,7 @@ export class MistralChatCompletionProvider implements ApiProvider {
       }
     }
 
-    const url = `${this.getApiUrl()}/chat/completions`;
+    const url = `${apiUrl}/chat/completions`;
     logger.debug('Mistral API request', { url, params });
 
     let data,
@@ -367,7 +371,7 @@ export class MistralChatCompletionProvider implements ApiProvider {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.getApiKey()}`,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(params),
         },
