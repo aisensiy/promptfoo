@@ -3,6 +3,7 @@ import { getEnvFloat, getEnvInt, getEnvString } from '../envars';
 import logger from '../logger';
 import { REQUEST_TIMEOUT_MS } from '../providers/shared';
 import { type GenAISpanContext, type GenAISpanResult, withGenAISpan } from '../tracing/genaiTracer';
+import { sha256 } from '../util/createHash';
 import { safeJsonStringify } from '../util/json';
 import { ellipsize } from '../util/text';
 import { createEmptyTokenUsage } from '../util/tokenUsageUtils';
@@ -146,7 +147,9 @@ export class ReplicateProvider implements ApiProvider {
     let cacheKey;
     if (isCacheEnabled()) {
       cache = await getCache();
-      cacheKey = `replicate:${this.modelName}:${JSON.stringify(this.config)}:${prompt}`;
+      cacheKey = `replicate:${this.modelName}:${sha256(
+        JSON.stringify({ config: this.config, prompt }),
+      )}`;
 
       // Try to get the cached response
       const cachedResponse = await cache.get(cacheKey);
@@ -391,7 +394,9 @@ export class ReplicateImageProvider extends ReplicateProvider {
     _callApiOptions?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
     const cache = getCache();
-    const cacheKey = `replicate:image:${safeJsonStringify({ context, prompt })}`;
+    const cacheKey = `replicate:image:${this.modelName}:${sha256(
+      safeJsonStringify({ config: this.config, context, prompt }) ?? '',
+    )}`;
 
     if (!this.apiKey) {
       throw new Error(

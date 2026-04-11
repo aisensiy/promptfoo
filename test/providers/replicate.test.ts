@@ -308,14 +308,17 @@ describe('ReplicateProvider', () => {
       config: { apiKey: mockApiKey },
     });
 
-    const result = await provider.callApi('test prompt');
+    const prompt = 'PFQA_REPLICATE_PROMPT_SENTINEL';
+    const result = await provider.callApi(prompt);
 
     expect(result.output).toBe('test response');
     expect(mockCache.set).toHaveBeenCalledTimes(1);
-    expect(mockCache.set).toHaveBeenCalledWith(
-      'replicate:test-model:{"apiKey":"test-api-key"}:test prompt',
-      expect.any(String),
-    );
+    const cacheKey = mockCache.set.mock.calls[0][0] as string;
+    expect(cacheKey).toMatch(/^replicate:test-model:[a-f0-9]{64}$/);
+    expect(cacheKey).not.toContain(prompt);
+    expect(cacheKey).not.toContain(mockApiKey);
+    expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
+    expect(mockCache.set).toHaveBeenCalledWith(cacheKey, expect.any(String));
     expect(JSON.parse(mockCache.set.mock.calls[0][1])).toEqual({
       output: 'test response',
       tokenUsage: createEmptyTokenUsage(),
@@ -600,5 +603,44 @@ describe('ReplicateImageProvider', () => {
     const longPrompt = 'a'.repeat(100);
     const result = await provider.callApi(longPrompt);
     expect(result.output).toMatch(/!\[.*\.\.\.\]/);
+  });
+
+  it('should hash prompt and config values in image cache keys', async () => {
+    mockedFetchWithCache.mockResolvedValue({
+      data: {
+        id: 'test-id',
+        status: 'succeeded',
+        output: ['https://example.com/image.png'],
+      },
+      cached: false,
+      status: 200,
+      statusText: 'OK',
+    });
+
+    const mockCache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn(),
+    } as any;
+
+    vi.mocked(isCacheEnabled).mockReturnValue(true);
+    vi.mocked(getCache).mockReturnValue(mockCache);
+
+    const provider = new ReplicateImageProvider('test-model', {
+      config: {
+        apiKey: mockApiKey,
+        negative_prompt: 'PFQA_REPLICATE_IMAGE_CONFIG_SENTINEL',
+      },
+    });
+
+    const prompt = 'PFQA_REPLICATE_IMAGE_PROMPT_SENTINEL';
+    const result = await provider.callApi(prompt);
+
+    expect(result.cached).toBe(false);
+    const cacheKey = mockCache.set.mock.calls[0][0] as string;
+    expect(cacheKey).toMatch(/^replicate:image:test-model:[a-f0-9]{64}$/);
+    expect(cacheKey).not.toContain(prompt);
+    expect(cacheKey).not.toContain('PFQA_REPLICATE_IMAGE_CONFIG_SENTINEL');
+    expect(cacheKey).not.toContain(mockApiKey);
+    expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
   });
 });
