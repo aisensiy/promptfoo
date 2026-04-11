@@ -166,18 +166,43 @@ describe('Codex default providers', () => {
     });
   });
 
-  it('does not include raw API credentials in the provider cache key', async () => {
+  it('isolates cached default providers by process API credential without storing raw keys', async () => {
     const { getCodexDefaultProviders } = await import(
       '../../../src/providers/openai/codexDefaults'
     );
 
     process.env.CODEX_API_KEY = 'first-codex-key';
     const firstProviders = getCodexDefaultProviders();
+    expect((firstProviders.gradingProvider as OpenAICodexSDKProvider).apiKey).toBe(
+      'first-codex-key',
+    );
 
     process.env.CODEX_API_KEY = 'second-codex-key';
     const secondProviders = getCodexDefaultProviders();
 
-    expect(secondProviders).toBe(firstProviders);
+    expect(secondProviders).not.toBe(firstProviders);
+    expect((secondProviders.gradingProvider as OpenAICodexSDKProvider).apiKey).toBe(
+      'second-codex-key',
+    );
+    expect((secondProviders.gradingProvider as OpenAICodexSDKProvider).getApiKey()).toBe(
+      'second-codex-key',
+    );
+  });
+
+  it('isolates cached default providers by env override API credential', async () => {
+    const { getCodexDefaultProviders } = await import(
+      '../../../src/providers/openai/codexDefaults'
+    );
+
+    const firstProviders = getCodexDefaultProviders({ CODEX_API_KEY: 'first-codex-key' });
+    const firstProvidersAgain = getCodexDefaultProviders({ CODEX_API_KEY: 'first-codex-key' });
+    const secondProviders = getCodexDefaultProviders({ CODEX_API_KEY: 'second-codex-key' });
+
+    expect(firstProvidersAgain).toBe(firstProviders);
+    expect(secondProviders).not.toBe(firstProviders);
+    expect((firstProviders.gradingProvider as OpenAICodexSDKProvider).getApiKey()).toBe(
+      'first-codex-key',
+    );
     expect((secondProviders.gradingProvider as OpenAICodexSDKProvider).getApiKey()).toBe(
       'second-codex-key',
     );

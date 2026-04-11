@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -126,11 +127,20 @@ function getCodexDefaultProviderConfig(
   };
 }
 
+function getSecretCacheFingerprint(value: string | undefined): string | undefined {
+  return value ? createHash('sha256').update(value).digest('hex') : undefined;
+}
+
 function getCodexDefaultProvidersCacheKey(env?: EnvOverrides): string {
+  const codexApiKey = getCodexEnvString(env, 'CODEX_API_KEY');
+  const openAiApiKey = getCodexEnvString(env, 'OPENAI_API_KEY');
+
   return JSON.stringify({
     CODEX_HOME: getCodexEnvString(env, 'CODEX_HOME'),
-    hasCodexApiKey: Boolean(getCodexEnvString(env, 'CODEX_API_KEY')),
-    hasOpenAiApiKey: Boolean(getCodexEnvString(env, 'OPENAI_API_KEY')),
+    codexApiKeyFingerprint: getSecretCacheFingerprint(codexApiKey),
+    hasCodexApiKey: Boolean(codexApiKey),
+    hasOpenAiApiKey: Boolean(openAiApiKey),
+    openAiApiKeyFingerprint: getSecretCacheFingerprint(openAiApiKey),
   });
 }
 
