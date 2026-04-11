@@ -2096,7 +2096,7 @@ describe('HttpProvider', () => {
         'content-type': 'application/json',
         etag: 'W/"123"',
       });
-      expect(result.metadata?.http.requestHeaders).toEqual({
+      expect(result.metadata?.http?.requestHeaders).toEqual({
         authorization: '[REDACTED]',
         host: 'example.com',
         'content-type': 'application/json',
