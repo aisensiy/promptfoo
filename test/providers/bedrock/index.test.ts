@@ -20,7 +20,6 @@ import {
   LlamaVersion,
   parseValue,
 } from '../../../src/providers/bedrock/index';
-import { sha256 } from '../../../src/util/createHash';
 
 import type {
   BedrockAI21GenerationOptions,
@@ -3139,6 +3138,7 @@ describe('AwsBedrockCompletionProvider', () => {
     const modelName = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0';
     const prompt = 'PFQA_BEDROCK_PROMPT_SENTINEL';
     const apiKey = 'PFQA_BEDROCK_SECRET_SENTINEL';
+    const otherApiKey = 'PFQA_BEDROCK_OTHER_SECRET_SENTINEL';
     const cachedResponseData = { completion: 'cached response' };
 
     mockCache.get = vi.fn().mockResolvedValue(JSON.stringify(cachedResponseData));
@@ -3165,17 +3165,26 @@ describe('AwsBedrockCompletionProvider', () => {
     expect(mockCache.get).toHaveBeenCalledTimes(1);
 
     const cacheKey = mockCache.get.mock.calls[0][0] as string;
-    expect(cacheKey).toBe(
-      `bedrock:${modelName}:us-east-1:${sha256(
-        JSON.stringify({
-          prompt,
-          region: 'us-east-1',
-          apiKey,
-        }),
-      )}`,
-    );
+    expect(cacheKey).toMatch(new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}$`));
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain(apiKey);
+    expect(cacheKey).not.toContain(otherApiKey);
+
+    const otherProvider = new AwsBedrockCompletionProvider(modelName, {
+      config: {
+        region: 'us-east-1',
+        apiKey: otherApiKey,
+      } as BedrockClaudeMessagesCompletionOptions,
+    });
+
+    await otherProvider.callApi(prompt);
+
+    const otherCacheKey = mockCache.get.mock.calls[1][0] as string;
+    expect(otherCacheKey).toMatch(new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}$`));
+    expect(otherCacheKey).not.toBe(cacheKey);
+    expect(otherCacheKey).not.toContain(prompt);
+    expect(otherCacheKey).not.toContain(apiKey);
+    expect(otherCacheKey).not.toContain(otherApiKey);
   });
 });
 

@@ -5,6 +5,8 @@
  * This is extracted to avoid circular dependency issues.
  */
 
+import { createHmac } from 'crypto';
+
 import { getEnvInt, getEnvString } from '../../envars';
 import logger from '../../logger';
 import telemetry from '../../telemetry';
@@ -26,6 +28,65 @@ export interface BedrockOptions {
   trace?: Trace;
   showThinking?: boolean;
   endpoint?: string;
+}
+
+const BEDROCK_CACHE_KEY_HMAC_KEY = 'promptfoo-bedrock-cache-key-v1';
+const BEDROCK_CREDENTIAL_FIELD_NAMES = new Set([
+  'accessKeyId',
+  'apiKey',
+  'secretAccessKey',
+  'sessionToken',
+]);
+
+function hmacBedrockCacheValue(value: unknown) {
+  return createHmac('sha256', BEDROCK_CACHE_KEY_HMAC_KEY)
+    .update(JSON.stringify(value))
+    .digest('hex');
+}
+
+function omitBedrockCredentialFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(omitBedrockCredentialFields);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !BEDROCK_CREDENTIAL_FIELD_NAMES.has(key))
+      .map(([key, fieldValue]) => [key, omitBedrockCredentialFields(fieldValue)]),
+  );
+}
+
+export function createBedrockCacheKeyHash({
+  apiKey,
+  config,
+  params,
+  region,
+}: {
+  apiKey?: string;
+  config: BedrockOptions;
+  params: unknown;
+  region: string;
+}) {
+  return hmacBedrockCacheValue({
+    auth: {
+      ...(apiKey ? { apiKey: hmacBedrockCacheValue(['apiKey', apiKey]) } : {}),
+      ...(config.accessKeyId
+        ? { accessKeyId: hmacBedrockCacheValue(['accessKeyId', config.accessKeyId]) }
+        : {}),
+      ...(config.secretAccessKey
+        ? { secretAccessKey: hmacBedrockCacheValue(['secretAccessKey', config.secretAccessKey]) }
+        : {}),
+      ...(config.sessionToken
+        ? { sessionToken: hmacBedrockCacheValue(['sessionToken', config.sessionToken]) }
+        : {}),
+      ...(config.profile ? { profile: config.profile } : {}),
+      ...(config.endpoint ? { endpoint: config.endpoint } : {}),
+    },
+    params: omitBedrockCredentialFields(params),
+    region,
+  });
 }
 
 export abstract class AwsBedrockGenericProvider {
