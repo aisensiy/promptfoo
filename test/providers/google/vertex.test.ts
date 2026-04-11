@@ -127,6 +127,43 @@ vi.mock('../../../src/esm', async (importOriginal) => {
   };
 });
 
+function mockVertexRequest(data: unknown) {
+  const mockRequest = vi.fn().mockResolvedValue({ data });
+
+  vi.spyOn(vertexUtil, 'getGoogleClient').mockResolvedValue({
+    client: {
+      request: mockRequest,
+    } as unknown as JSONClient,
+    projectId: 'test-project-id',
+  });
+
+  vi.spyOn(vertexUtil, 'loadCredentials').mockImplementation(function (creds) {
+    if (typeof creds === 'object') {
+      return JSON.stringify(creds);
+    }
+    return creds;
+  });
+  vi.spyOn(vertexUtil, 'resolveProjectId').mockResolvedValue('test-project-id');
+
+  return mockRequest;
+}
+
+function expectHashedBodyCacheKeys(expectedPattern: RegExp, forbiddenValues: string[]) {
+  expect(mockCacheGet).toHaveBeenCalledTimes(1);
+  expect(mockCacheSet).toHaveBeenCalledTimes(1);
+
+  const cacheGetKey = mockCacheGet.mock.calls[0][0] as string;
+  const cacheSetKey = mockCacheSet.mock.calls[0][0] as string;
+
+  expect(cacheGetKey).toBe(cacheSetKey);
+  expect(cacheSetKey).toMatch(expectedPattern);
+  for (const value of forbiddenValues) {
+    expect(cacheSetKey).not.toContain(value);
+  }
+
+  return cacheSetKey;
+}
+
 describe('VertexChatProvider.callGeminiApi', () => {
   let provider: VertexChatProvider;
 
@@ -525,9 +562,7 @@ describe('VertexChatProvider.callGeminiApi', () => {
     provider = new VertexChatProvider('gemini-2.0-flash-001');
     await provider.callGeminiApi('test prompt');
 
-    const cacheKey = mockCacheSet.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^vertex:gemini-2\.0-flash-001:[a-f0-9]{64}$/);
-    expect(cacheKey).not.toContain('test prompt');
+    expectHashedBodyCacheKeys(/^vertex:gemini-2\.0-flash-001:[a-f0-9]{64}$/, ['test prompt']);
     expect(mockCacheSet).toHaveBeenCalledWith(
       expect.stringContaining('vertex:gemini-2.0-flash-001:'),
       expect.any(String),
@@ -1676,6 +1711,38 @@ describe('VertexChatProvider.callGeminiApi', () => {
   });
 });
 
+describe('VertexChatProvider.callPalm2Api', () => {
+  beforeEach(() => {
+    mockCacheGet.mockReset();
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockReset();
+
+    mockIsCacheEnabled.mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('hashes Palm2 request body cache keys without leaking prompts', async () => {
+    const prompt = 'palm2-secret-prompt-value';
+    const provider = new VertexChatProvider('chat-bison', {
+      config: {
+        context: 'palm2-secret-context',
+        temperature: 0.4,
+      },
+    });
+
+    mockVertexRequest({
+      predictions: [{ candidates: [{ content: 'Palm2 response content' }] }],
+    });
+
+    await provider.callPalm2Api(prompt);
+
+    expectHashedBodyCacheKeys(/^vertex:palm2:[a-f0-9]{64}$/, [prompt, 'palm2-secret-context']);
+  });
+});
+
 describe('VertexChatProvider.callLlamaApi', () => {
   let provider: VertexChatProvider;
 
@@ -1813,6 +1880,43 @@ describe('VertexChatProvider.callLlamaApi', () => {
         }),
       }),
     );
+  });
+
+  it('hashes Llama request body cache keys without leaking prompts', async () => {
+    const prompt = 'llama-secret-prompt-value';
+    provider = new VertexChatProvider('llama-3.3-70b-instruct-maas', {
+      config: {
+        region: 'us-central1',
+        temperature: 0.7,
+        llamaConfig: {
+          safetySettings: {
+            llama_guard_settings: { marker: 'llama-secret-safety-setting' },
+          },
+        },
+      },
+    });
+
+    mockVertexRequest({
+      choices: [
+        {
+          message: {
+            content: 'Llama response content',
+          },
+        },
+      ],
+      usage: {
+        total_tokens: 35,
+        prompt_tokens: 15,
+        completion_tokens: 20,
+      },
+    });
+
+    await provider.callLlamaApi(prompt);
+
+    expectHashedBodyCacheKeys(/^vertex:llama:llama-3\.3-70b-instruct-maas:[a-f0-9]{64}$/, [
+      prompt,
+      'llama-secret-safety-setting',
+    ]);
   });
 
   it('should default safety settings to enabled when not specified', async () => {
@@ -2037,6 +2141,40 @@ describe('VertexChatProvider.callClaudeApi parameter naming', () => {
           max_tokens: 500,
         }),
       }),
+    );
+  });
+
+  it('hashes Claude request body cache keys without leaking prompts', async () => {
+    const prompt = 'claude-secret-prompt-value';
+    provider = new VertexChatProvider('claude-3-5-sonnet-v2@20241022', {
+      config: {
+        anthropicVersion: 'vertex-2023-10-16',
+        maxOutputTokens: 500,
+        systemInstruction: 'claude-secret-system-instruction',
+      },
+    });
+
+    mockVertexRequest({
+      id: 'test-id',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-3-5-sonnet-v2@20241022',
+      content: [{ type: 'text', text: 'Response from Claude' }],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: {
+        input_tokens: 20,
+        output_tokens: 30,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+    });
+
+    await provider.callClaudeApi(prompt);
+
+    expectHashedBodyCacheKeys(
+      /^vertex:claude:claude-3-5-sonnet-v2@20241022:showThinking=false:[a-f0-9]{64}$/,
+      [prompt, 'claude-secret-system-instruction'],
     );
   });
 
