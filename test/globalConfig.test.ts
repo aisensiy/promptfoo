@@ -18,6 +18,7 @@ function isValidUUID(uuid: string): boolean {
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
+  chmodSync: vi.fn(),
   statSync: vi.fn(),
   readdirSync: vi.fn(),
   existsSync: vi.fn(),
@@ -66,6 +67,8 @@ describe('Global Config', () => {
           'utf-8',
         );
         expect(result).toEqual(mockConfig);
+        expect(fs.chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
+        expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('promptfoo.yaml'), 0o600);
       });
 
       it('should handle empty config file by returning config with generated ID', () => {
@@ -94,7 +97,9 @@ describe('Global Config', () => {
         expect(fs.writeFileSync).toHaveBeenCalledWith(
           expect.stringContaining('promptfoo.yaml'),
           expect.stringContaining(`id: ${result.id}`),
+          { mode: 0o600 },
         );
+        expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('promptfoo.yaml'), 0o600);
       });
     });
 
@@ -109,12 +114,18 @@ describe('Global Config', () => {
         const result = globalConfig.readGlobalConfig();
 
         expect(fs.existsSync).toHaveBeenCalledTimes(2);
-        expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
+        expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), {
+          recursive: true,
+          mode: 0o700,
+        });
         expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
         expect(fs.writeFileSync).toHaveBeenCalledWith(
           expect.stringContaining('promptfoo.yaml'),
           expect.any(String),
+          { mode: 0o600 },
         );
+        expect(fs.chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
+        expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('promptfoo.yaml'), 0o600);
         expect(result).toEqual({ id: expect.any(String) });
         expect(result.id).toBeDefined();
         expect(typeof result.id).toBe('string');
@@ -141,7 +152,10 @@ describe('Global Config', () => {
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         expect.stringContaining('promptfoo.yaml'),
         expect.stringContaining('account:'),
+        { mode: 0o600 },
       );
+      expect(fs.chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
+      expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('promptfoo.yaml'), 0o600);
     });
   });
 
@@ -167,6 +181,7 @@ describe('Global Config', () => {
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         expect.stringContaining('promptfoo.yaml'),
         expect.stringMatching(/email: new@example\.com.*apiKey: old-key/s),
+        { mode: 0o600 },
       );
     });
 
@@ -180,6 +195,7 @@ describe('Global Config', () => {
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         expect.stringContaining('promptfoo.yaml'),
         expect.not.stringContaining('apiKey: old-key'),
+        { mode: 0o600 },
       );
     });
 
