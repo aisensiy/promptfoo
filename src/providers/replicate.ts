@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHash, scryptSync } from 'crypto';
 
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../envars';
@@ -61,13 +61,17 @@ interface ReplicatePrediction {
   };
 }
 
-const REPLICATE_CACHE_KEY_HMAC_KEY = 'promptfoo-replicate-cache-key-v1';
+const REPLICATE_CACHE_KEY_SALT = 'promptfoo-replicate-cache-key-v1';
 const REPLICATE_SECRET_FIELD_NAMES = new Set(['apiKey']);
 
-function hmacReplicateCacheValue(value: unknown) {
-  return createHmac('sha256', REPLICATE_CACHE_KEY_HMAC_KEY)
+function hashReplicateCacheValue(value: unknown) {
+  return createHash('sha256')
     .update(safeJsonStringify(value) ?? '')
     .digest('hex');
+}
+
+function fingerprintReplicateSecret(label: string, secret: string) {
+  return scryptSync(secret, `${REPLICATE_CACHE_KEY_SALT}:${label}`, 32).toString('hex');
 }
 
 function omitReplicateSecretFields(value: unknown): unknown {
@@ -172,8 +176,8 @@ export class ReplicateProvider implements ApiProvider {
     let cacheKey;
     if (isCacheEnabled()) {
       cache = await getCache();
-      cacheKey = `replicate:${this.modelName}:${hmacReplicateCacheValue({
-        apiKey: hmacReplicateCacheValue(['apiKey', this.apiKey]),
+      cacheKey = `replicate:${this.modelName}:${hashReplicateCacheValue({
+        apiKey: fingerprintReplicateSecret('apiKey', this.apiKey),
         config: this.config,
         prompt,
       })}`;
@@ -420,19 +424,19 @@ export class ReplicateImageProvider extends ReplicateProvider {
     context?: CallApiContextParams,
     _callApiOptions?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
-    const cache = getCache();
-    const cacheKey = `replicate:image:${this.modelName}:${hmacReplicateCacheValue({
-      apiKey: hmacReplicateCacheValue(['apiKey', this.apiKey]),
-      config: this.config,
-      context: omitReplicateSecretFields(context),
-      prompt,
-    })}`;
-
     if (!this.apiKey) {
       throw new Error(
         'Replicate API key is not set. Set the REPLICATE_API_TOKEN environment variable or add `apiKey` to the provider config.',
       );
     }
+
+    const cache = getCache();
+    const cacheKey = `replicate:image:${this.modelName}:${hashReplicateCacheValue({
+      apiKey: fingerprintReplicateSecret('apiKey', this.apiKey),
+      config: this.config,
+      context: omitReplicateSecretFields(context),
+      prompt,
+    })}`;
 
     let response: any | undefined;
     let cached = false;

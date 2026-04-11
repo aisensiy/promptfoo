@@ -368,7 +368,8 @@ describe('ReplicateProvider', () => {
     await providerA.callApi('Shared replicate prompt');
     await providerB.callApi('Shared replicate prompt');
 
-    const [cacheKeyA, cacheKeyB] = mockCache.get.mock.calls.map(([key]) => key as string);
+    const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
+    const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
     expect(cacheKeyA).toMatch(/^replicate:test-model:[a-f0-9]{64}$/);
     expect(cacheKeyB).toMatch(/^replicate:test-model:[a-f0-9]{64}$/);
     expect(cacheKeyA).not.toBe(cacheKeyB);
