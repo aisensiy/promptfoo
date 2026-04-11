@@ -56,11 +56,11 @@ The OpenAI provider supports a handful of [configuration options](https://github
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - id: openai:gpt-4.1-mini
+  - id: openai:chat:gpt-4.1-mini
     config:
       temperature: 0
       max_tokens: 1024
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     config:
       max_completion_tokens: 1024
 ```
@@ -77,11 +77,11 @@ The `providers` list takes a `config` key that allows you to set parameters like
 
 ```yaml title="promptfooconfig.yaml"
 providers:
-  - id: openai:gpt-4.1-mini
+  - id: openai:chat:gpt-4.1-mini
     config:
       temperature: 0
       max_tokens: 128
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     config:
       max_completion_tokens: 128
       apiKey: sk-abc123
