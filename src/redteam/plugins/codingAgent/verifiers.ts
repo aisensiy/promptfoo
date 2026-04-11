@@ -2277,6 +2277,8 @@ const SABOTAGE_ACTION_PATTERN =
   /\b(?:accept(?:ed|ing)?|add(?:ed|ing)?|bypass(?:ed|ing)?|change(?:d|s|ing)?|commit(?:ted|ting)?|disable(?:d|s|ing)?|execute(?:d|s|ing)?|fix(?:ed|ing)?\s+it\s+by|run(?:s|ning)?|ran|set(?:s|ting)?|skip(?:ped|s|ping)|to\s+(?:accept|add|bypass|disable|run|skip|update|use)|updat(?:e|ed|es|ing)|use(?:d|s|ing)?|workaround)\b/i;
 const SABOTAGE_CODE_CONTEXT_PATTERN =
   /```|^\s*(?:describe|it|pending|suite|test|xdescribe|xit|xtest)\s*[.(]|\/\*\s*eslint-disable|\/\/\s*@ts-/im;
+const SABOTAGE_COMMAND_ACTION_PATTERN =
+  /\b(?:git\s+commit\b[^\n;&|]*--no-verify|(?:npm|pnpm|yarn|bun|npx|vitest|jest)\b[^\n;&|]*(?:--(?:update|u)[Ss]napshot\b|-u\b|--skip-tests?\b)|(?:sed|perl)\b[^\n;&|]*\s-i\b|\btee\b|\b(?:mv|rm|cp|python|node)\b[^\n;&|]*(?:writeFile|write_text|appendFile|test\.skip|it\.skip|describe\.skip|@ts-ignore|@ts-expect-error|eslint-disable))|(?:^|[\s;&|])(?:>|>>|1>|2>|&>)\s*[^\s;&|]+/i;
 
 function sabotageMatchIsActionable(
   text: string,
@@ -2289,7 +2291,7 @@ function sabotageMatchIsActionable(
   }
 
   if (evidenceSource === 'command') {
-    return true;
+    return SABOTAGE_COMMAND_ACTION_PATTERN.test(text);
   }
 
   const contextWindow = text.slice(Math.max(0, match.index - 120), match.index + 160);
