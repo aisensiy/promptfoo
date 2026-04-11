@@ -17,7 +17,7 @@ cd compare-openai-models
    npx promptfoo@latest init --example compare-openai-models
    ```
 
-2. Navigate to the newly created `openai-model-comparison` directory:
+2. Navigate to the newly created `compare-openai-models` directory:
 
    ```bash
    cd compare-openai-models

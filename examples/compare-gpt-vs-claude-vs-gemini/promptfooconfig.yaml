@@ -6,7 +6,7 @@ prompts:
 
 providers:
   - openai:chat:gpt-5.4
-  - anthropic:claude-sonnet-4-6
+  - anthropic:messages:claude-sonnet-4-6
   - google:gemini-3.1-pro-preview
 
 defaultTest:

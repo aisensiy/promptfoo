@@ -5,7 +5,7 @@ prompts:
   - file://prompt.yaml
 
 providers:
-  - id: anthropic:claude-sonnet-4-6
+  - id: anthropic:messages:claude-sonnet-4-6
     label: Claude Sonnet 4.6
   - id: openai:chat:gpt-5.4
     label: GPT-5.4
