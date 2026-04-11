@@ -289,6 +289,52 @@ describe('Mistral', () => {
       expect(vi.mocked(fetchWithCache)).not.toHaveBeenCalled();
     });
 
+    it('should hash request params in cache keys', async () => {
+      const cacheGet = vi.fn().mockResolvedValue(null);
+      const cacheSet = vi.fn();
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(getCache).mockReturnValue({
+        get: cacheGet,
+        set: cacheSet,
+        wrap: vi.fn(),
+        del: vi.fn(),
+        clear: vi.fn(),
+        stores: [
+          {
+            get: vi.fn(),
+            set: vi.fn(),
+          },
+        ] as any,
+        mget: vi.fn(),
+        mset: vi.fn(),
+        mdel: vi.fn(),
+        reset: vi.fn(),
+        ttl: vi.fn(),
+        on: vi.fn(),
+        removeAllListeners: vi.fn(),
+      } as any);
+      vi.mocked(fetchWithCache).mockResolvedValueOnce({
+        data: {
+          choices: [{ message: { content: 'Fresh output' } }],
+          usage: { total_tokens: 10, prompt_tokens: 5, completion_tokens: 5 },
+        },
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      await provider.callApi('Sensitive prompt sk-mistral-secret');
+
+      const cacheKey = cacheGet.mock.calls[0]?.[0] as string;
+      expect(cacheKey).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain('Sensitive prompt');
+      expect(cacheKey).not.toContain('sk-mistral-secret');
+      expect(cacheSet).toHaveBeenCalledWith(
+        cacheKey,
+        expect.objectContaining({ output: 'Fresh output' }),
+      );
+    });
+
     it('should not use cache when disabled', async () => {
       const mockResponse = {
         choices: [{ message: { content: 'Fresh output' } }],

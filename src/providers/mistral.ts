@@ -3,6 +3,7 @@ import { getEnvString } from '../envars';
 import logger from '../logger';
 import { type GenAISpanContext, type GenAISpanResult, withGenAISpan } from '../tracing/genaiTracer';
 import { maybeLoadToolsFromExternalFile } from '../util';
+import { sha256 } from '../util/createHash';
 import { calculateCost, parseChatPrompt, REQUEST_TIMEOUT_MS } from './shared';
 
 import type { EnvVarKey } from '../envars';
@@ -334,7 +335,7 @@ export class MistralChatCompletionProvider implements ApiProvider {
       ...(config?.response_format ? { response_format: config.response_format } : {}),
     };
 
-    const cacheKey = `mistral:${JSON.stringify(params)}`;
+    const cacheKey = `mistral:chat:${this.modelName}:${sha256(JSON.stringify(params))}`;
     if (isCacheEnabled()) {
       const cache = getCache();
       if (cache) {
