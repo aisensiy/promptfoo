@@ -1,3 +1,4 @@
+import { createHash as createNodeHash } from 'node:crypto';
 import { execFile } from 'child_process';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -10,6 +11,10 @@ import {
   ScriptCompletionProvider,
 } from '../../src/providers/scriptCompletion';
 import type { MockedFunction } from 'vitest';
+
+function sha256(value: string) {
+  return createNodeHash('sha256').update(value).digest('hex');
+}
 
 vi.mock('child_process', async (importOriginal) => {
   return {
@@ -209,6 +214,8 @@ describe('ScriptCompletionProvider', () => {
 
   it('should use cache when available', async () => {
     const cachedResult = { output: 'cached result' };
+    const options = { config: { basePath: '/base', apiKey: 'sk-test-script-secret' } } as any;
+    const provider = new ScriptCompletionProvider('node script.js', options);
     const mockCache = {
       get: vi.fn().mockResolvedValue(JSON.stringify(cachedResult)),
       set: vi.fn(),
@@ -230,12 +237,59 @@ describe('ScriptCompletionProvider', () => {
     });
 
     const result = await provider.callApi('test prompt');
+    const expectedCacheKey = `exec:node script.js:mock hash:mock hash:${sha256('test prompt')}:${sha256(
+      JSON.stringify(options) ?? 'undefined',
+    )}`;
+
     expect(result.cached).toBe(true);
     expect(result).toEqual({ ...cachedResult, cached: true });
-    expect(mockCache.get).toHaveBeenCalledWith(
-      'exec:node script.js:mock hash:mock hash:test prompt:undefined',
-    );
+    expect(mockCache.get).toHaveBeenCalledWith(expectedCacheKey);
+    expect(expectedCacheKey).not.toContain('test prompt');
+    expect(expectedCacheKey).not.toContain('sk-test-script-secret');
     expect(execFile).not.toHaveBeenCalled();
+  });
+
+  it('should hash cache keys when storing fresh results', async () => {
+    const options = { config: { basePath: '/base', apiKey: 'sk-test-script-secret' } } as any;
+    const provider = new ScriptCompletionProvider('node script.js', options);
+    const mockCache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn(),
+    };
+    vi.spyOn(cacheModule, 'getCache').mockResolvedValue(mockCache as never);
+    vi.spyOn(cacheModule, 'isCacheEnabled').mockReturnValue(true);
+
+    existsSyncMock.mockReturnValue(true);
+    statSyncMock.mockReturnValue({ isFile: () => true } as fs.Stats);
+    readFileSyncMock.mockReturnValue('file content');
+
+    const mockHashUpdate = {
+      update: vi.fn().mockReturnThis(),
+      digest: vi.fn().mockReturnValue('mock hash'),
+    } as unknown as crypto.Hash;
+    vi.mocked(crypto.createHash).mockImplementation(function () {
+      return mockHashUpdate;
+    });
+
+    vi.mocked(execFile).mockImplementation(function (_cmd, _args, _options, callback) {
+      if (typeof callback === 'function') {
+        callback(null, Buffer.from('fresh result'), '');
+      }
+      return {} as any;
+    });
+
+    const result = await provider.callApi('test prompt');
+    const expectedCacheKey = `exec:node script.js:mock hash:mock hash:${sha256('test prompt')}:${sha256(
+      JSON.stringify(options) ?? 'undefined',
+    )}`;
+
+    expect(result.output).toBe('fresh result');
+    expect(mockCache.set).toHaveBeenCalledWith(
+      expectedCacheKey,
+      JSON.stringify({ output: 'fresh result' }),
+    );
+    expect(expectedCacheKey).not.toContain('test prompt');
+    expect(expectedCacheKey).not.toContain('sk-test-script-secret');
   });
 
   it('should handle script execution errors', async () => {

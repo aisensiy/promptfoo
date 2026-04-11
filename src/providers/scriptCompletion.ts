@@ -4,6 +4,7 @@ import fs from 'fs';
 
 import { getCache, isCacheEnabled } from '../cache';
 import logger from '../logger';
+import { sha256 } from '../util/createHash';
 import invariant from '../util/invariant';
 import { safeJsonStringify } from '../util/json';
 
@@ -72,7 +73,9 @@ export class ScriptCompletionProvider implements ApiProvider {
       logger.warn(`Could not find any valid files in the command: ${this.scriptPath}`);
     }
 
-    const cacheKey = `exec:${this.scriptPath}:${fileHashes.join(':')}:${prompt}:${JSON.stringify(this.options)}`;
+    const cacheKey = `exec:${this.scriptPath}:${fileHashes.join(':')}:${sha256(prompt)}:${sha256(
+      JSON.stringify(this.options) ?? 'undefined',
+    )}`;
 
     let cachedResult;
     if (fileHashes.length > 0 && isCacheEnabled()) {

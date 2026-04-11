@@ -73,9 +73,9 @@ export class GolangProvider implements ApiProvider {
     logger.debug(`Found module root at ${moduleRoot}`);
     logger.debug(`Computing file hash for script ${absPath}`);
     const fileHash = sha256(fs.readFileSync(absPath, 'utf-8'));
-    const cacheKey = `golang:${this.scriptPath}:${apiType}:${fileHash}:${prompt}:${JSON.stringify(
-      this.options,
-    )}:${JSON.stringify(context?.vars)}`;
+    const cacheKey = `golang:${this.scriptPath}:${apiType}:${fileHash}:${sha256(prompt)}:${sha256(
+      JSON.stringify(this.options) ?? 'undefined',
+    )}:${sha256(JSON.stringify(context?.vars) ?? 'undefined')}`;
     const cache = await getCache();
     let cachedResult;
 

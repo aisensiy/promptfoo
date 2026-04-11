@@ -3,6 +3,7 @@ import path from 'path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GolangProvider } from '../../src/providers/golangCompletion';
+import { sha256 } from '../../src/util/createHash';
 
 // Hoisted mock functions
 const mockExecFile = vi.hoisted(() => vi.fn());
@@ -283,9 +284,11 @@ describe('GolangProvider', () => {
 
   describe('caching', () => {
     it('should use cached result when available', async () => {
-      const provider = new GolangProvider('script.go', {
-        config: { basePath: '/absolute/path/to' },
-      });
+      const options = {
+        config: { basePath: '/absolute/path/to', apiKey: 'sk-test-golang-secret' },
+      } as any;
+      const provider = new GolangProvider('script.go', options);
+      const context = { vars: { promptSecret: 'sk-test-context-secret' } } as any;
       mockIsCacheEnabled.mockReturnValue(true);
       const mockCache = {
         get: vi.fn().mockResolvedValue(JSON.stringify({ output: 'cached result' })),
@@ -293,12 +296,55 @@ describe('GolangProvider', () => {
       };
       mockGetCache.mockResolvedValue(mockCache as never);
 
-      const result = await provider.callApi('test prompt');
+      const result = await provider.callApi('test prompt', context);
+      const expectedCacheKey = mockCache.get.mock.calls[0][0] as string;
+      const expectedFileHash = sha256('package main\n// Mock script.go content');
 
-      expect(mockCache.get).toHaveBeenCalledWith(expect.stringContaining('golang:'));
+      expect(expectedCacheKey).toContain('golang:');
+      expect(expectedCacheKey).toContain(':call_api:');
+      expect(expectedCacheKey).toContain(expectedFileHash);
+      expect(expectedCacheKey).toContain(sha256('test prompt'));
+      expect(expectedCacheKey).toContain(sha256(JSON.stringify(options) ?? 'undefined'));
+      expect(expectedCacheKey).toContain(sha256(JSON.stringify(context.vars) ?? 'undefined'));
+      expect(expectedCacheKey).not.toContain('test prompt');
+      expect(expectedCacheKey).not.toContain('sk-test-golang-secret');
+      expect(expectedCacheKey).not.toContain('sk-test-context-secret');
       expect(mockExecFile).not.toHaveBeenCalled();
       expect(result.cached).toBe(true);
       expect(result).toEqual({ output: 'cached result', cached: true });
+    });
+
+    it('should hash cache keys when storing fresh results', async () => {
+      const options = {
+        config: { basePath: '/absolute/path/to', apiKey: 'sk-test-golang-secret' },
+      } as any;
+      const provider = new GolangProvider('script.go', options);
+      const context = { vars: { promptSecret: 'sk-test-context-secret' } } as any;
+      mockIsCacheEnabled.mockReturnValue(true);
+      const mockCache = {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn(),
+      };
+      mockGetCache.mockResolvedValue(mockCache as never);
+
+      const result = await provider.callApi('test prompt', context);
+      const expectedCacheKey = mockCache.set.mock.calls[0][0] as string;
+      const expectedFileHash = sha256('package main\n// Mock script.go content');
+
+      expect(expectedCacheKey).toContain('golang:');
+      expect(expectedCacheKey).toContain(':call_api:');
+      expect(expectedCacheKey).toContain(expectedFileHash);
+      expect(expectedCacheKey).toContain(sha256('test prompt'));
+      expect(expectedCacheKey).toContain(sha256(JSON.stringify(options) ?? 'undefined'));
+      expect(expectedCacheKey).toContain(sha256(JSON.stringify(context.vars) ?? 'undefined'));
+      expect(mockCache.set).toHaveBeenCalledWith(
+        expectedCacheKey,
+        JSON.stringify({ output: 'test output' }),
+      );
+      expect(expectedCacheKey).not.toContain('test prompt');
+      expect(expectedCacheKey).not.toContain('sk-test-golang-secret');
+      expect(expectedCacheKey).not.toContain('sk-test-context-secret');
+      expect(result).toEqual({ output: 'test output' });
     });
 
     it('should handle cache errors', async () => {

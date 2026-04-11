@@ -114,9 +114,9 @@ export class RubyProvider implements ApiProvider {
     const fileHash = sha256(fs.readFileSync(absPath, 'utf-8'));
 
     // Create cache key including the function name to ensure different functions don't share caches
-    const cacheKey = `ruby:${this.scriptPath}:${this.functionName || 'default'}:${apiType}:${fileHash}:${prompt}:${safeJsonStringify(
-      this.options,
-    )}:${safeJsonStringify(context?.vars)}`;
+    const cacheKey = `ruby:${this.scriptPath}:${this.functionName || 'default'}:${apiType}:${fileHash}:${sha256(prompt)}:${sha256(
+      safeJsonStringify(this.options) ?? 'undefined',
+    )}:${sha256(safeJsonStringify(context?.vars) ?? 'undefined')}`;
     logger.debug(`RubyProvider cache key: ${cacheKey}`);
 
     const cache = await getCache();

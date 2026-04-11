@@ -184,9 +184,9 @@ export class PythonProvider implements ApiProvider {
     const fileHash = sha256(fs.readFileSync(absPath, 'utf-8'));
 
     // Create cache key including the function name to ensure different functions don't share caches
-    const cacheKey = `python:${this.scriptPath}:${this.functionName || 'default'}:${apiType}:${fileHash}:${prompt}:${JSON.stringify(
-      this.options,
-    )}:${JSON.stringify(context?.vars)}`;
+    const cacheKey = `python:${this.scriptPath}:${this.functionName || 'default'}:${apiType}:${fileHash}:${sha256(prompt)}:${sha256(
+      JSON.stringify(this.options) ?? 'undefined',
+    )}:${sha256(JSON.stringify(context?.vars) ?? 'undefined')}`;
     logger.debug(`PythonProvider cache key: ${cacheKey}`);
 
     const cache = await getCache();
