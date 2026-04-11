@@ -3,6 +3,7 @@ import dedent from 'dedent';
 import { getCache, isCacheEnabled } from '../../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../../envars';
 import logger from '../../logger';
+import { sha256 } from '../../util/createHash';
 import { maybeLoadToolsFromExternalFile } from '../../util/index';
 import { createEmptyTokenUsage } from '../../util/tokenUsageUtils';
 import { outputFromMessage, parseMessages } from '../anthropic/util';
@@ -2441,7 +2442,9 @@ export class AwsBedrockCompletionProvider extends AwsBedrockGenericProvider impl
     logger.debug('Calling Amazon Bedrock API', { params });
 
     const cache = await getCache();
-    const cacheKey = `bedrock:${this.modelName}:${JSON.stringify(params)}`;
+    const cacheKey = `bedrock:${this.modelName}:${this.getRegion()}:${sha256(
+      JSON.stringify(params),
+    )}`;
 
     if (isCacheEnabled()) {
       // Try to get the cached response

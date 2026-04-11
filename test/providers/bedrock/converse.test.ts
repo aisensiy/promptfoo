@@ -1256,6 +1256,46 @@ Third line`;
       // Verify the mock send was never called (response came from cache)
       expect(mockSend).not.toHaveBeenCalled();
     });
+
+    it('should hash prompt and request fields in the cache key', async () => {
+      const cacheModule = await import('../../../src/cache');
+      const prompt = 'PFQA_BEDROCK_CONVERSE_PROMPT_SENTINEL';
+      const requestSecret = 'PFQA_BEDROCK_CONVERSE_SECRET_SENTINEL';
+      const mockCachedResponse = createMockConverseResponse('Cached response', {
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      });
+
+      const mockCache = {
+        get: vi.fn().mockResolvedValue(JSON.stringify(mockCachedResponse)),
+        set: vi.fn(),
+      } as any;
+
+      vi.mocked(cacheModule.isCacheEnabled).mockReturnValueOnce(true);
+      vi.mocked(cacheModule.getCache).mockResolvedValueOnce(mockCache);
+
+      const provider = new AwsBedrockConverseProvider('anthropic.claude-3-5-sonnet-20241022-v2:0', {
+        config: {
+          region: 'us-east-1',
+          additionalModelRequestFields: {
+            requestSecret,
+          },
+        },
+      });
+
+      const result = await provider.callApi(prompt);
+
+      expect(result.cached).toBe(true);
+      expect(result.output).toBe('Cached response');
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(mockCache.get).toHaveBeenCalledTimes(1);
+
+      const cacheKey = mockCache.get.mock.calls[0][0] as string;
+      expect(cacheKey).toContain(
+        'bedrock:converse:anthropic.claude-3-5-sonnet-20241022-v2:0:us-east-1:',
+      );
+      expect(cacheKey).not.toContain(prompt);
+      expect(cacheKey).not.toContain(requestSecret);
+    });
   });
 
   describe('parseConverseMessages - advanced content blocks', () => {
@@ -2051,6 +2091,8 @@ describe('Model coverage parity', () => {
     beforeEach(() => {
       // Only reset mockSend, not all mocks (which would break the mock implementations)
       mockSend.mockReset();
+      delete process.env.HTTP_PROXY;
+      delete process.env.HTTPS_PROXY;
     });
 
     afterEach(() => {

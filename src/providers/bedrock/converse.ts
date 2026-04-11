@@ -24,6 +24,7 @@ import {
   type GenAISpanResult,
   withGenAISpan,
 } from '../../tracing/genaiTracer';
+import { sha256 } from '../../util/createHash';
 import { isJavascriptFile } from '../../util/fileExtensions';
 import { maybeLoadToolsFromExternalFile } from '../../util/index';
 import {
@@ -1013,7 +1014,9 @@ export class AwsBedrockConverseProvider extends AwsBedrockGenericProvider implem
 
     // Check cache
     const cache = await getCache();
-    const cacheKey = `bedrock:converse:${this.modelName}:${JSON.stringify(converseInput)}`;
+    const cacheKey = `bedrock:converse:${this.modelName}:${this.getRegion()}:${sha256(
+      JSON.stringify(converseInput),
+    )}`;
 
     if (isCacheEnabled()) {
       const cachedResponse = await cache.get(cacheKey);

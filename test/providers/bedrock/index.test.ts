@@ -20,6 +20,7 @@ import {
   LlamaVersion,
   parseValue,
 } from '../../../src/providers/bedrock/index';
+import { sha256 } from '../../../src/util/createHash';
 
 import type {
   BedrockAI21GenerationOptions,
@@ -3132,6 +3133,49 @@ describe('AwsBedrockCompletionProvider', () => {
     expect(mockCache.get).toHaveBeenCalled();
     // Verify invokeModel was not called because cache was used
     expect(mockInvokeModel).not.toHaveBeenCalled();
+  });
+
+  it('should hash prompt and secret values in the cache key', async () => {
+    const modelName = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0';
+    const prompt = 'PFQA_BEDROCK_PROMPT_SENTINEL';
+    const apiKey = 'PFQA_BEDROCK_SECRET_SENTINEL';
+    const cachedResponseData = { completion: 'cached response' };
+
+    mockCache.get = vi.fn().mockResolvedValue(JSON.stringify(cachedResponseData));
+    vi.mocked(isCacheEnabled).mockReturnValue(true);
+    vi.mocked(AWS_BEDROCK_MODELS[modelName].params).mockImplementation(
+      async (config, promptText) => ({
+        prompt: promptText,
+        ...config,
+      }),
+    );
+
+    const provider = new AwsBedrockCompletionProvider(modelName, {
+      config: {
+        region: 'us-east-1',
+        apiKey,
+      } as BedrockClaudeMessagesCompletionOptions,
+    });
+
+    const result = await provider.callApi(prompt);
+
+    expect(result.cached).toBe(true);
+    expect(result.output).toBe('processed output');
+    expect(mockInvokeModel).not.toHaveBeenCalled();
+    expect(mockCache.get).toHaveBeenCalledTimes(1);
+
+    const cacheKey = mockCache.get.mock.calls[0][0] as string;
+    expect(cacheKey).toBe(
+      `bedrock:${modelName}:us-east-1:${sha256(
+        JSON.stringify({
+          prompt,
+          region: 'us-east-1',
+          apiKey,
+        }),
+      )}`,
+    );
+    expect(cacheKey).not.toContain(prompt);
+    expect(cacheKey).not.toContain(apiKey);
   });
 });
 
