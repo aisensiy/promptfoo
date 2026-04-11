@@ -14,6 +14,7 @@ keywords:
     openai,
     eval,
   ]
+sidebar_position: 31
 sidebar_label: GPT Model Tiers MMLU-Pro
 slug: gpt-mmlu-comparison
 ---
@@ -71,9 +72,9 @@ prompts:
     End with: Therefore, the answer is <LETTER>.
 
 providers:
-  - openai:gpt-5.4
-  - openai:gpt-5.4-mini
-  - openai:gpt-5.4-nano
+  - openai:chat:gpt-5.4
+  - openai:chat:gpt-5.4-mini
+  - openai:chat:gpt-5.4-nano
 
 defaultTest:
   assert:
@@ -120,13 +121,13 @@ prompts:
     Think through this step by step, then provide your final answer as "Therefore, the answer is A."
 
 providers:
-  - id: openai:gpt-5.4
+  - id: openai:chat:gpt-5.4
     config:
       max_completion_tokens: 1200
-  - id: openai:gpt-5.4-mini
+  - id: openai:chat:gpt-5.4-mini
     config:
       max_completion_tokens: 1200
-  - id: openai:gpt-5.4-nano
+  - id: openai:chat:gpt-5.4-nano
     config:
       max_completion_tokens: 1200
 
@@ -145,7 +146,7 @@ tests:
   - huggingface://datasets/TIGER-Lab/MMLU-Pro?split=test&config=default&limit=100
 ```
 
-## Step 4: Scale Your Evaluation
+## Step 4: Scale Your Eval
 
 Increase the sample size for a broader benchmark pass:
 
