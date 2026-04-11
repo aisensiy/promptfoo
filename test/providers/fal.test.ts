@@ -443,7 +443,9 @@ describe('Fal Provider', () => {
 
         expect(result.cached).toBe(false);
         const cacheKey = mockCache.get.mock.calls[0]?.[0] as string;
-        expect(cacheKey).toMatch(/^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}$/);
+        expect(cacheKey).toMatch(
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        );
         expect(cacheKey).not.toContain(prompt);
         expect(cacheKey).not.toContain(contextSecret);
         expect(mockCache.set).toHaveBeenCalledWith(
@@ -502,8 +504,12 @@ describe('Fal Provider', () => {
         await providerB.callApi('Shared fal prompt');
 
         const [cacheKeyA, cacheKeyB] = mockCache.get.mock.calls.map(([key]) => key as string);
-        expect(cacheKeyA).toMatch(/^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}$/);
-        expect(cacheKeyB).toMatch(/^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}$/);
+        expect(cacheKeyA).toMatch(
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        );
+        expect(cacheKeyB).toMatch(
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        );
         expect(cacheKeyA).not.toBe(cacheKeyB);
         expect(mockSubscribe).toHaveBeenCalledTimes(2);
         for (const cacheKey of [cacheKeyA, cacheKeyB]) {

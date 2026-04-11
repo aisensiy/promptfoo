@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHash, scryptSync } from 'crypto';
 
 import { getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
@@ -18,10 +18,47 @@ interface FalResult<T = unknown> {
   requestId: string;
 }
 
-const FAL_CACHE_KEY_HMAC_KEY = 'promptfoo-fal-cache-key-v1';
+const FAL_CACHE_KEY_KDF_SALT = 'promptfoo-fal-cache-key-v1';
 
-function hmacFalCacheValue(value: unknown) {
-  return createHmac('sha256', FAL_CACHE_KEY_HMAC_KEY).update(JSON.stringify(value)).digest('hex');
+function sortObject(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => sortObject(item));
+  }
+
+  if (typeof obj === 'object') {
+    return Object.keys(obj)
+      .sort()
+      .reduce((result, key) => {
+        result[key] = sortObject(obj[key]);
+        return result;
+      }, {} as any);
+  }
+
+  return obj;
+}
+
+function omitFalSecretConfigFields(config: FalProviderOptions): Record<string, unknown> {
+  const { apiKey, ...rest } = config;
+  return rest;
+}
+
+function fingerprintFalSecret(secret: string): string {
+  return scryptSync(secret, FAL_CACHE_KEY_KDF_SALT, 32).toString('hex');
+}
+
+function generateConfigHash(config: FalProviderOptions): string {
+  const sortedConfig = sortObject(omitFalSecretConfigFields(config));
+  return createHash('sha256').update(JSON.stringify(sortedConfig)).digest('hex');
+}
+
+function generateInputHash(input: unknown): string {
+  return createHash('sha256')
+    .update(JSON.stringify(sortObject(input)))
+    .digest('hex');
 }
 
 class FalProvider<Input = Record<string, unknown>> implements ApiProvider {
@@ -82,10 +119,7 @@ class FalProvider<Input = Record<string, unknown>> implements ApiProvider {
       ...this.input,
       ...(context?.prompt?.config ?? {}),
     };
-    const cacheKey = `fal:${this.modelName}:${hmacFalCacheValue({
-      apiKey: hmacFalCacheValue(['apiKey', this.apiKey]),
-      input,
-    })}`;
+    const cacheKey = `fal:${this.modelName}:${generateConfigHash(this.config)}:${fingerprintFalSecret(this.apiKey)}:${generateInputHash(input)}`;
     if (isCacheEnabled()) {
       cache = getCache();
       const cachedResponse = await cache.get<string>(cacheKey);
