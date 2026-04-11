@@ -395,6 +395,63 @@ describe('Fal Provider', () => {
         );
       });
 
+      it('should hash prompt and config values in cache keys', async () => {
+        vi.mocked(isCacheEnabled).mockImplementation(function () {
+          return true;
+        });
+        const mockCache = {
+          get: vi.fn().mockResolvedValue(null),
+          set: vi.fn(),
+          wrap: vi.fn(),
+          del: vi.fn(),
+          clear: vi.fn(),
+          stores: [
+            {
+              get: vi.fn(),
+              set: vi.fn(),
+            },
+          ] as any,
+          mget: vi.fn(),
+          mset: vi.fn(),
+          mdel: vi.fn(),
+          reset: vi.fn(),
+          ttl: vi.fn(),
+          on: vi.fn(),
+          removeAllListeners: vi.fn(),
+        };
+        vi.mocked(getCache).mockReturnValue(mockCache as any);
+
+        mockSubscribe.mockResolvedValueOnce({
+          data: {
+            images: [{ url: 'https://example.com/image.png' }],
+          },
+          requestId: 'test-request-id',
+        });
+
+        const prompt = 'PFQA_FAL_PROMPT_SENTINEL';
+        const contextSecret = 'PFQA_FAL_CONFIG_SECRET_SENTINEL';
+        const result = await provider.callApi(prompt, {
+          prompt: {
+            raw: prompt,
+            label: 'test',
+            config: {
+              negative_prompt: contextSecret,
+            },
+          },
+          vars: {},
+        });
+
+        expect(result.cached).toBe(false);
+        const cacheKey = mockCache.get.mock.calls[0]?.[0] as string;
+        expect(cacheKey).toMatch(/^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}$/);
+        expect(cacheKey).not.toContain(prompt);
+        expect(cacheKey).not.toContain(contextSecret);
+        expect(mockCache.set).toHaveBeenCalledWith(
+          cacheKey,
+          JSON.stringify(`![${prompt}](https://example.com/image.png)`),
+        );
+      });
+
       it('should handle cache set errors gracefully', async () => {
         vi.mocked(isCacheEnabled).mockImplementation(function () {
           return true;

@@ -1,6 +1,7 @@
 import { getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
 import logger from '../logger';
+import { sha256 } from '../util/createHash';
 import { ellipsize } from '../util/text';
 import type { Cache } from 'cache-manager';
 
@@ -74,7 +75,7 @@ class FalProvider<Input = Record<string, unknown>> implements ApiProvider {
       ...this.input,
       ...(context?.prompt?.config ?? {}),
     };
-    const cacheKey = `fal:${this.modelName}:${JSON.stringify(input)}`;
+    const cacheKey = `fal:${this.modelName}:${sha256(JSON.stringify(input))}`;
     if (isCacheEnabled()) {
       cache = getCache();
       const cachedResponse = await cache.get<string>(cacheKey);
