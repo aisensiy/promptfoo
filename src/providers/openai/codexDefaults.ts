@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { scryptSync } from 'node:crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -128,7 +128,9 @@ function getCodexDefaultProviderConfig(
 }
 
 function getSecretCacheFingerprint(value: string | undefined): string | undefined {
-  return value ? createHash('sha256').update(value).digest('hex') : undefined;
+  return value
+    ? scryptSync(value, 'promptfoo:codex-default-provider-cache-key', 32).toString('hex')
+    : undefined;
 }
 
 function getCodexDefaultProvidersCacheKey(env?: EnvOverrides): string {
