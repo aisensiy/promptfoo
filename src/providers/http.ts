@@ -1287,6 +1287,39 @@ function sanitizeRequestBodyForMetadata(body: unknown, headers?: Record<string, 
   return sanitizedBody;
 }
 
+function sanitizeTransformedRequestForMetadata(
+  value: unknown,
+  headers?: Record<string, string>,
+): unknown {
+  const sanitizedValue = sanitizeRequestBodyForMetadata(value, headers);
+  if (typeof sanitizedValue !== 'string') {
+    return sanitizedValue;
+  }
+
+  return sanitizedValue
+    .split(/\r?\n/)
+    .map((line) => {
+      const requestLine = line.match(/^([A-Z]+)\s+(\S+)\s+(HTTP\/\d(?:\.\d)?)$/i);
+      if (requestLine) {
+        return `${requestLine[1]} ${sanitizeUrl(requestLine[2])} ${requestLine[3]}`;
+      }
+
+      const headerLine = line.match(/^([^:\s][^:]*):\s*(.*)$/);
+      if (headerLine) {
+        const [, name, value] = headerLine;
+        if (isSecretField(name) || looksLikeSecret(value)) {
+          return `${name}: ${REDACTED}`;
+        }
+      }
+
+      const sanitizedLine = sanitizeRequestBodyForMetadata(line, headers);
+      return typeof sanitizedLine === 'string'
+        ? sanitizedLine
+        : (safeJsonStringify(sanitizedLine) ?? String(sanitizedLine));
+    })
+    .join('\n');
+}
+
 function formatRawRequestForDebugMetadata(
   parsedRequest: ReturnType<typeof parseRawRequest>,
   bodyContent?: string,
@@ -2546,7 +2579,10 @@ export class HttpProvider implements ApiProvider {
       },
     };
     if (context?.debug) {
-      ret.metadata.transformedRequest = transformedPrompt;
+      ret.metadata.transformedRequest = sanitizeTransformedRequestForMetadata(
+        transformedPrompt,
+        renderedConfig.headers,
+      );
       if (multipartBody) {
         ret.metadata.multipart = {
           fields: sanitizeMultipartFields(multipartBody.fields),
@@ -2815,7 +2851,7 @@ export class HttpProvider implements ApiProvider {
         // If no transform was applied, show the final raw request body with nunjucks applied
         // Otherwise show the transformed prompt
         transformedRequest: this.config.transformRequest
-          ? transformedPrompt
+          ? sanitizeTransformedRequestForMetadata(transformedPrompt, parsedRequest.headers)
           : formatRawRequestForDebugMetadata(parsedRequest, bodyContent),
         finalRequestBody: sanitizeRequestBodyForMetadata(bodyContent, parsedRequest.headers),
         http: {

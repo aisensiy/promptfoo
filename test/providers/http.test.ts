@@ -2109,6 +2109,52 @@ describe('HttpProvider', () => {
       expect(result.metadata?.transformedRequest).not.toContain('plain-secret');
     });
 
+    it('should redact transformed raw request strings in debug metadata', async () => {
+      const transformedRawRequest = dedent`
+        GET /api/data?api_key=transform-query-secret HTTP/1.1
+        Host: example.com
+        Authorization: Bearer raw-transform-token-12345678901234567890
+
+        {"apiKey":"sk-123456789012345678901234567890","message":"ok"}
+      `;
+      const provider = new HttpProvider('http', {
+        config: {
+          request: dedent`
+            POST /api/data HTTP/1.1
+            Host: example.com
+            Content-Type: text/plain
+
+            {{prompt}}
+          `,
+          transformRequest: () => transformedRawRequest,
+          transformResponse: (data: any) => data,
+        },
+      });
+
+      vi.mocked(fetchWithCache).mockResolvedValueOnce({
+        data: JSON.stringify({ result: 'success' }),
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+        headers: { 'content-type': 'application/json' },
+      });
+
+      const result = await provider.callApi('test prompt', {
+        debug: true,
+        vars: {},
+        prompt: { raw: 'test prompt', label: 'test' },
+      });
+
+      expect(result.metadata?.transformedRequest).toContain('/api/data?api_key=%5BREDACTED%5D');
+      expect(result.metadata?.transformedRequest).toContain('Authorization: [REDACTED]');
+      expect(result.metadata?.transformedRequest).toContain('"apiKey":"[REDACTED]"');
+      expect(result.metadata?.transformedRequest).not.toContain('transform-query-secret');
+      expect(result.metadata?.transformedRequest).not.toContain('raw-transform-token');
+      expect(result.metadata?.transformedRequest).not.toContain(
+        'sk-123456789012345678901234567890',
+      );
+    });
+
     it('should handle case-insensitive header matching', async () => {
       const provider = new HttpProvider(mockUrl, {
         config: {
@@ -3027,6 +3073,45 @@ describe('response handling', () => {
     });
 
     expect(result.metadata?.finalRequestBody).toEqual({
+      message: 'hello',
+      password: '[REDACTED]',
+      nested: {
+        apiKey: '[REDACTED]',
+      },
+    });
+  });
+
+  it('should redact sensitive transformed request object fields from debug metadata', async () => {
+    const provider = new HttpProvider('http://example.com/api', {
+      config: {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: { message: '{{ prompt }}' },
+        transformRequest: () => ({
+          message: 'hello',
+          password: 'plain-secret',
+          nested: {
+            apiKey: 'sk-123456789012345678901234567890',
+          },
+        }),
+      },
+    });
+
+    vi.mocked(fetchWithCache).mockResolvedValueOnce({
+      data: { result: 'success' },
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      statusText: 'OK',
+      cached: false,
+    });
+
+    const result = await provider.callApi('hello', {
+      debug: true,
+      prompt: { raw: 'hello', label: 'hello' },
+      vars: {},
+    });
+
+    expect(result.metadata?.transformedRequest).toEqual({
       message: 'hello',
       password: '[REDACTED]',
       nested: {
