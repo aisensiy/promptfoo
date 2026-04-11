@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -216,6 +216,7 @@ type PreparedFetchResponse = {
 };
 
 const inflightFetchResponses = new Map<string, Promise<SerializedFetchResponse>>();
+const FETCH_CACHE_KEY_HMAC_KEY = 'promptfoo-fetch-cache-key-v1';
 
 function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
   const headers = new Headers(
@@ -228,7 +229,9 @@ function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
 }
 
 function hashFetchCacheKey(identity: unknown) {
-  return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+  return createHmac('sha256', FETCH_CACHE_KEY_HMAC_KEY)
+    .update(JSON.stringify(identity))
+    .digest('hex');
 }
 
 function hashBytesForCacheKey(bytes: ArrayBuffer | ArrayBufferView) {
@@ -237,7 +240,7 @@ function hashBytesForCacheKey(bytes: ArrayBuffer | ArrayBufferView) {
     : Buffer.from(bytes);
   return {
     byteLength: buffer.byteLength,
-    sha256: createHash('sha256').update(buffer).digest('hex'),
+    sha256: createHmac('sha256', FETCH_CACHE_KEY_HMAC_KEY).update(buffer).digest('hex'),
   };
 }
 
