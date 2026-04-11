@@ -612,6 +612,59 @@ describe('fetchWithCache', () => {
       expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
     });
 
+    it('should isolate cached responses by request headers without storing secrets in the key', async () => {
+      const cache = getCache();
+      mockFetchWithRetries
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'token one data' }))
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'token two data' }));
+
+      const tokenOneResult = await fetchWithCache(
+        'https://api.example.com/data?api_key=secret-url-token',
+        {
+          headers: { Authorization: 'Bearer secret-header-token-one' },
+          method: 'POST',
+          body: JSON.stringify({ apiKey: 'secret-body-token' }),
+        },
+        1000,
+      );
+      const tokenTwoResult = await fetchWithCache(
+        'https://api.example.com/data?api_key=secret-url-token',
+        {
+          headers: { Authorization: 'Bearer secret-header-token-two' },
+          method: 'POST',
+          body: JSON.stringify({ apiKey: 'secret-body-token' }),
+        },
+        1000,
+      );
+
+      expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
+      expect(tokenOneResult.data).toEqual({ data: 'token one data' });
+      expect(tokenTwoResult.data).toEqual({ data: 'token two data' });
+
+      const cacheKeys = vi.mocked(cache.set).mock.calls.map(([cacheKey]) => String(cacheKey));
+      expect(cacheKeys).toHaveLength(2);
+      for (const cacheKey of cacheKeys) {
+        expect(cacheKey).not.toContain('secret-url-token');
+        expect(cacheKey).not.toContain('secret-header-token');
+        expect(cacheKey).not.toContain('secret-body-token');
+      }
+    });
+
+    it('should isolate cached responses by requested response format', async () => {
+      mockFetchWithRetries
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'json data' }))
+        .mockResolvedValueOnce(
+          mockFetchWithRetriesResponse(true, 'plain text response', 'text/plain'),
+        );
+
+      const jsonResult = await fetchWithCache(url, {}, 1000, 'json');
+      const textResult = await fetchWithCache<string>(url, {}, 1000, 'text');
+
+      expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
+      expect(jsonResult.data).toEqual({ data: 'json data' });
+      expect(textResult.data).toBe('plain text response');
+    });
+
     it('should respect cache busting', async () => {
       const mockResponse = mockFetchWithRetriesResponse(true, response);
       mockFetchWithRetries.mockResolvedValueOnce(mockResponse);

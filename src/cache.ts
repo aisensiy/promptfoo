@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHash } from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -216,6 +217,40 @@ type PreparedFetchResponse = {
 
 const inflightFetchResponses = new Map<string, Promise<SerializedFetchResponse>>();
 
+function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
+  const headers = new Headers(
+    options.headers ?? (url instanceof Request ? url.headers : undefined),
+  );
+  return Array.from(headers.entries()).sort(([nameA, valueA], [nameB, valueB]) => {
+    const nameComparison = nameA.localeCompare(nameB);
+    return nameComparison === 0 ? valueA.localeCompare(valueB) : nameComparison;
+  });
+}
+
+function hashFetchCacheKey(identity: unknown) {
+  return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+}
+
+function getFetchCacheKey(
+  url: RequestInfo,
+  options: RequestInit,
+  method: string,
+  format: 'json' | 'text',
+) {
+  const optionsWithoutHeaders = { ...options };
+  delete optionsWithoutHeaders.headers;
+
+  return getScopedCacheKey(
+    `fetch:v3:${hashFetchCacheKey({
+      format,
+      headers: getHeadersForCacheKey(url, options),
+      method,
+      options: optionsWithoutHeaders,
+      url: url instanceof Request ? url.url : String(url),
+    })}`,
+  );
+}
+
 function serializeFetchResponse(
   data: unknown,
   status: number,
@@ -392,9 +427,7 @@ export async function fetchWithCache<T = unknown>(
     }
   }
 
-  const copy = Object.assign({}, options);
-  delete copy.headers;
-  const cacheKey = getScopedCacheKey(`fetch:v2:${url}:${JSON.stringify(copy)}`);
+  const cacheKey = getFetchCacheKey(url, options, method, format);
   const cache = getCacheInstance();
 
   const cachedResponse = await cache.get<SerializedFetchResponse>(cacheKey);
