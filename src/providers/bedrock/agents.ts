@@ -2,6 +2,7 @@ import { getCache, isCacheEnabled } from '../../cache';
 import { getEnvInt } from '../../envars';
 import logger from '../../logger';
 import telemetry from '../../telemetry';
+import { sha256 } from '../../util/createHash';
 import { AwsBedrockGenericProvider } from './base';
 import { createBedrockRequestHandler, hasProxyEnv } from './util';
 import type {
@@ -440,11 +441,13 @@ export class AwsBedrockAgentsProvider extends AwsBedrockGenericProvider implemen
 
     // Cache key based on agent ID and prompt (excluding volatile fields)
     const cache = await getCache();
-    const cacheKey = `bedrock-agent:${this.config.agentId}:${JSON.stringify({
-      prompt,
-      inferenceConfig: this.buildInferenceConfig(),
-      knowledgeBaseConfigurations: this.config.knowledgeBaseConfigurations,
-    })}`;
+    const cacheKey = `bedrock-agent:${this.config.agentId}:${this.config.agentAliasId}:${this.getRegion()}:${sha256(
+      JSON.stringify({
+        prompt,
+        inferenceConfig: this.buildInferenceConfig(),
+        knowledgeBaseConfigurations: this.config.knowledgeBaseConfigurations,
+      }),
+    )}`;
 
     // Check cache
     if (isCacheEnabled()) {

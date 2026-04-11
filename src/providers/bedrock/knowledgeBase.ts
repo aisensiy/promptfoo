@@ -2,6 +2,7 @@ import { getCache, isCacheEnabled } from '../../cache';
 import { getEnvInt } from '../../envars';
 import logger from '../../logger';
 import telemetry from '../../telemetry';
+import { sha256 } from '../../util/createHash';
 import { createEmptyTokenUsage } from '../../util/tokenUsageUtils';
 import { AwsBedrockGenericProvider } from './base';
 import { createBedrockRequestHandler, hasProxyEnv } from './util';
@@ -197,7 +198,12 @@ export class AwsBedrockKnowledgeBaseProvider
     };
 
     const configStr = JSON.stringify(cacheConfig, Object.keys(cacheConfig).sort());
-    const cacheKey = `bedrock-kb:${Buffer.from(configStr).toString('base64')}:${prompt}`;
+    const cacheKey = `bedrock-kb:${this.kbConfig.knowledgeBaseId}:${modelArn}:${this.getRegion()}:${sha256(
+      JSON.stringify({
+        configStr,
+        prompt,
+      }),
+    )}`;
 
     if (isCacheEnabled()) {
       const cachedResponse = await cache.get(cacheKey);
