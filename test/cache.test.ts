@@ -612,6 +612,34 @@ describe('fetchWithCache', () => {
       expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
     });
 
+    it('should not cache opaque FormData request bodies', async () => {
+      const cache = getCache();
+      const firstFormData = new FormData();
+      firstFormData.append('file', new Blob(['audio-one']), 'sample.wav');
+      const secondFormData = new FormData();
+      secondFormData.append('file', new Blob(['audio-two']), 'sample.wav');
+
+      mockFetchWithRetries
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'first audio' }))
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'second audio' }));
+
+      const firstResult = await fetchWithCache(
+        url,
+        { headers: { Authorization: 'Bearer same-token' }, method: 'POST', body: firstFormData },
+        1000,
+      );
+      const secondResult = await fetchWithCache(
+        url,
+        { headers: { Authorization: 'Bearer same-token' }, method: 'POST', body: secondFormData },
+        1000,
+      );
+
+      expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
+      expect(firstResult.data).toEqual({ data: 'first audio' });
+      expect(secondResult.data).toEqual({ data: 'second audio' });
+      expect(vi.mocked(cache.set)).not.toHaveBeenCalled();
+    });
+
     it('should isolate cached responses by request headers without storing secrets in the key', async () => {
       const cache = getCache();
       mockFetchWithRetries

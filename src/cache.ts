@@ -231,13 +231,57 @@ function hashFetchCacheKey(identity: unknown) {
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
 }
 
+function hashBytesForCacheKey(bytes: ArrayBuffer | ArrayBufferView) {
+  const buffer = ArrayBuffer.isView(bytes)
+    ? Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    : Buffer.from(bytes);
+  return {
+    byteLength: buffer.byteLength,
+    sha256: createHash('sha256').update(buffer).digest('hex'),
+  };
+}
+
+function getBodyForFetchCacheKey(body: RequestInit['body'] | ReadableStream | null | undefined) {
+  if (body == null) {
+    return { cacheable: true, identity: undefined };
+  }
+
+  if (typeof body === 'string') {
+    return { cacheable: true, identity: { type: 'string', value: body } };
+  }
+
+  if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+    return { cacheable: true, identity: { type: 'url-search-params', value: body.toString() } };
+  }
+
+  if (body instanceof ArrayBuffer) {
+    return { cacheable: true, identity: { type: 'array-buffer', ...hashBytesForCacheKey(body) } };
+  }
+
+  if (ArrayBuffer.isView(body)) {
+    return {
+      cacheable: true,
+      identity: { type: body.constructor.name, ...hashBytesForCacheKey(body) },
+    };
+  }
+
+  return { cacheable: false, identity: undefined };
+}
+
 function getFetchCacheKey(
   url: RequestInfo,
   options: RequestInit,
   method: string,
   format: 'json' | 'text',
 ) {
-  const optionsWithoutHeaders = { ...options };
+  const bodyForCacheKey = getBodyForFetchCacheKey(
+    options.body ?? (url instanceof Request ? url.body : undefined),
+  );
+  if (!bodyForCacheKey.cacheable) {
+    return null;
+  }
+
+  const optionsWithoutHeaders = { ...options, body: bodyForCacheKey.identity };
   delete optionsWithoutHeaders.headers;
 
   return getScopedCacheKey(
@@ -402,7 +446,9 @@ export async function fetchWithCache<T = unknown>(
   const method = (options.method ?? (url instanceof Request ? url.method : 'GET')).toUpperCase();
   const isIdempotent = ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'].includes(method);
 
-  if (!enabled || bust) {
+  const cacheKey = enabled && !bust ? getFetchCacheKey(url, options, method, format) : null;
+
+  if (!enabled || bust || cacheKey == null) {
     const { respText, resp, fetchLatencyMs } = await fetchAndReadBody(
       url,
       options,
@@ -427,7 +473,6 @@ export async function fetchWithCache<T = unknown>(
     }
   }
 
-  const cacheKey = getFetchCacheKey(url, options, method, format);
   const cache = getCacheInstance();
 
   const cachedResponse = await cache.get<SerializedFetchResponse>(cacheKey);
