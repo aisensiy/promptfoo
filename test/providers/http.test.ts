@@ -2054,9 +2054,13 @@ describe('HttpProvider', () => {
 
     it('should redact auth headers in raw request mode with debug context', async () => {
       const rawRequest = dedent`
-        GET /api/data HTTP/1.1
+        POST /api/data?api_key=secret-query-value HTTP/1.1
         Host: example.com
+        Authorization: Bearer raw-request-token-12345678901234567890
+        Content-Type: application/json
         User-Agent: TestAgent/1.0
+
+        {"password":"plain-secret","message":"ok"}
       `;
       const provider = new HttpProvider('http', {
         config: {
@@ -2092,6 +2096,17 @@ describe('HttpProvider', () => {
         'content-type': 'application/json',
         etag: 'W/"123"',
       });
+      expect(result.metadata?.http.requestHeaders).toEqual({
+        authorization: '[REDACTED]',
+        host: 'example.com',
+        'content-type': 'application/json',
+        'user-agent': 'TestAgent/1.0',
+      });
+      expect(result.metadata?.finalRequestBody).toBe('{"password":"[REDACTED]","message":"ok"}');
+      expect(result.metadata?.transformedRequest).toContain('/api/data?api_key=%5BREDACTED%5D');
+      expect(result.metadata?.transformedRequest).not.toContain('secret-query-value');
+      expect(result.metadata?.transformedRequest).not.toContain('raw-request-token');
+      expect(result.metadata?.transformedRequest).not.toContain('plain-secret');
     });
 
     it('should handle case-insensitive header matching', async () => {
@@ -2977,6 +2992,47 @@ describe('response handling', () => {
       transformedRequest: 'test',
     });
     expect(result.raw).toEqual(mockData);
+  });
+
+  it('should redact sensitive request body fields from debug metadata', async () => {
+    const provider = new HttpProvider('http://example.com/api', {
+      config: {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: {
+          message: '{{ prompt }}',
+          password: '{{ password }}',
+          nested: {
+            apiKey: '{{ apiKey }}',
+          },
+        },
+      },
+    });
+
+    vi.mocked(fetchWithCache).mockResolvedValueOnce({
+      data: { result: 'success' },
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      statusText: 'OK',
+      cached: false,
+    });
+
+    const result = await provider.callApi('hello', {
+      debug: true,
+      prompt: { raw: 'hello', label: 'hello' },
+      vars: {
+        password: 'plain-secret',
+        apiKey: 'sk-123456789012345678901234567890',
+      },
+    });
+
+    expect(result.metadata?.finalRequestBody).toEqual({
+      message: 'hello',
+      password: '[REDACTED]',
+      nested: {
+        apiKey: '[REDACTED]',
+      },
+    });
   });
 
   it('should handle plain text non-JSON responses', async () => {

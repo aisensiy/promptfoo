@@ -1235,6 +1235,79 @@ export function extractBodyFromRawRequest(rawRequest: string): string | undefine
   return body.length > 0 ? body : undefined;
 }
 
+function getHeaderValue(
+  headers: Record<string, string> | undefined,
+  headerName: string,
+): string | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  const normalizedHeaderName = headerName.toLowerCase();
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === normalizedHeaderName);
+  return entry?.[1];
+}
+
+function sanitizeUrlEncodedBody(body: string): string {
+  if (!body.includes('=')) {
+    return body;
+  }
+
+  try {
+    const params = new URLSearchParams(body);
+    const entries = Array.from(params.entries());
+    if (entries.length === 0) {
+      return body;
+    }
+
+    let changed = false;
+    for (const [key, value] of entries) {
+      if (isSecretField(key) || looksLikeSecret(value)) {
+        params.set(key, REDACTED);
+        changed = true;
+      }
+    }
+
+    return changed ? params.toString() : body;
+  } catch {
+    return body;
+  }
+}
+
+function sanitizeRequestBodyForMetadata(body: unknown, headers?: Record<string, string>): unknown {
+  const sanitizedBody = sanitizeObject(body, { context: 'request body' });
+  if (typeof sanitizedBody !== 'string' || sanitizedBody.length === 0) {
+    return sanitizedBody;
+  }
+
+  const contentType = getHeaderValue(headers, 'content-type')?.toLowerCase();
+  if (contentType?.includes('application/x-www-form-urlencoded')) {
+    return sanitizeUrlEncodedBody(sanitizedBody);
+  }
+
+  return sanitizedBody;
+}
+
+function formatRawRequestForDebugMetadata(
+  parsedRequest: ReturnType<typeof parseRawRequest>,
+  bodyContent?: string,
+): string {
+  const requestLines = [`${parsedRequest.method} ${sanitizeUrl(parsedRequest.url)} HTTP/1.1`];
+  const sanitizedHeaders = sanitizeObject(parsedRequest.headers, {
+    context: 'request headers',
+  }) as Record<string, string>;
+
+  for (const [key, value] of Object.entries(sanitizedHeaders)) {
+    requestLines.push(`${key}: ${value}`);
+  }
+
+  const sanitizedBody = sanitizeRequestBodyForMetadata(bodyContent, parsedRequest.headers);
+  if (sanitizedBody !== undefined) {
+    requestLines.push('', String(sanitizedBody));
+  }
+
+  return requestLines.join('\n');
+}
+
 export function determineRequestBody(
   contentType: boolean,
   parsedPrompt: any,
@@ -2480,7 +2553,10 @@ export class HttpProvider implements ApiProvider {
           files: sanitizeMultipartFiles(multipartBody.files),
         };
       } else {
-        ret.metadata.finalRequestBody = renderedConfig.body;
+        ret.metadata.finalRequestBody = sanitizeRequestBodyForMetadata(
+          renderedConfig.body,
+          renderedConfig.headers,
+        );
       }
     }
 
@@ -2740,8 +2816,8 @@ export class HttpProvider implements ApiProvider {
         // Otherwise show the transformed prompt
         transformedRequest: this.config.transformRequest
           ? transformedPrompt
-          : parsedRequest.body?.text || renderedRequest.trim(),
-        finalRequestBody: parsedRequest.body?.text,
+          : formatRawRequestForDebugMetadata(parsedRequest, bodyContent),
+        finalRequestBody: sanitizeRequestBodyForMetadata(bodyContent, parsedRequest.headers),
         http: {
           status,
           statusText,
