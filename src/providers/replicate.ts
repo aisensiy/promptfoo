@@ -176,8 +176,10 @@ export class ReplicateProvider implements ApiProvider {
     let cacheKey;
     if (isCacheEnabled()) {
       cache = await getCache();
-      cacheKey = `replicate:${this.modelName}:${hashReplicateCacheValue({
-        apiKey: fingerprintReplicateSecret('apiKey', this.apiKey),
+      cacheKey = `replicate:${this.modelName}:${fingerprintReplicateSecret(
+        'apiKey',
+        this.apiKey,
+      )}:${hashReplicateCacheValue({
         config: this.config,
         prompt,
       })}`;
@@ -431,8 +433,10 @@ export class ReplicateImageProvider extends ReplicateProvider {
     }
 
     const cache = getCache();
-    const cacheKey = `replicate:image:${this.modelName}:${hashReplicateCacheValue({
-      apiKey: fingerprintReplicateSecret('apiKey', this.apiKey),
+    const cacheKey = `replicate:image:${this.modelName}:${fingerprintReplicateSecret(
+      'apiKey',
+      this.apiKey,
+    )}:${hashReplicateCacheValue({
       config: this.config,
       context: omitReplicateSecretFields(context),
       prompt,

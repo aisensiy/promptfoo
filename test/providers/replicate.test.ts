@@ -318,7 +318,7 @@ describe('ReplicateProvider', () => {
     expect(result.output).toBe('test response');
     expect(mockCache.set).toHaveBeenCalledTimes(1);
     const cacheKey = mockCache.set.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^replicate:test-model:[a-f0-9]{64}$/);
+    expect(cacheKey).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain(mockApiKey);
     expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
@@ -370,8 +370,8 @@ describe('ReplicateProvider', () => {
 
     const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
     const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
-    expect(cacheKeyA).toMatch(/^replicate:test-model:[a-f0-9]{64}$/);
-    expect(cacheKeyB).toMatch(/^replicate:test-model:[a-f0-9]{64}$/);
+    expect(cacheKeyA).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKeyB).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKeyA).not.toBe(cacheKeyB);
     expect(mockedFetchWithCache).toHaveBeenCalledTimes(2);
     for (const cacheKey of [cacheKeyA, cacheKeyB]) {
@@ -693,7 +693,7 @@ describe('ReplicateImageProvider', () => {
 
     expect(result.cached).toBe(false);
     const cacheKey = mockCache.set.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^replicate:image:test-model:[a-f0-9]{64}$/);
+    expect(cacheKey).toMatch(/^replicate:image:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain('PFQA_REPLICATE_IMAGE_CONFIG_SENTINEL');
     expect(cacheKey).not.toContain(mockApiKey);
