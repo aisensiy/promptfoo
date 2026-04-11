@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { csrfProtection } from '../../../src/server/middleware/csrfProtection';
+import {
+  csrfProtection,
+  isAllowedBrowserOrigin,
+} from '../../../src/server/middleware/csrfProtection';
 import type { NextFunction, Request, Response } from 'express';
 
 vi.mock('../../../src/logger', () => ({
@@ -226,5 +229,44 @@ describe('csrfProtection', () => {
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(403);
     });
+  });
+});
+
+describe('isAllowedBrowserOrigin', () => {
+  beforeEach(() => {
+    vi.mocked(getEnvString).mockImplementation(
+      (_key: string, defaultValue?: string) => defaultValue ?? '',
+    );
+  });
+
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('allows non-browser requests without origin', () => {
+    expect(isAllowedBrowserOrigin(undefined, 'localhost:15500')).toBe(true);
+  });
+
+  it('allows same-host browser origins', () => {
+    expect(isAllowedBrowserOrigin('http://localhost:3000', 'localhost:15500')).toBe(true);
+  });
+
+  it('allows localhost aliases', () => {
+    expect(isAllowedBrowserOrigin('http://local.promptfoo.app:5173', '127.0.0.1:15500')).toBe(true);
+  });
+
+  it('allows explicitly configured origins', () => {
+    vi.mocked(getEnvString).mockImplementation((_key: string, defaultValue?: string) => {
+      if (_key === 'PROMPTFOO_CSRF_ALLOWED_ORIGINS') {
+        return 'https://allowed.example';
+      }
+      return defaultValue ?? '';
+    });
+
+    expect(isAllowedBrowserOrigin('https://allowed.example', 'localhost:15500')).toBe(true);
+  });
+
+  it('rejects hostile browser origins', () => {
+    expect(isAllowedBrowserOrigin('https://evil.example', 'localhost:15500')).toBe(false);
   });
 });

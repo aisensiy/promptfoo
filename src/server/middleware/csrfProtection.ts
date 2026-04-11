@@ -50,6 +50,24 @@ function isAllowedCrossSite(origin: string, host: string): boolean {
   return getAllowedOrigins().has(origin);
 }
 
+export function isAllowedBrowserOrigin(origin: string | undefined, host: string): boolean {
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const originHostname = new URL(origin).hostname;
+    const targetHostname = stripPort(host);
+    if (originHostname === targetHostname) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return isAllowedCrossSite(origin, host);
+}
+
 export function csrfProtection(req: Request, res: Response, next: NextFunction): void {
   if (SAFE_METHODS.has(req.method)) {
     return next();
@@ -88,17 +106,8 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
 
   // Path 2: No Sec-Fetch-Site but Origin present (older browser)
   if (origin) {
-    try {
-      const originHostname = new URL(origin).hostname;
-      const targetHostname = stripPort(host);
-      if (originHostname === targetHostname) {
-        return next();
-      }
-      if (isAllowedCrossSite(origin, host)) {
-        return next();
-      }
-    } catch {
-      // Malformed Origin header — fall through to block
+    if (isAllowedBrowserOrigin(origin, host)) {
+      return next();
     }
     logger.warn('[CSRF] Blocked cross-origin request', {
       method: req.method,

@@ -1,5 +1,5 @@
 import compression from 'compression';
-import cors from 'cors';
+import cors, { type CorsOptions, type CorsOptionsDelegate } from 'cors';
 import dotenv from 'dotenv';
 
 dotenv.config({ quiet: true });
@@ -32,7 +32,7 @@ import {
 } from '../util/database';
 import invariant from '../util/invariant';
 import { BrowserBehavior, BrowserBehaviorNames, openBrowser } from '../util/server';
-import { csrfProtection } from './middleware/csrfProtection';
+import { csrfProtection, isAllowedBrowserOrigin } from './middleware/csrfProtection';
 import { blobsRouter } from './routes/blobs';
 import { configsRouter } from './routes/configs';
 import { evalRouter } from './routes/eval';
@@ -56,6 +56,24 @@ const JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 
 // Express middleware limits
 const REQUEST_SIZE_LIMIT = '100mb';
+
+export const localCorsOptionsDelegate: CorsOptionsDelegate<Request> = (req, callback) => {
+  const origin = req.headers.origin;
+  const host = req.headers.host || '';
+  const allowOrigin =
+    typeof origin === 'string' && isAllowedBrowserOrigin(origin, host) ? origin : false;
+  const options: CorsOptions = {
+    origin: allowOrigin,
+  };
+  callback(null, options);
+};
+
+export function isSocketIoOriginAllowed(
+  origin: string | undefined,
+  port: number | string,
+): boolean {
+  return isAllowedBrowserOrigin(origin, `localhost:${port}`);
+}
 
 /**
  * Middleware to set proper MIME types for JavaScript files.
@@ -119,7 +137,7 @@ export function createApp() {
 
   const staticDir = findStaticDir();
 
-  app.use(cors());
+  app.use(cors(localCorsOptionsDelegate));
   app.use(csrfProtection);
   app.use(compression());
   app.use(express.json({ limit: REQUEST_SIZE_LIMIT }));
@@ -318,7 +336,9 @@ export async function startServer(
   const httpServer = http.createServer(app);
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: '*',
+      origin: (origin, callback) => {
+        callback(null, isSocketIoOriginAllowed(origin, port));
+      },
     },
   });
 
