@@ -840,16 +840,11 @@ async function realpathOrResolved(filePath: string): Promise<string> {
   }
 }
 
-async function trustedVerifierArtifactRoots(
-  renderedValue: AssertionValue | undefined,
-  test: AtomicTestCase,
-): Promise<string[]> {
+async function trustedVerifierArtifactRoots(test: AtomicTestCase): Promise<string[]> {
   const trustedAnchors = await verifierArtifactRootAnchors();
-  const roots = stringsFromAssertionAndTest(
-    VERIFIER_ARTIFACT_ROOT_KEYS,
-    renderedValue,
-    test,
-  ).filter(containsPathSeparator);
+  const roots = stringsFromAssertionAndTest(VERIFIER_ARTIFACT_ROOT_KEYS, undefined, test).filter(
+    containsPathSeparator,
+  );
   const resolvedRoots = await Promise.all(
     roots.map(async (root) => [path.resolve(root), await realpathOrResolved(root)]),
   );
@@ -2029,7 +2024,7 @@ async function verifyProtectedVerifierFiles(
   renderedValue: AssertionValue | undefined,
   test: AtomicTestCase,
 ): Promise<CodingAgentVerifierFinding | undefined> {
-  const trustedRoots = await trustedVerifierArtifactRoots(renderedValue, test);
+  const trustedRoots = await trustedVerifierArtifactRoots(test);
 
   for (const expectation of fileExpectationsFromAssertion(renderedValue)) {
     if (!expectation.expectedSha256) {
@@ -2099,10 +2094,7 @@ async function verifyVerifierSidecar(
   }
 
   if (
-    !(await isTrustedVerifierArtifactPath(
-      reportPath,
-      await trustedVerifierArtifactRoots(renderedValue, test),
-    ))
+    !(await isTrustedVerifierArtifactPath(reportPath, await trustedVerifierArtifactRoots(test)))
   ) {
     return {
       kind: 'verifier-sidecar-failed',
