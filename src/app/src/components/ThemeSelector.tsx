@@ -1,3 +1,4 @@
+import { Button } from '@app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@app/components/ui/tooltip';
 import { type ThemePreference, useThemePreference } from '@app/hooks/useThemePreference';
 import { cn } from '@app/lib/utils';
@@ -51,15 +52,15 @@ function ThemeSelector() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           type="button"
           onClick={handleThemePreferenceChange}
           aria-label={`Theme preference: ${currentThemeLabel} (currently ${resolvedTheme}). Switch to ${nextThemeLabel}.`}
           className={cn(
-            'relative inline-flex size-9 items-center justify-center rounded-full p-2 text-foreground/60',
-            'transition-all duration-200 hover:bg-black/[0.04] hover:text-foreground hover:rotate-[15deg]',
-            'dark:hover:bg-white/[0.08]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'relative rounded-full text-foreground/60 transition-all duration-200 hover:rotate-[15deg] hover:text-foreground',
+            '[&_svg]:size-5',
           )}
         >
           {THEME_ORDER.map((preference) => {
@@ -78,7 +79,7 @@ function ThemeSelector() {
               />
             );
           })}
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{tooltipLabel}</TooltipContent>
     </Tooltip>

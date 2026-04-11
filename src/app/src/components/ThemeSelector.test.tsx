@@ -1,8 +1,12 @@
 import { TooltipProvider } from '@app/components/ui/tooltip';
-import { mockMatchMedia as installMatchMedia, restoreBrowserMocks } from '@app/tests/browserMocks';
+import {
+  mockMatchMedia as installMatchMedia,
+  mockBrowserProperty,
+  restoreBrowserMocks,
+} from '@app/tests/browserMocks';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ThemeSelector from './ThemeSelector';
 
 const SYSTEM_DARK_MODE_QUERY = '(prefers-color-scheme: dark)';
@@ -100,6 +104,37 @@ describe('ThemeSelector', () => {
     expect(localStorage.getItem('darkMode')).toBeNull();
   });
 
+  it('uses the system preference when localStorage reads are blocked', async () => {
+    restoreBrowserMocks();
+    installSystemTheme(true);
+    mockBrowserProperty(window, 'localStorage', {
+      getItem: vi.fn(() => {
+        throw new Error('localStorage blocked');
+      }),
+      removeItem: vi.fn(),
+      setItem: vi.fn(),
+    } as unknown as Storage);
+
+    renderThemeSelector();
+
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    });
+  });
+
+  it('falls back to light when matchMedia is unavailable', () => {
+    restoreBrowserMocks();
+    mockBrowserProperty(window, 'matchMedia', undefined);
+
+    renderThemeSelector();
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+      }),
+    ).toBeInTheDocument();
+  });
+
   it('persists explicit dark and light preferences', async () => {
     const user = userEvent.setup();
     renderThemeSelector();
@@ -136,6 +171,29 @@ describe('ThemeSelector', () => {
       expect(document.documentElement.getAttribute('data-theme')).toBeNull();
     });
     expect(localStorage.getItem('darkMode')).toBeNull();
+  });
+
+  it('syncs back to system when localStorage is cleared in another tab', async () => {
+    localStorage.setItem('darkMode', 'true');
+    renderThemeSelector();
+
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    });
+
+    localStorage.clear();
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: null }));
+    });
+
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+    });
+    expect(
+      screen.getByRole('button', {
+        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+      }),
+    ).toBeInTheDocument();
   });
 
   it('follows system changes only when system preference is selected', async () => {

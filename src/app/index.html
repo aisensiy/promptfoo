@@ -9,19 +9,26 @@
     <meta property="og:image" content="https://www.promptfoo.dev/img/thumbnail.png" />
     <script>
       (() => {
+        let savedMode = null;
+        let systemPrefersDark = false;
+
         try {
-          const savedMode = localStorage.getItem('darkMode');
-          const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          const resolvedTheme =
-            savedMode === 'true' || (savedMode !== 'false' && systemPrefersDark) ? 'dark' : 'light';
+          systemPrefersDark =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+        } catch {}
 
-          document.documentElement.style.colorScheme = resolvedTheme;
+        try {
+          savedMode = localStorage.getItem('darkMode');
+        } catch {}
 
-          if (resolvedTheme === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-          }
-        } catch {
-          document.documentElement.style.colorScheme = 'light dark';
+        const resolvedTheme =
+          savedMode === 'true' || (savedMode !== 'false' && systemPrefersDark) ? 'dark' : 'light';
+
+        document.documentElement.style.colorScheme = resolvedTheme;
+
+        if (resolvedTheme === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
         }
       })();
     </script>

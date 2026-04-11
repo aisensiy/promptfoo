@@ -7,11 +7,21 @@ const DARK_MODE_STORAGE_KEY = 'darkMode';
 const SYSTEM_DARK_MODE_QUERY = '(prefers-color-scheme: dark)';
 
 function getSystemTheme(): ResolvedTheme {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'light';
+  }
+
   return window.matchMedia(SYSTEM_DARK_MODE_QUERY).matches ? 'dark' : 'light';
 }
 
 function getStoredThemePreference(): ThemePreference {
-  const savedMode = localStorage.getItem(DARK_MODE_STORAGE_KEY);
+  let savedMode: string | null = null;
+
+  try {
+    savedMode = localStorage.getItem(DARK_MODE_STORAGE_KEY);
+  } catch {
+    return 'system';
+  }
 
   if (savedMode === 'true') {
     return 'dark';
@@ -25,15 +35,21 @@ function getStoredThemePreference(): ThemePreference {
 }
 
 function persistThemePreference(preference: ThemePreference) {
-  if (preference === 'system') {
-    localStorage.removeItem(DARK_MODE_STORAGE_KEY);
-    return;
-  }
+  try {
+    if (preference === 'system') {
+      localStorage.removeItem(DARK_MODE_STORAGE_KEY);
+      return;
+    }
 
-  localStorage.setItem(DARK_MODE_STORAGE_KEY, String(preference === 'dark'));
+    localStorage.setItem(DARK_MODE_STORAGE_KEY, String(preference === 'dark'));
+  } catch {}
 }
 
 function applyResolvedTheme(theme: ResolvedTheme) {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
   if (theme === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
   } else {
@@ -54,6 +70,10 @@ export function useThemePreference() {
   }, [resolvedTheme]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+
     const systemPreference = window.matchMedia(SYSTEM_DARK_MODE_QUERY);
 
     const handleSystemPreferenceChange = ({ matches }: { matches: boolean }) => {
@@ -68,8 +88,12 @@ export function useThemePreference() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === DARK_MODE_STORAGE_KEY) {
+      if (event.key === DARK_MODE_STORAGE_KEY || event.key === null) {
         setThemePreferenceState(getStoredThemePreference());
       }
     };
