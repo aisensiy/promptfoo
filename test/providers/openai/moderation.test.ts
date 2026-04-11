@@ -396,6 +396,68 @@ describe('OpenAiModerationProvider', () => {
       );
     });
 
+    it('hashes cached mixed text and image inputs without leaking raw content', async () => {
+      vi.mocked(isCacheEnabled).mockImplementation(function () {
+        return true;
+      });
+
+      const apiKey = 'sk-secret-moderation-key';
+      const headerSecret = 'Bearer moderation-header-secret';
+      const textSecret = 'multimodal-secret-text';
+      const imageUrl = 'https://example.com/image.png?token=image-secret-token';
+      const provider = new OpenAiModerationProvider('omni-moderation-latest', {
+        config: {
+          apiKey,
+          headers: {
+            Authorization: headerSecret,
+          },
+        },
+      });
+
+      const mockResponse = {
+        id: 'modr-123',
+        model: 'omni-moderation-latest',
+        results: [{ flagged: false, categories: {}, category_scores: {} }],
+      };
+
+      const mockCache = {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+      };
+
+      vi.mocked(getCache).mockImplementation(function () {
+        return mockCache as any;
+      });
+      vi.mocked(fetchWithCache).mockResolvedValueOnce({
+        data: mockResponse,
+        status: 200,
+        statusText: 'OK',
+        cached: false,
+      });
+
+      const imageInput: Array<TextInput | ImageInput> = [
+        { type: 'text' as const, text: textSecret },
+        {
+          type: 'image_url' as const,
+          image_url: { url: imageUrl },
+        },
+      ];
+
+      await provider.callModerationApi('user input', imageInput);
+
+      const cacheGetKey = mockCache.get.mock.calls[0][0] as string;
+      const cacheSetKey = mockCache.set.mock.calls[0][0] as string;
+      expect(cacheGetKey).toBe(cacheSetKey);
+      expect(cacheSetKey).toMatch(
+        /^openai:moderation:omni-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
+      expect(cacheSetKey).not.toContain(textSecret);
+      expect(cacheSetKey).not.toContain(imageUrl);
+      expect(cacheSetKey).not.toContain('image-secret-token');
+      expect(cacheSetKey).not.toContain(apiKey);
+      expect(cacheSetKey).not.toContain(headerSecret);
+    });
+
     it('should show which input types triggered each flag', async () => {
       const provider = createProvider('omni-moderation-latest');
 
