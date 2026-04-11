@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getCache, isCacheEnabled } from '../../../src/cache';
 import logger from '../../../src/logger';
 import { AzureFoundryAgentProvider } from '../../../src/providers/azure/foundry-agent';
 
@@ -420,6 +421,31 @@ describe('AzureFoundryAgentProvider', () => {
       expect(firstRequestBody).not.toHaveProperty('timeoutMs');
       expect(firstRequestBody).not.toHaveProperty('tool_resources');
       expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+    });
+
+    it('should hash the request body in cache keys', async () => {
+      mockGetAgent.mockResolvedValue(mockAgent);
+      mockResponsesCreate.mockResolvedValue(createMessageResponse('Test response'));
+
+      const mockCache = {
+        get: vi.fn().mockResolvedValue(undefined),
+        set: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(getCache).mockResolvedValue(mockCache as any);
+
+      const secret = 'sk-test-12345678901234567890';
+      const provider = new AzureFoundryAgentProvider('weather-agent', {
+        config: { projectUrl },
+      });
+
+      await provider.callApi(`weather in Paris ${secret}`);
+
+      const cacheKey = mockCache.get.mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(/^azure_foundry_agent:weather-agent:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain(secret);
+      expect(cacheKey).not.toContain('weather in Paris');
+      expect(mockCache.set).toHaveBeenCalledWith(cacheKey, expect.any(Object));
     });
   });
 

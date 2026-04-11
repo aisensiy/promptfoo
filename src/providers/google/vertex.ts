@@ -7,6 +7,7 @@ import {
   type GenAISpanResult,
   withGenAISpan,
 } from '../../tracing/genaiTracer';
+import { sha256 } from '../../util/createHash';
 import { fetchWithProxy } from '../../util/fetch/index';
 import { maybeLoadFromExternalFile } from '../../util/file';
 import { renderVarsInObject } from '../../util/index';
@@ -64,6 +65,10 @@ function getVertexApiHost(
     getEnvString('VERTEX_API_HOST') ||
     (region === 'global' ? 'aiplatform.googleapis.com' : `${region}-aiplatform.googleapis.com`)
   );
+}
+
+function getVertexBodyCacheKey(prefix: string, body: unknown): string {
+  return `${prefix}:${sha256(JSON.stringify(body))}`;
 }
 
 /**
@@ -287,7 +292,10 @@ export class VertexChatProvider extends GoogleGenericProvider {
     const showThinking = this.config.showThinking ?? isThinkingEnabled;
 
     const cache = await getCache();
-    const cacheKey = `vertex:claude:${this.modelName}:showThinking=${showThinking}:${JSON.stringify(body)}`;
+    const cacheKey = getVertexBodyCacheKey(
+      `vertex:claude:${this.modelName}:showThinking=${showThinking}`,
+      body,
+    );
 
     let cachedResponse;
     if (isCacheEnabled()) {
@@ -487,7 +495,7 @@ export class VertexChatProvider extends GoogleGenericProvider {
     }
 
     const cache = await getCache();
-    const cacheKey = `vertex:${this.modelName}:${JSON.stringify(body)}`;
+    const cacheKey = getVertexBodyCacheKey(`vertex:${this.modelName}`, body);
 
     let response;
     let cachedResponse;
@@ -823,7 +831,7 @@ export class VertexChatProvider extends GoogleGenericProvider {
     };
 
     const cache = await getCache();
-    const cacheKey = `vertex:palm2:${JSON.stringify(body)}`;
+    const cacheKey = getVertexBodyCacheKey('vertex:palm2', body);
 
     let cachedResponse;
     if (isCacheEnabled()) {
@@ -952,7 +960,7 @@ export class VertexChatProvider extends GoogleGenericProvider {
     logger.debug(`Preparing to call Llama API with body: ${JSON.stringify(body)}`);
 
     const cache = await getCache();
-    const cacheKey = `vertex:llama:${this.modelName}:${JSON.stringify(body)}`;
+    const cacheKey = getVertexBodyCacheKey(`vertex:llama:${this.modelName}`, body);
 
     let cachedResponse;
     if (isCacheEnabled()) {

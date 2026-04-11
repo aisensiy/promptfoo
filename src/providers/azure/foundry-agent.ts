@@ -4,6 +4,7 @@ import { getCache, isCacheEnabled } from '../../cache';
 import cliState from '../../cliState';
 import { importModule } from '../../esm';
 import logger from '../../logger';
+import { sha256 } from '../../util/createHash';
 import { isJavascriptFile } from '../../util/fileExtensions';
 import {
   maybeLoadResponseFormatFromExternalFile,
@@ -472,7 +473,7 @@ export class AzureFoundryAgentProvider extends AzureGenericProvider {
     _callApiOptions?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
     const { body, effectiveConfig } = await this.buildResponsesBody(prompt, context);
-    const cacheKey = `azure_foundry_agent:${this.deploymentName}:${JSON.stringify(body)}`;
+    const cacheKey = `azure_foundry_agent:${this.deploymentName}:${sha256(JSON.stringify(body))}`;
 
     if (isCacheEnabled()) {
       try {

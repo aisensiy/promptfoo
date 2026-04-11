@@ -525,6 +525,9 @@ describe('VertexChatProvider.callGeminiApi', () => {
     provider = new VertexChatProvider('gemini-2.0-flash-001');
     await provider.callGeminiApi('test prompt');
 
+    const cacheKey = mockCacheSet.mock.calls[0][0] as string;
+    expect(cacheKey).toMatch(/^vertex:gemini-2\.0-flash-001:[a-f0-9]{64}$/);
+    expect(cacheKey).not.toContain('test prompt');
     expect(mockCacheSet).toHaveBeenCalledWith(
       expect.stringContaining('vertex:gemini-2.0-flash-001:'),
       expect.any(String),
