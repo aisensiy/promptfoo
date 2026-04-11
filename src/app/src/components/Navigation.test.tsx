@@ -1,6 +1,5 @@
-import type { ComponentProps } from 'react';
-
 import { TooltipProvider } from '@app/components/ui/tooltip';
+import { mockMatchMedia, restoreBrowserMocks } from '@app/tests/browserMocks';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,17 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Navigation from './Navigation';
 
 // Helper function to render Navigation with all required providers
-const defaultNavigationProps = {
-  onThemePreferenceChange: () => {},
-  resolvedTheme: 'light',
-  systemTheme: 'light',
-  themePreference: 'system',
-} satisfies ComponentProps<typeof Navigation>;
-
-const renderNavigation = (
-  props: Partial<ComponentProps<typeof Navigation>> = {},
-  routerProps: { initialEntries?: string[] } = {},
-) => {
+const renderNavigation = (routerProps: { initialEntries?: string[] } = {}) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -32,14 +21,14 @@ const renderNavigation = (
     <TooltipProvider delayDuration={0}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter {...routerProps}>
-          <Navigation {...defaultNavigationProps} {...props} />
+          <Navigation />
         </MemoryRouter>
       </QueryClientProvider>
     </TooltipProvider>,
   );
 };
 
-const renderWithModal = (navigationProps: Partial<ComponentProps<typeof Navigation>> = {}) => {
+const renderWithModal = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -69,7 +58,7 @@ const renderWithModal = (navigationProps: Partial<ComponentProps<typeof Navigati
     <TooltipProvider delayDuration={0}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <Navigation {...defaultNavigationProps} {...navigationProps} />
+          <Navigation />
           <Modal />
         </MemoryRouter>
       </QueryClientProvider>
@@ -79,10 +68,15 @@ const renderWithModal = (navigationProps: Partial<ComponentProps<typeof Navigati
 
 describe('Navigation', () => {
   beforeEach(() => {
+    localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
+    document.documentElement.style.colorScheme = '';
+    mockMatchMedia();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
+    restoreBrowserMocks();
     vi.restoreAllMocks();
   });
 
@@ -111,29 +105,42 @@ describe('Navigation', () => {
   });
 
   it('activates the Create button when on model audit setup page', () => {
-    renderNavigation({}, { initialEntries: ['/model-audit/setup'] });
+    renderNavigation({ initialEntries: ['/model-audit/setup'] });
     const createButton = screen.getByText('New').closest('button');
     // The Create button gets a visual highlight when active, but specific class depends on implementation
     expect(createButton).toBeInTheDocument();
   });
 
-  it('changes theme preference from the theme selector menu', async () => {
+  it('changes theme preference from the compact theme button', async () => {
     const user = userEvent.setup();
-    const onThemePreferenceChange = vi.fn();
-    renderNavigation({ onThemePreferenceChange });
+    renderNavigation();
 
-    const themeSelector = screen.getByRole('button', {
-      name: /theme selector: system/i,
+    const themeButton = screen.getByRole('button', {
+      name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
     });
-    await user.click(themeSelector);
+    expect(themeButton).toHaveClass('size-9');
 
-    expect(await screen.findByRole('menuitemradio', { name: /^light/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitemradio', { name: /^dark/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitemradio', { name: /^system/i })).toBeInTheDocument();
+    await user.click(themeButton);
 
-    await user.click(screen.getByRole('menuitemradio', { name: /^dark/i }));
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    });
+    expect(localStorage.getItem('darkMode')).toBe('true');
+    expect(
+      screen.getByRole('button', {
+        name: 'Theme preference: Dark theme (currently dark). Switch to Light theme.',
+      }),
+    ).toBeInTheDocument();
+  });
 
-    expect(onThemePreferenceChange).toHaveBeenCalledWith('dark');
+  it('keeps the compact theme button in the same nav footprint', () => {
+    renderNavigation();
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+      }),
+    ).toHaveClass('size-9');
   });
 
   it('renders appropriately on mobile viewport sizes', () => {
@@ -150,7 +157,7 @@ describe('Navigation', () => {
   });
 
   it('activates the Model Audit NavLink on /model-audit path', () => {
-    renderNavigation({}, { initialEntries: ['/model-audit'] });
+    renderNavigation({ initialEntries: ['/model-audit'] });
     const navBar = screen.getByRole('banner');
     const modelAuditLink = within(navBar).getByRole('link', { name: 'Model Audit' });
     expect(modelAuditLink).toHaveClass('bg-primary/10');
@@ -158,7 +165,7 @@ describe('Navigation', () => {
   });
 
   it('activates the Model Audit NavLink on /model-audit/:id path', () => {
-    renderNavigation({}, { initialEntries: ['/model-audit/123'] });
+    renderNavigation({ initialEntries: ['/model-audit/123'] });
     const navBar = screen.getByRole('banner');
     const modelAuditLink = within(navBar).getByRole('link', { name: 'Model Audit' });
     expect(modelAuditLink).toHaveClass('bg-primary/10');
@@ -166,7 +173,7 @@ describe('Navigation', () => {
   });
 
   it('does not activate Model Audit NavLink on /model-audit/setup path', () => {
-    renderNavigation({}, { initialEntries: ['/model-audit/setup'] });
+    renderNavigation({ initialEntries: ['/model-audit/setup'] });
     const navBar = screen.getByRole('banner');
     const topLevelNavLink = within(navBar).getByRole('link', { name: 'Model Audit' });
     expect(topLevelNavLink).toBeDefined();
@@ -176,7 +183,7 @@ describe('Navigation', () => {
   });
 
   it('does not activate Model Audit NavLink on /model-audit/history path', () => {
-    renderNavigation({}, { initialEntries: ['/model-audit/history'] });
+    renderNavigation({ initialEntries: ['/model-audit/history'] });
     const navBar = screen.getByRole('banner');
     const topLevelNavLink = within(navBar).getByRole('link', { name: 'Model Audit' });
     expect(topLevelNavLink).toBeDefined();
@@ -186,7 +193,7 @@ describe('Navigation', () => {
   });
 
   it('does not activate Model Audit NavLink on /model-audit/history/:id path', () => {
-    renderNavigation({}, { initialEntries: ['/model-audit/history/123'] });
+    renderNavigation({ initialEntries: ['/model-audit/history/123'] });
     const navBar = screen.getByRole('banner');
     const topLevelNavLink = within(navBar).getByRole('link', { name: 'Model Audit' });
     expect(topLevelNavLink).toBeDefined();
@@ -285,7 +292,7 @@ describe('Navigation', () => {
 
   describe('Model Audit NavLink Active States', () => {
     it('activates Model Audit NavLink on /model-audit path', () => {
-      renderNavigation({}, { initialEntries: ['/model-audit'] });
+      renderNavigation({ initialEntries: ['/model-audit'] });
 
       // Find the top-level Model Audit NavLink (not the dropdown item)
       const allModelAuditLinks = screen.getAllByRole('link', { name: 'Model Audit' });
@@ -298,7 +305,7 @@ describe('Navigation', () => {
     });
 
     it('activates Model Audit NavLink on /model-audit/:id path', () => {
-      renderNavigation({}, { initialEntries: ['/model-audit/123'] });
+      renderNavigation({ initialEntries: ['/model-audit/123'] });
 
       const allModelAuditLinks = screen.getAllByRole('link', { name: 'Model Audit' });
       const topLevelModelAuditLink = allModelAuditLinks.find(
@@ -310,7 +317,7 @@ describe('Navigation', () => {
     });
 
     it('does not activate Model Audit NavLink on /model-audit/setup path', () => {
-      renderNavigation({}, { initialEntries: ['/model-audit/setup'] });
+      renderNavigation({ initialEntries: ['/model-audit/setup'] });
 
       const allModelAuditLinks = screen.getAllByRole('link', { name: 'Model Audit' });
       const topLevelModelAuditLink = allModelAuditLinks.find(
@@ -322,7 +329,7 @@ describe('Navigation', () => {
     });
 
     it('does not activate Model Audit NavLink on /model-audit/history path', () => {
-      renderNavigation({}, { initialEntries: ['/model-audit/history'] });
+      renderNavigation({ initialEntries: ['/model-audit/history'] });
 
       const allModelAuditLinks = screen.getAllByRole('link', { name: 'Model Audit' });
       const topLevelModelAuditLink = allModelAuditLinks.find(
@@ -334,7 +341,7 @@ describe('Navigation', () => {
     });
 
     it('does not activate Model Audit NavLink on deeply nested paths under excluded routes like /model-audit/history/details/123', () => {
-      renderNavigation({}, { initialEntries: ['/model-audit/history/details/123'] });
+      renderNavigation({ initialEntries: ['/model-audit/history/details/123'] });
 
       const allModelAuditLinks = screen.getAllByRole('link', { name: 'Model Audit' });
       const topLevelModelAuditLink = allModelAuditLinks.find(

@@ -7,7 +7,6 @@ import { GlobeIcon, TerminalIcon } from '@app/components/ui/icons';
 import { Spinner } from '@app/components/ui/spinner';
 import { useApiHealth } from '@app/hooks/useApiHealth';
 import { usePageMeta } from '@app/hooks/usePageMeta';
-import { useThemePreference } from '@app/hooks/useThemePreference';
 import { cn } from '@app/lib/utils';
 import useApiConfig from '@app/stores/apiConfig';
 import { CheckCircle } from 'lucide-react';
@@ -21,7 +20,6 @@ export default function LauncherPage() {
   const [hasBeenConnected, setHasBeenConnected] = useState(false);
   const [isInitialConnection, setIsInitialConnection] = useState(true);
   const navigate = useNavigate();
-  const theme = useThemePreference();
   const {
     data: { status: healthStatus },
     refetch: checkHealth,
@@ -104,12 +102,7 @@ export default function LauncherPage() {
 
       {/* Dark mode toggle */}
       <div className="absolute right-4 top-4">
-        <ThemeSelector
-          resolvedTheme={theme.resolvedTheme}
-          systemTheme={theme.systemTheme}
-          themePreference={theme.themePreference}
-          onThemePreferenceChange={theme.setThemePreference}
-        />
+        <ThemeSelector />
       </div>
 
       {/* Header section */}

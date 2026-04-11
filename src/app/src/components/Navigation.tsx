@@ -17,7 +17,6 @@ import ApiSettingsModal from './ApiSettingsModal';
 import InfoModal from './InfoModal';
 import Logo from './Logo';
 import ThemeSelector from './ThemeSelector';
-import type { ResolvedTheme, ThemePreference } from '@app/hooks/useThemePreference';
 
 interface NavLinkProps {
   href: string;
@@ -154,19 +153,7 @@ const resultsMenuItems: MenuItem[] = [
   },
 ];
 
-interface NavigationProps {
-  resolvedTheme: ResolvedTheme;
-  systemTheme: ResolvedTheme;
-  themePreference: ThemePreference;
-  onThemePreferenceChange: (themePreference: ThemePreference) => void;
-}
-
-export default function Navigation({
-  resolvedTheme,
-  systemTheme,
-  themePreference,
-  onThemePreferenceChange,
-}: NavigationProps) {
+export default function Navigation() {
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
   const [showApiSettingsModal, setShowApiSettingsModal] = useState<boolean>(false);
 
@@ -242,12 +229,7 @@ export default function Navigation({
               </Tooltip>
             )}
 
-            <ThemeSelector
-              resolvedTheme={resolvedTheme}
-              systemTheme={systemTheme}
-              themePreference={themePreference}
-              onThemePreferenceChange={onThemePreferenceChange}
-            />
+            <ThemeSelector />
           </div>
         </div>
       </header>

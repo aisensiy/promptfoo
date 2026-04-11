@@ -1,111 +1,87 @@
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from '@app/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@app/components/ui/tooltip';
+import { type ThemePreference, useThemePreference } from '@app/hooks/useThemePreference';
 import { cn } from '@app/lib/utils';
 import { Monitor, Moon, Sun } from 'lucide-react';
-import type { ResolvedTheme, ThemePreference } from '@app/hooks/useThemePreference';
 
-interface ThemeSelectorProps {
-  resolvedTheme: ResolvedTheme;
-  systemTheme: ResolvedTheme;
-  themePreference: ThemePreference;
-  onThemePreferenceChange: (themePreference: ThemePreference) => void;
-}
+const THEME_ORDER = ['light', 'system', 'dark'] as const satisfies readonly ThemePreference[];
 
-const THEME_OPTIONS = [
-  {
-    description: 'Always use the light theme',
-    icon: Sun,
-    label: 'Light',
-    value: 'light',
-  },
-  {
-    description: 'Always use the dark theme',
+const NEXT_THEME_PREFERENCE = {
+  dark: 'light',
+  light: 'system',
+  system: 'dark',
+} satisfies Record<ThemePreference, ThemePreference>;
+
+const THEME_OPTIONS = {
+  dark: {
     icon: Moon,
-    label: 'Dark',
-    value: 'dark',
+    label: 'Dark theme',
   },
-  {
-    description: 'Match your operating system',
+  light: {
+    icon: Sun,
+    label: 'Light theme',
+  },
+  system: {
     icon: Monitor,
-    label: 'System',
-    value: 'system',
+    label: 'System theme',
   },
-] satisfies {
-  description: string;
-  icon: typeof Sun;
-  label: string;
-  value: ThemePreference;
-}[];
+} satisfies Record<
+  ThemePreference,
+  {
+    icon: typeof Sun;
+    label: string;
+  }
+>;
 
-function getPreferenceLabel(themePreference: ThemePreference) {
-  return THEME_OPTIONS.find((option) => option.value === themePreference)?.label ?? 'System';
+function getNextThemePreference(themePreference: ThemePreference): ThemePreference {
+  return NEXT_THEME_PREFERENCE[themePreference];
 }
 
-function ThemeSelector({
-  resolvedTheme,
-  systemTheme,
-  themePreference,
-  onThemePreferenceChange,
-}: ThemeSelectorProps) {
-  const activeOption =
-    THEME_OPTIONS.find((option) => option.value === themePreference) ?? THEME_OPTIONS[2];
-  const ActiveIcon = activeOption.icon;
-  const preferenceLabel = getPreferenceLabel(themePreference);
-  const resolvedThemeLabel = resolvedTheme === 'dark' ? 'dark' : 'light';
+function ThemeSelector() {
+  const { resolvedTheme, setThemePreference, systemTheme, themePreference } = useThemePreference();
+  const nextThemePreference = getNextThemePreference(themePreference);
+  const currentThemeLabel = THEME_OPTIONS[themePreference].label;
+  const nextThemeLabel = THEME_OPTIONS[nextThemePreference].label;
+  const tooltipLabel =
+    themePreference === 'system' ? `${currentThemeLabel} (${systemTheme})` : currentThemeLabel;
 
-  const handleThemePreferenceChange = (value: string) => {
-    onThemePreferenceChange(value as ThemePreference);
+  const handleThemePreferenceChange = () => {
+    setThemePreference(nextThemePreference);
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <Tooltip>
+      <TooltipTrigger asChild>
         <button
           type="button"
-          aria-label={`Theme selector: ${preferenceLabel} (currently ${resolvedThemeLabel})`}
-          title={`Theme: ${preferenceLabel} (currently ${resolvedThemeLabel})`}
+          onClick={handleThemePreferenceChange}
+          aria-label={`Theme preference: ${currentThemeLabel} (currently ${resolvedTheme}). Switch to ${nextThemeLabel}.`}
           className={cn(
-            'inline-flex size-9 items-center justify-center rounded-md text-foreground/60',
-            'transition-colors hover:bg-accent hover:text-foreground',
+            'relative inline-flex size-9 items-center justify-center rounded-full p-2 text-foreground/60',
+            'transition-all duration-200 hover:bg-black/[0.04] hover:text-foreground hover:rotate-[15deg]',
+            'dark:hover:bg-white/[0.08]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           )}
         >
-          <ActiveIcon className="size-5" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
-          Theme
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={themePreference} onValueChange={handleThemePreferenceChange}>
-          {THEME_OPTIONS.map((option) => {
-            const Icon = option.icon;
-            const isSystemOption = option.value === 'system';
+          {THEME_ORDER.map((preference) => {
+            const Icon = THEME_OPTIONS[preference].icon;
+
             return (
-              <DropdownMenuRadioItem
-                key={option.value}
-                value={option.value}
-                className="items-start gap-2 py-2"
-              >
-                <Icon className="mt-0.5 size-4 text-muted-foreground" />
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-medium leading-none">{option.label}</span>
-                  <span className="text-xs leading-tight text-muted-foreground">
-                    {isSystemOption ? `Matches system (${systemTheme})` : option.description}
-                  </span>
-                </span>
-              </DropdownMenuRadioItem>
+              <Icon
+                key={preference}
+                aria-hidden="true"
+                className={cn(
+                  'absolute size-5 transition-all duration-200',
+                  preference === themePreference
+                    ? 'rotate-0 opacity-100'
+                    : 'pointer-events-none rotate-90 opacity-0',
+                )}
+              />
             );
           })}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{tooltipLabel}</TooltipContent>
+    </Tooltip>
   );
 }
 
