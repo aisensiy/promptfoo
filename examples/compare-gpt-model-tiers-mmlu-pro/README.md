@@ -92,7 +92,7 @@ You can modify the test by editing `promptfooconfig.yaml`:
 
    ```yaml
    providers:
-     - id: openai:gpt-5.4
+     - id: openai:chat:gpt-5.4
        config:
          max_completion_tokens: 1500
    ```

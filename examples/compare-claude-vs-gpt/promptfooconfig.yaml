@@ -7,7 +7,7 @@ prompts:
 providers:
   - id: anthropic:claude-sonnet-4-6
     label: Claude Sonnet 4.6
-  - id: openai:gpt-5.4
+  - id: openai:chat:gpt-5.4
     label: GPT-5.4
 
 defaultTest:
