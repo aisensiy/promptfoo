@@ -1,5 +1,6 @@
 import { fetchWithCache, getCache, isCacheEnabled } from '../../cache';
 import logger from '../../logger';
+import { sha256 } from '../../util/createHash';
 import { REQUEST_TIMEOUT_MS } from '../shared';
 import { OpenAiGenericProvider } from '.';
 
@@ -134,7 +135,26 @@ function getModerationCacheKey(
   content: string | (TextInput | ImageInput)[],
 ): string {
   const contentKey = typeof content === 'string' ? content : JSON.stringify(content);
-  return `openai:moderation:${modelName}:${JSON.stringify(config)}:${contentKey}`;
+  const headers = config?.headers as Record<string, string> | undefined;
+  const cacheConfig = {
+    ...config,
+    apiKey: undefined,
+    apiKeyEnvar: undefined,
+    headers:
+      headers && Object.keys(headers).length > 0
+        ? sha256(
+            JSON.stringify(
+              Object.keys(headers)
+                .sort()
+                .map((key) => [key, headers[key]]),
+            ),
+          )
+        : undefined,
+  };
+
+  return `openai:moderation:${modelName}:${sha256(JSON.stringify(cacheConfig))}:${sha256(
+    contentKey,
+  )}`;
 }
 
 export function supportsImageInput(modelName: string): boolean {

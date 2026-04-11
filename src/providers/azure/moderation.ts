@@ -128,8 +128,9 @@ export function getModerationCacheKey(
     haltOnBlocklistHit: config.haltOnBlocklistHit ?? false,
     passthrough: config.passthrough || {},
   };
+  const contentHash = crypto.createHash('sha256').update(JSON.stringify(content)).digest('hex');
 
-  return `azure-moderation:${modelName}:${JSON.stringify(cacheConfig)}:${JSON.stringify(content)}`;
+  return `azure-moderation:${modelName}:${JSON.stringify(cacheConfig)}:${contentHash}`;
 }
 
 export class AzureModerationProvider extends AzureGenericProvider implements ApiModerationProvider {

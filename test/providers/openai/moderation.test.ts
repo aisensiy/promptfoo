@@ -223,7 +223,10 @@ describe('OpenAiModerationProvider', () => {
         return true;
       });
 
-      const provider = createProvider();
+      const headerSecret = 'Bearer cache-secret-header';
+      const provider = new OpenAiModerationProvider('text-moderation-latest', {
+        config: { apiKey: 'test-key', headers: { Authorization: headerSecret } },
+      });
 
       const mockResponse = {
         flags: [
@@ -248,9 +251,13 @@ describe('OpenAiModerationProvider', () => {
 
       expect(result).toEqual({ ...mockResponse, cached: true });
       expect(result.cached).toBe(true);
-      expect(mockCache.get).toHaveBeenCalledWith(
-        expect.stringContaining('openai:moderation:text-moderation-latest:'),
+      const cacheKey = mockCache.get.mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
+      expect(cacheKey).not.toContain('assistant response');
+      expect(cacheKey).not.toContain(headerSecret);
+      expect(cacheKey).not.toContain('test-key');
       // Verify fetchWithCache wasn't called because cache was used
       expect(fetchWithCache).not.toHaveBeenCalled();
     });
@@ -292,8 +299,13 @@ describe('OpenAiModerationProvider', () => {
       await provider.callModerationApi('user', 'assistant');
 
       // Verify we attempted to save to cache
+      const cacheKey = mockCache.set.mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
+      expect(cacheKey).not.toContain('assistant');
       expect(mockCache.set).toHaveBeenCalledWith(
-        expect.stringContaining('openai:moderation:'),
+        cacheKey,
         expect.stringContaining('{"flags":[{"code":"hate"'),
       );
     });

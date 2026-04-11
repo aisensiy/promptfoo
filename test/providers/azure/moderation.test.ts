@@ -174,16 +174,26 @@ describe('Azure Moderation', () => {
 
       const key = getModerationCacheKey(modelName, config, content);
 
-      expect(key).toBe(
-        'azure-moderation:test-model:{"blocklistNames":[],"haltOnBlocklistHit":false,"passthrough":{}}:"test content"',
+      expect(key).toMatch(
+        /^azure-moderation:test-model:\{"blocklistNames":\[\],"haltOnBlocklistHit":false,"passthrough":\{\}\}:[a-f0-9]{64}$/,
       );
+      expect(key).not.toContain(content);
     });
 
     it('should handle empty content', () => {
       const key = getModerationCacheKey('model', {}, '');
-      expect(key).toBe(
-        'azure-moderation:model:{"blocklistNames":[],"haltOnBlocklistHit":false,"passthrough":{}}:""',
+      expect(key).toMatch(
+        /^azure-moderation:model:\{"blocklistNames":\[\],"haltOnBlocklistHit":false,"passthrough":\{\}\}:[a-f0-9]{64}$/,
       );
+    });
+
+    it('should differentiate content without leaking it', () => {
+      const firstKey = getModerationCacheKey('model', {}, 'sensitive prompt one');
+      const secondKey = getModerationCacheKey('model', {}, 'sensitive prompt two');
+
+      expect(firstKey).not.toBe(secondKey);
+      expect(firstKey).not.toContain('sensitive prompt one');
+      expect(secondKey).not.toContain('sensitive prompt two');
     });
 
     it('should include request-shaping config in the cache key', () => {
@@ -197,9 +207,10 @@ describe('Azure Moderation', () => {
         'content',
       );
 
-      expect(key).toBe(
-        'azure-moderation:model:{"blocklistNames":["custom-list"],"haltOnBlocklistHit":true,"passthrough":{"outputType":"EightSeverityLevels"}}:"content"',
+      expect(key).toMatch(
+        /^azure-moderation:model:\{"blocklistNames":\["custom-list"\],"haltOnBlocklistHit":true,"passthrough":\{"outputType":"EightSeverityLevels"\}\}:[a-f0-9]{64}$/,
       );
+      expect(key).not.toContain('content');
     });
 
     it('should include endpoint and apiVersion in the cache key', () => {
@@ -343,6 +354,7 @@ describe('Azure Moderation', () => {
       const cacheKey = mockCache.get.mock.calls[0][0] as string;
       expect(cacheKey).toContain('resolved-endpoint');
       expect(cacheKey).toContain('2024-09-15-preview');
+      expect(cacheKey).not.toContain('test content');
     });
   });
 });
