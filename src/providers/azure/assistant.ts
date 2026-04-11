@@ -1,6 +1,7 @@
+import { createHmac } from 'crypto';
+
 import { fetchWithCache, getCache, isCacheEnabled } from '../../cache';
 import logger from '../../logger';
-import { sha256 } from '../../util/createHash';
 import { maybeLoadToolsFromExternalFile } from '../../util/index';
 import invariant from '../../util/invariant';
 import { sleep } from '../../util/time';
@@ -98,6 +99,22 @@ interface RunStepsResponse {
   }>;
 }
 
+const AZURE_ASSISTANT_CACHE_KEY_HMAC_KEY = 'promptfoo-azure-assistant-cache-key-v1';
+
+function hmacAzureAssistantCacheValue(value: unknown) {
+  return createHmac('sha256', AZURE_ASSISTANT_CACHE_KEY_HMAC_KEY)
+    .update(JSON.stringify(value))
+    .digest('hex');
+}
+
+function getAuthHeadersCacheIdentity(authHeaders: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(authHeaders)
+      .sort(([nameA], [nameB]) => nameA.localeCompare(nameB))
+      .map(([name, value]) => [name, hmacAzureAssistantCacheValue([name, value])]),
+  );
+}
+
 export class AzureAssistantProvider extends AzureGenericProvider {
   assistantConfig: AzureAssistantOptions;
   private functionCallbackHandler = new FunctionCallbackHandler();
@@ -128,25 +145,27 @@ export class AzureAssistantProvider extends AzureGenericProvider {
     }
 
     const apiVersion = this.assistantConfig.apiVersion || '2024-04-01-preview';
+    const loadedTools = await maybeLoadToolsFromExternalFile(
+      this.assistantConfig.tools,
+      context?.vars,
+    );
 
     // Create a simple cache key based on the input and configuration
-    const cacheKey = `azure_assistant:${this.deploymentName}:${sha256(
-      JSON.stringify({
-        apiVersion,
-        instructions: this.assistantConfig.instructions,
-        max_tokens: this.assistantConfig.max_tokens,
-        model: this.assistantConfig.modelName,
-        prompt,
-        response_format: this.assistantConfig.response_format,
-        temperature: this.assistantConfig.temperature,
-        tool_choice: this.assistantConfig.tool_choice,
-        tool_resources: this.assistantConfig.tool_resources,
-        tools: JSON.stringify(
-          await maybeLoadToolsFromExternalFile(this.assistantConfig.tools, context?.vars),
-        ),
-        top_p: this.assistantConfig.top_p,
-      }),
-    )}`;
+    const cacheKey = `azure_assistant:${this.deploymentName}:${hmacAzureAssistantCacheValue({
+      apiBaseUrl,
+      apiVersion,
+      auth: getAuthHeadersCacheIdentity(this.authHeaders),
+      instructions: this.assistantConfig.instructions,
+      max_tokens: this.assistantConfig.max_tokens,
+      model: this.assistantConfig.modelName,
+      prompt,
+      response_format: this.assistantConfig.response_format,
+      temperature: this.assistantConfig.temperature,
+      tool_choice: this.assistantConfig.tool_choice,
+      tool_resources: this.assistantConfig.tool_resources,
+      tools: JSON.stringify(loadedTools),
+      top_p: this.assistantConfig.top_p,
+    })}`;
 
     // Check the cache if enabled
     if (isCacheEnabled()) {
@@ -210,10 +229,6 @@ export class AzureAssistantProvider extends AzureGenericProvider {
         runOptions.tool_choice = this.assistantConfig.tool_choice;
       }
       if (this.assistantConfig.tools) {
-        const loadedTools = await maybeLoadToolsFromExternalFile(
-          this.assistantConfig.tools,
-          context?.vars,
-        );
         if (loadedTools !== undefined) {
           runOptions.tools = loadedTools;
         }
