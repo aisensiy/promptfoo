@@ -503,7 +503,8 @@ describe('Fal Provider', () => {
         await providerA.callApi('Shared fal prompt');
         await providerB.callApi('Shared fal prompt');
 
-        const [cacheKeyA, cacheKeyB] = mockCache.get.mock.calls.map(([key]) => key as string);
+        const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
+        const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
         expect(cacheKeyA).toMatch(
           /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
         );
