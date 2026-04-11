@@ -358,20 +358,18 @@ export class WatsonXProvider implements ApiProvider {
   protected getAuthCacheHash(): string {
     const authSelection = this.getAuthSelection();
     if (authSelection.type === 'iam') {
-      return hashWatsonXCacheValue({
+      return `${hashWatsonXCacheValue({
         type: authSelection.type,
         forcedByAuthType: authSelection.forcedByAuthType,
-        apiKey: fingerprintWatsonXSecret('apiKey', authSelection.apiKey),
-      });
+      })}:${fingerprintWatsonXSecret('apiKey', authSelection.apiKey)}`;
     }
     if (authSelection.type === 'bearertoken') {
-      return hashWatsonXCacheValue({
+      return `${hashWatsonXCacheValue({
         type: authSelection.type,
         forcedByAuthType: authSelection.forcedByAuthType,
-        bearerToken: fingerprintWatsonXSecret('apiBearerToken', authSelection.bearerToken),
-      });
+      })}:${fingerprintWatsonXSecret('apiBearerToken', authSelection.bearerToken)}`;
     }
-    return hashWatsonXCacheValue({ type: 'none' });
+    return `${hashWatsonXCacheValue({ type: 'none' })}:${hashWatsonXCacheValue('none')}`;
   }
 
   async getAuth(): Promise<IamAuthenticator | BearerTokenAuthenticator> {

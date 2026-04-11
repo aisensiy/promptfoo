@@ -382,7 +382,7 @@ describe('WatsonXProvider', () => {
       const cacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
       expect(cacheKey).toMatch(
         new RegExp(
-          `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}$`,
+          `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$`,
         ),
       );
       expect(cacheKey).not.toContain(prompt);
@@ -586,7 +586,7 @@ describe('WatsonXProvider', () => {
       const cacheKey = vi.mocked(cache.get).mock.calls[0][0] as string;
       expect(cacheKey).toMatch(
         new RegExp(
-          `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}$`,
+          `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$`,
         ),
       );
       expect(cacheKey).not.toContain(prompt);
@@ -1231,7 +1231,7 @@ describe('WatsonXChatProvider', () => {
     const cacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
     expect(cacheKey).toMatch(
       new RegExp(
-        `^watsonx:chat:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}$`,
+        `^watsonx:chat:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$`,
       ),
     );
     expect(cacheKey).not.toContain(chatPrompt);
