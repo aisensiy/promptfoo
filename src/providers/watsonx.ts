@@ -155,13 +155,37 @@ function sortObject(obj: any): any {
   return result;
 }
 
+const WATSONX_CACHE_KEY_HMAC_KEY = 'promptfoo-watsonx-cache-key-v1';
+const WATSONX_SECRET_FIELD_NAMES = new Set(['apiKey', 'apiBearerToken']);
+
+function hmacWatsonXCacheValue(value: unknown): string {
+  return crypto
+    .createHmac('sha256', WATSONX_CACHE_KEY_HMAC_KEY)
+    .update(JSON.stringify(value) ?? '')
+    .digest('hex');
+}
+
+function omitWatsonXSecretConfigFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(omitWatsonXSecretConfigFields);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !WATSONX_SECRET_FIELD_NAMES.has(key))
+      .map(([key, fieldValue]) => [key, omitWatsonXSecretConfigFields(fieldValue)]),
+  );
+}
+
 export function generateConfigHash(config: any): string {
-  const sortedConfig = sortObject(config);
-  return crypto.createHash('md5').update(JSON.stringify(sortedConfig)).digest('hex');
+  const sortedConfig = sortObject(omitWatsonXSecretConfigFields(config));
+  return hmacWatsonXCacheValue(sortedConfig);
 }
 
 function generatePromptHash(prompt: string): string {
-  return crypto.createHash('sha256').update(prompt).digest('hex');
+  return hmacWatsonXCacheValue(['prompt', prompt]);
 }
 
 interface ModelSpec {
@@ -177,6 +201,11 @@ interface WatsonXModel {
     output: number;
   };
 }
+
+type WatsonXAuthSelection =
+  | { type: 'iam'; apiKey: string; forcedByAuthType: boolean }
+  | { type: 'bearertoken'; bearerToken: string; forcedByAuthType: boolean }
+  | { type: 'none' };
 
 async function fetchModelSpecs(): Promise<ModelSpec[]> {
   try {
@@ -275,6 +304,72 @@ export class WatsonXProvider implements ApiProvider {
     return `[Watsonx Provider ${this.modelName}]`;
   }
 
+  private getApiKey(): string | undefined {
+    return (
+      this.config.apiKey ||
+      (this.config.apiKeyEnvar
+        ? getEnvString(this.config.apiKeyEnvar as EnvVarKey) ||
+          this.env?.[this.config.apiKeyEnvar as keyof EnvOverrides]
+        : undefined) ||
+      this.env?.WATSONX_AI_APIKEY ||
+      getEnvString('WATSONX_AI_APIKEY')
+    );
+  }
+
+  private getBearerToken(): string | undefined {
+    return (
+      this.config.apiBearerToken ||
+      (this.config.apiBearerTokenEnvar
+        ? getEnvString(this.config.apiBearerTokenEnvar as EnvVarKey) ||
+          this.env?.[this.config.apiBearerTokenEnvar as keyof EnvOverrides]
+        : undefined) ||
+      this.env?.WATSONX_AI_BEARER_TOKEN ||
+      getEnvString('WATSONX_AI_BEARER_TOKEN')
+    );
+  }
+
+  private getAuthType(): string | undefined {
+    return this.env?.WATSONX_AI_AUTH_TYPE || getEnvString('WATSONX_AI_AUTH_TYPE');
+  }
+
+  private getAuthSelection(): WatsonXAuthSelection {
+    const apiKey = this.getApiKey();
+    const bearerToken = this.getBearerToken();
+    const authType = this.getAuthType();
+
+    if (authType === 'iam' && apiKey) {
+      return { type: 'iam', apiKey, forcedByAuthType: true };
+    } else if (authType === 'bearertoken' && bearerToken) {
+      return { type: 'bearertoken', bearerToken, forcedByAuthType: true };
+    }
+
+    if (apiKey) {
+      return { type: 'iam', apiKey, forcedByAuthType: false };
+    } else if (bearerToken) {
+      return { type: 'bearertoken', bearerToken, forcedByAuthType: false };
+    }
+    return { type: 'none' };
+  }
+
+  private getAuthCacheHash(): string {
+    const authSelection = this.getAuthSelection();
+    if (authSelection.type === 'iam') {
+      return hmacWatsonXCacheValue({
+        type: authSelection.type,
+        forcedByAuthType: authSelection.forcedByAuthType,
+        apiKey: hmacWatsonXCacheValue(['apiKey', authSelection.apiKey]),
+      });
+    }
+    if (authSelection.type === 'bearertoken') {
+      return hmacWatsonXCacheValue({
+        type: authSelection.type,
+        forcedByAuthType: authSelection.forcedByAuthType,
+        bearerToken: hmacWatsonXCacheValue(['apiBearerToken', authSelection.bearerToken]),
+      });
+    }
+    return hmacWatsonXCacheValue({ type: 'none' });
+  }
+
   async getAuth(): Promise<IamAuthenticator | BearerTokenAuthenticator> {
     let IamAuthenticator: any;
     let BearerTokenAuthenticator: any;
@@ -288,40 +383,22 @@ export class WatsonXProvider implements ApiProvider {
       );
     }
 
-    const apiKey =
-      this.config.apiKey ||
-      (this.config.apiKeyEnvar
-        ? getEnvString(this.config.apiKeyEnvar as EnvVarKey) ||
-          this.env?.[this.config.apiKeyEnvar as keyof EnvOverrides]
-        : undefined) ||
-      this.env?.WATSONX_AI_APIKEY ||
-      getEnvString('WATSONX_AI_APIKEY');
+    const authSelection = this.getAuthSelection();
 
-    const bearerToken =
-      this.config.apiBearerToken ||
-      (this.config.apiBearerTokenEnvar
-        ? getEnvString(this.config.apiBearerTokenEnvar as EnvVarKey) ||
-          this.env?.[this.config.apiBearerTokenEnvar as keyof EnvOverrides]
-        : undefined) ||
-      this.env?.WATSONX_AI_BEARER_TOKEN ||
-      getEnvString('WATSONX_AI_BEARER_TOKEN');
-
-    const authType = this.env?.WATSONX_AI_AUTH_TYPE || getEnvString('WATSONX_AI_AUTH_TYPE');
-
-    if (authType === 'iam' && apiKey) {
+    if (authSelection.type === 'iam' && authSelection.forcedByAuthType) {
       logger.info('Using IAM Authentication based on WATSONX_AI_AUTH_TYPE.');
-      return new IamAuthenticator({ apikey: apiKey });
-    } else if (authType === 'bearertoken' && bearerToken) {
+      return new IamAuthenticator({ apikey: authSelection.apiKey });
+    } else if (authSelection.type === 'bearertoken' && authSelection.forcedByAuthType) {
       logger.info('Using Bearer Token Authentication based on WATSONX_AI_AUTH_TYPE.');
-      return new BearerTokenAuthenticator({ bearerToken });
+      return new BearerTokenAuthenticator({ bearerToken: authSelection.bearerToken });
     }
 
-    if (apiKey) {
+    if (authSelection.type === 'iam') {
       logger.info('Using IAM Authentication.');
-      return new IamAuthenticator({ apikey: apiKey });
-    } else if (bearerToken) {
+      return new IamAuthenticator({ apikey: authSelection.apiKey });
+    } else if (authSelection.type === 'bearertoken') {
       logger.info('Using Bearer Token Authentication.');
-      return new BearerTokenAuthenticator({ bearerToken });
+      return new BearerTokenAuthenticator({ bearerToken: authSelection.bearerToken });
     } else {
       throw new Error(
         'Authentication credentials not provided. Please set either `WATSONX_AI_APIKEY` for IAM Authentication or `WATSONX_AI_BEARER_TOKEN` for Bearer Token Authentication.',
@@ -431,7 +508,8 @@ export class WatsonXProvider implements ApiProvider {
 
     const cache = getCache();
     const configHash = generateConfigHash(config);
-    const cacheKey = `watsonx:${this.modelName}:${configHash}:${generatePromptHash(prompt)}`;
+    const authHash = this.getAuthCacheHash();
+    const cacheKey = `watsonx:${this.modelName}:${configHash}:${authHash}:${generatePromptHash(prompt)}`;
     const cacheEnabled = isCacheEnabled();
     if (cacheEnabled) {
       const cachedResponse = await cache.get(cacheKey);
@@ -546,7 +624,8 @@ export class WatsonXChatProvider extends WatsonXProvider {
 
     const cache = getCache();
     const configHash = generateConfigHash(config);
-    const cacheKey = `watsonx:chat:${this.modelName}:${configHash}:${generatePromptHash(prompt)}`;
+    const authHash = this.getAuthCacheHash();
+    const cacheKey = `watsonx:chat:${this.modelName}:${configHash}:${authHash}:${generatePromptHash(prompt)}`;
     const cacheEnabled = isCacheEnabled();
     if (cacheEnabled) {
       const cachedResponse = await cache.get(cacheKey);
