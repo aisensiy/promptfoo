@@ -388,7 +388,8 @@ describe('Mistral', () => {
       await providerA.callApi('Shared sensitive prompt');
       await providerB.callApi('Shared sensitive prompt');
 
-      const [cacheKeyA, cacheKeyB] = cacheGet.mock.calls.map(([key]) => key as string);
+      const cacheKeyA = cacheGet.mock.calls[0][0] as string;
+      const cacheKeyB = cacheGet.mock.calls[1][0] as string;
       expect(cacheKeyA).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}$/);
       expect(cacheKeyB).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}$/);
       expect(cacheKeyA).not.toBe(cacheKeyB);
