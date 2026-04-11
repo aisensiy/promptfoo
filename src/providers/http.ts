@@ -2232,8 +2232,11 @@ export class HttpProvider implements ApiProvider {
     );
 
     // Add OAuth Bearer token if configured
-    if (this.config.auth?.type === 'oauth' && this.lastToken) {
-      allHeaders.authorization = `Bearer ${this.lastToken}`;
+    if (this.config.auth?.type === 'oauth') {
+      const token = typeof vars.token === 'string' ? vars.token : this.lastToken;
+      if (token) {
+        allHeaders.authorization = `Bearer ${token}`;
+      }
     }
 
     // Add Bearer token if configured
@@ -2678,8 +2681,11 @@ export class HttpProvider implements ApiProvider {
     }
 
     // Add OAuth Bearer token if configured
-    if (this.config.auth?.type === 'oauth' && this.lastToken) {
-      parsedRequest.headers.authorization = `Bearer ${this.lastToken}`;
+    if (this.config.auth?.type === 'oauth') {
+      const token = typeof vars.token === 'string' ? vars.token : this.lastToken;
+      if (token) {
+        parsedRequest.headers.authorization = `Bearer ${token}`;
+      }
     }
 
     // Add Bearer token if configured

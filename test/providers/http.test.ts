@@ -6129,6 +6129,79 @@ describe('HttpProvider - OAuth Token Refresh Deduplication', () => {
     expect(apiAuthHeaders).toEqual(['Bearer token-a', 'Bearer token-b']);
   });
 
+  it('should not cross-use OAuth tokens across concurrent raw requests', async () => {
+    let releaseFirstTransform!: () => void;
+    let resolveFirstTransformStarted!: () => void;
+    const firstTransformStarted = new Promise<void>((resolve) => {
+      resolveFirstTransformStarted = resolve;
+    });
+    const rawRequest = dedent`
+      POST /api HTTP/1.1
+      Host: example.com
+      Content-Type: application/json
+
+      {"prompt": "{{prompt}}"}
+    `;
+    const provider = new HttpProvider('https', {
+      config: {
+        request: rawRequest,
+        transformRequest: async (prompt, vars) => {
+          if (vars.clientSecret === 'secret-a') {
+            resolveFirstTransformStarted();
+            await new Promise<void>((resolve) => {
+              releaseFirstTransform = resolve;
+            });
+          }
+          return prompt;
+        },
+        auth: {
+          type: 'oauth',
+          grantType: 'client_credentials',
+          tokenUrl,
+          clientId: 'test-client-id',
+          clientSecret: '{{ clientSecret }}',
+        },
+      },
+    });
+
+    const apiAuthByPrompt: Record<string, string> = {};
+    vi.mocked(fetchWithCache).mockImplementation(async (url: RequestInfo, options: any) => {
+      const urlString =
+        typeof url === 'string' ? url : url instanceof Request ? url.url : String(url);
+      if (urlString === tokenUrl) {
+        const body = String(options.body);
+        const token = body.includes('secret-a') ? 'token-a' : 'token-b';
+        return {
+          data: JSON.stringify({ access_token: token, expires_in: 3600 }),
+          status: 200,
+          statusText: 'OK',
+          cached: false,
+        };
+      }
+
+      const requestBody = JSON.parse(options.body);
+      apiAuthByPrompt[requestBody.prompt] = options.headers.authorization;
+      return {
+        data: JSON.stringify({ result: 'success' }),
+        status: 200,
+        statusText: 'OK',
+        cached: false,
+      };
+    });
+
+    const firstCall = provider.callApi('first', { vars: { clientSecret: 'secret-a' } });
+    await firstTransformStarted;
+    await provider.callApi('second', { vars: { clientSecret: 'secret-b' } });
+
+    releaseFirstTransform();
+    await firstCall;
+
+    expect(apiAuthByPrompt).toEqual({
+      first: 'Bearer token-a',
+      second: 'Bearer token-b',
+    });
+  });
+
   it('should use the same token for all concurrent API calls', async () => {
     const provider = new HttpProvider(mockUrl, {
       config: {
