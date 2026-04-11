@@ -1048,6 +1048,12 @@ function hashAuthCacheInput(value: unknown): string {
   return crypto.createHash('sha256').update(stableSerialize(value)).digest('hex');
 }
 
+function fingerprintAuthSecret(value: string | undefined, label: string): string | undefined {
+  return value
+    ? crypto.scryptSync(value, `promptfoo:http-auth-token-cache:${label}`, 32).toString('hex')
+    : undefined;
+}
+
 function getOAuthTokenCacheKey(oauthConfig: {
   grantType: string;
   clientId?: string;
@@ -1057,17 +1063,19 @@ function getOAuthTokenCacheKey(oauthConfig: {
   username?: string;
   password?: string;
 }): string {
-  return `oauth:${hashAuthCacheInput({
+  const metadataHash = hashAuthCacheInput({
     grantType: oauthConfig.grantType,
     clientId: oauthConfig.clientId,
-    clientSecretHash: oauthConfig.clientSecret
-      ? hashAuthCacheInput(oauthConfig.clientSecret)
-      : undefined,
+    hasClientSecret: Boolean(oauthConfig.clientSecret),
+    hasPassword: Boolean(oauthConfig.password),
     tokenUrl: oauthConfig.tokenUrl,
     scopes: oauthConfig.scopes,
     username: oauthConfig.username,
-    passwordHash: oauthConfig.password ? hashAuthCacheInput(oauthConfig.password) : undefined,
-  })}`;
+  });
+  const clientSecretFingerprint = fingerprintAuthSecret(oauthConfig.clientSecret, 'client-secret');
+  const passwordFingerprint = fingerprintAuthSecret(oauthConfig.password, 'password');
+
+  return `oauth:${metadataHash}:${clientSecretFingerprint ?? 'none'}:${passwordFingerprint ?? 'none'}`;
 }
 
 function getFileAuthTokenCacheKey(

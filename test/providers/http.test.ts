@@ -6119,8 +6119,14 @@ describe('HttpProvider - OAuth Token Refresh Deduplication', () => {
       };
     });
 
-    await provider.callApi('test prompt', { vars: { clientSecret: 'secret-a' } });
-    await provider.callApi('test prompt', { vars: { clientSecret: 'secret-b' } });
+    await provider.callApi('test prompt', {
+      prompt: { raw: 'test prompt', label: 'test prompt' },
+      vars: { clientSecret: 'secret-a' },
+    });
+    await provider.callApi('test prompt', {
+      prompt: { raw: 'test prompt', label: 'test prompt' },
+      vars: { clientSecret: 'secret-b' },
+    });
 
     const tokenRefreshCalls = vi
       .mocked(fetchWithCache)
@@ -6145,7 +6151,7 @@ describe('HttpProvider - OAuth Token Refresh Deduplication', () => {
     const provider = new HttpProvider('https', {
       config: {
         request: rawRequest,
-        transformRequest: async (prompt, vars) => {
+        transformRequest: async (prompt: string, vars: Record<string, any>) => {
           if (vars.clientSecret === 'secret-a') {
             resolveFirstTransformStarted();
             await new Promise<void>((resolve) => {
@@ -6189,9 +6195,15 @@ describe('HttpProvider - OAuth Token Refresh Deduplication', () => {
       };
     });
 
-    const firstCall = provider.callApi('first', { vars: { clientSecret: 'secret-a' } });
+    const firstCall = provider.callApi('first', {
+      prompt: { raw: 'first', label: 'first' },
+      vars: { clientSecret: 'secret-a' },
+    });
     await firstTransformStarted;
-    await provider.callApi('second', { vars: { clientSecret: 'secret-b' } });
+    await provider.callApi('second', {
+      prompt: { raw: 'second', label: 'second' },
+      vars: { clientSecret: 'secret-b' },
+    });
 
     releaseFirstTransform();
     await firstCall;
