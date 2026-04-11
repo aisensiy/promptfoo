@@ -6078,6 +6078,57 @@ describe('HttpProvider - OAuth Token Refresh Deduplication', () => {
     expect(tokenRefreshCalls).toHaveLength(1);
   });
 
+  it('should not reuse OAuth tokens across different rendered credentials', async () => {
+    const provider = new HttpProvider(mockUrl, {
+      config: {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer {{token}}',
+        },
+        auth: {
+          type: 'oauth',
+          grantType: 'client_credentials',
+          tokenUrl,
+          clientId: 'test-client-id',
+          clientSecret: '{{ clientSecret }}',
+        },
+      },
+    });
+
+    const apiAuthHeaders: string[] = [];
+    vi.mocked(fetchWithCache).mockImplementation(async (url: RequestInfo, options: any) => {
+      const urlString =
+        typeof url === 'string' ? url : url instanceof Request ? url.url : String(url);
+      if (urlString === tokenUrl) {
+        const body = String(options.body);
+        const token = body.includes('secret-a') ? 'token-a' : 'token-b';
+        return {
+          data: JSON.stringify({ access_token: token, expires_in: 3600 }),
+          status: 200,
+          statusText: 'OK',
+          cached: false,
+        };
+      }
+
+      apiAuthHeaders.push(options.headers.authorization);
+      return {
+        data: JSON.stringify({ result: 'success' }),
+        status: 200,
+        statusText: 'OK',
+        cached: false,
+      };
+    });
+
+    await provider.callApi('test prompt', { vars: { clientSecret: 'secret-a' } });
+    await provider.callApi('test prompt', { vars: { clientSecret: 'secret-b' } });
+
+    const tokenRefreshCalls = vi
+      .mocked(fetchWithCache)
+      .mock.calls.filter((call) => call[0] === tokenUrl);
+    expect(tokenRefreshCalls).toHaveLength(2);
+    expect(apiAuthHeaders).toEqual(['Bearer token-a', 'Bearer token-b']);
+  });
+
   it('should use the same token for all concurrent API calls', async () => {
     const provider = new HttpProvider(mockUrl, {
       config: {
@@ -6287,12 +6338,12 @@ describe('HttpProvider - OAuth Token Refresh Deduplication', () => {
       return apiResponse;
     });
 
-    const promise1 = provider.callApi('test 1').catch(() => {
+    const promise1 = provider.callApi('same prompt').catch(() => {
       // Expected to fail on the first refresh attempt.
     });
     await firstRefreshStarted.promise;
-    const promise2 = provider.callApi('test 2');
-    const promise3 = provider.callApi('test 3');
+    const promise2 = provider.callApi('same prompt');
+    const promise3 = provider.callApi('same prompt');
 
     firstRefreshContinue.resolve(undefined);
     await secondRefreshStarted.promise;
@@ -6658,12 +6709,12 @@ describe('HttpProvider - File Auth', () => {
       },
     });
 
-    const promise1 = provider.callApi('test 1').catch(() => {
+    const promise1 = provider.callApi('same prompt').catch(() => {
       // Expected to fail on the first refresh attempt.
     });
     await firstRefreshStarted.promise;
-    const promise2 = provider.callApi('test 2');
-    const promise3 = provider.callApi('test 3');
+    const promise2 = provider.callApi('same prompt');
+    const promise3 = provider.callApi('same prompt');
 
     firstRefreshContinue.resolve(undefined);
     await secondRefreshStarted.promise;
@@ -6889,16 +6940,61 @@ describe('HttpProvider - File Auth', () => {
       },
     });
 
-    await provider.callApi('first prompt', {
-      prompt: { raw: 'first prompt', label: 'first prompt' },
+    await provider.callApi('same prompt', {
+      prompt: { raw: 'same prompt', label: 'same prompt' },
       vars: {},
     });
-    await provider.callApi('second prompt', {
-      prompt: { raw: 'second prompt', label: 'second prompt' },
+    await provider.callApi('same prompt', {
+      prompt: { raw: 'same prompt', label: 'same prompt' },
       vars: {},
     });
 
     expect(authFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not reuse file auth tokens across different vars', async () => {
+    const authFn = vi.fn((authContext: any) => ({
+      token: `token-for-${authContext.vars.userId}`,
+    }));
+    vi.mocked(importModule).mockImplementation(async () => ({ default: authFn }));
+
+    const provider = new HttpProvider(mockUrl, {
+      config: {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer {{token}}',
+        },
+        auth: {
+          type: 'file',
+          path: './auth/get-token.js',
+        },
+      },
+    });
+
+    await provider.callApi('same prompt', {
+      prompt: { raw: 'same prompt', label: 'same prompt' },
+      vars: { userId: 'alice' },
+    });
+    await provider.callApi('same prompt', {
+      prompt: { raw: 'same prompt', label: 'same prompt' },
+      vars: { userId: 'bob' },
+    });
+
+    expect(authFn).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetchWithCache).mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer token-for-alice',
+        }),
+      }),
+    );
+    expect(vi.mocked(fetchWithCache).mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer token-for-bob',
+        }),
+      }),
+    );
   });
 
   it('should refresh a file auth token when it is within the oauth refresh buffer', async () => {
@@ -6971,16 +7067,16 @@ describe('HttpProvider - File Auth', () => {
     });
 
     const requests = Promise.all([
-      provider.callApi('test 1', {
-        prompt: { raw: 'test 1', label: 'test 1' },
+      provider.callApi('same prompt', {
+        prompt: { raw: 'same prompt', label: 'same prompt' },
         vars: {},
       }),
-      provider.callApi('test 2', {
-        prompt: { raw: 'test 2', label: 'test 2' },
+      provider.callApi('same prompt', {
+        prompt: { raw: 'same prompt', label: 'same prompt' },
         vars: {},
       }),
-      provider.callApi('test 3', {
-        prompt: { raw: 'test 3', label: 'test 3' },
+      provider.callApi('same prompt', {
+        prompt: { raw: 'same prompt', label: 'same prompt' },
         vars: {},
       }),
     ]);

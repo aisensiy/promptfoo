@@ -827,6 +827,11 @@ type FileAuthResult = {
   expiration?: number;
 };
 
+type CachedAuthToken = {
+  token: string;
+  expiresAt?: number;
+};
+
 /**
  * Configuration for a separate session endpoint that must be called before the main API.
  * The session endpoint returns a session ID that is then used in the main request.
@@ -1015,6 +1020,70 @@ function hasOwnProperty(obj: Record<string, any>, key: string): boolean {
 
 function parseFileAuthReference(filePath: string): { filePath: string; functionName?: string } {
   return filePath.startsWith('file://') ? parseFileUrl(filePath) : { filePath };
+}
+
+function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
+  if (value === undefined) {
+    return 'undefined';
+  }
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (seen.has(value)) {
+    return '"[Circular]"';
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item, seen)).join(',')}]`;
+  }
+
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key], seen)}`)
+    .join(',')}}`;
+}
+
+function hashAuthCacheInput(value: unknown): string {
+  return crypto.createHash('sha256').update(stableSerialize(value)).digest('hex');
+}
+
+function getOAuthTokenCacheKey(oauthConfig: {
+  grantType: string;
+  clientId?: string;
+  clientSecret?: string;
+  tokenUrl: string;
+  scopes?: string[];
+  username?: string;
+  password?: string;
+}): string {
+  return `oauth:${hashAuthCacheInput({
+    grantType: oauthConfig.grantType,
+    clientId: oauthConfig.clientId,
+    clientSecretHash: oauthConfig.clientSecret
+      ? hashAuthCacheInput(oauthConfig.clientSecret)
+      : undefined,
+    tokenUrl: oauthConfig.tokenUrl,
+    scopes: oauthConfig.scopes,
+    username: oauthConfig.username,
+    passwordHash: oauthConfig.password ? hashAuthCacheInput(oauthConfig.password) : undefined,
+  })}`;
+}
+
+function getFileAuthTokenCacheKey(
+  authPath: string,
+  prompt: string,
+  vars: Record<string, any>,
+  context?: CallApiContextParams,
+): string {
+  return `file:${hashAuthCacheInput({
+    path: authPath,
+    prompt: {
+      raw: context?.prompt?.raw ?? prompt,
+      label: context?.prompt?.label ?? prompt,
+    },
+    vars,
+  })}`;
 }
 
 export async function createSessionParser(
@@ -1525,7 +1594,8 @@ export class HttpProvider implements ApiProvider {
   private lastSignature?: string;
   private lastToken?: string;
   private lastTokenExpiresAt?: number;
-  private tokenRefreshLock?: TokenRefreshLock;
+  private authTokenCache = new Map<string, CachedAuthToken>();
+  private tokenRefreshLocks = new Map<string, TokenRefreshLock>();
   private httpsAgent?: Agent;
   private httpsAgentPromise?: Promise<Agent>;
   /**
@@ -1625,10 +1695,12 @@ export class HttpProvider implements ApiProvider {
     }
   }
 
-  private async refreshOAuthTokenIfNeeded(vars: Record<string, any> = {}): Promise<void> {
+  private async refreshOAuthTokenIfNeeded(
+    vars: Record<string, any> = {},
+  ): Promise<CachedAuthToken> {
     if (!this.config.auth || this.config.auth.type !== 'oauth') {
       logger.debug('[HTTP Provider Auth]: No OAuth auth configured');
-      return;
+      throw new Error('OAuth auth is not configured');
     }
 
     // Render OAuth config values with template substitution
@@ -1660,24 +1732,36 @@ export class HttpProvider implements ApiProvider {
               : undefined,
           }
         : baseConfig;
-    if (this.hasValidCachedToken()) {
+    const cacheKey = getOAuthTokenCacheKey(oauthConfig);
+    const cachedToken = this.getValidCachedToken(cacheKey);
+    if (cachedToken) {
       logger.debug('[HTTP Provider Auth]: Using cached OAuth token');
-      return;
+      this.setActiveToken(cachedToken);
+      return cachedToken;
     }
 
     logger.debug('[HTTP Provider Auth]: Starting or waiting for OAuth token refresh');
-    await this.refreshTokenWithLock(() => this.performTokenRefresh(oauthConfig));
+    await this.refreshTokenWithLock(cacheKey, () =>
+      this.performTokenRefresh(oauthConfig, cacheKey),
+    );
+    const refreshedToken = this.authTokenCache.get(cacheKey);
+    invariant(refreshedToken, 'OAuth token should be cached after refresh');
+    this.setActiveToken(refreshedToken);
+    return refreshedToken;
   }
 
-  private async performTokenRefresh(oauthConfig: {
-    grantType: string;
-    clientId?: string;
-    clientSecret?: string;
-    tokenUrl: string;
-    scopes?: string[];
-    username?: string;
-    password?: string;
-  }): Promise<void> {
+  private async performTokenRefresh(
+    oauthConfig: {
+      grantType: string;
+      clientId?: string;
+      clientSecret?: string;
+      tokenUrl: string;
+      scopes?: string[];
+      username?: string;
+      password?: string;
+    },
+    cacheKey: string,
+  ): Promise<void> {
     try {
       // Prepare the token request body
       const tokenRequestBody = new URLSearchParams();
@@ -1737,12 +1821,11 @@ export class HttpProvider implements ApiProvider {
         throw new Error('OAuth token response missing access_token');
       }
 
-      this.lastToken = tokenData.access_token;
-
       // Calculate expiration time
       // expires_in is typically in seconds, default to 3600 (1 hour) if not provided
       const expiresInSeconds = tokenData.expires_in || 3600;
-      this.lastTokenExpiresAt = Date.now() + expiresInSeconds * 1000;
+      const expiresAt = Date.now() + expiresInSeconds * 1000;
+      this.cacheToken(cacheKey, tokenData.access_token, expiresAt);
 
       logger.debug('[HTTP Provider Auth]: Successfully refreshed OAuth token');
     } catch (err) {
@@ -1750,58 +1833,76 @@ export class HttpProvider implements ApiProvider {
       throw new Error(`Failed to refresh OAuth token: ${String(err)}`);
     }
 
-    invariant(this.lastToken, 'OAuth token should be defined at this point');
+    invariant(this.authTokenCache.has(cacheKey), 'OAuth token should be cached at this point');
   }
 
-  private hasValidCachedToken(now = Date.now()): boolean {
-    if (!this.lastToken) {
-      return false;
-    }
-
-    if (this.lastTokenExpiresAt == null) {
-      return this.config.auth?.type === 'file';
-    }
-
-    return now + TOKEN_REFRESH_BUFFER_MS < this.lastTokenExpiresAt;
+  private cacheToken(cacheKey: string, token: string, expiresAt?: number): void {
+    const cachedToken = { token, expiresAt };
+    this.authTokenCache.set(cacheKey, cachedToken);
+    this.setActiveToken(cachedToken);
   }
 
-  private async waitForInFlightTokenRefresh(): Promise<boolean> {
-    const refreshPromise = this.tokenRefreshLock?.promise;
-    if (refreshPromise == null) {
+  private setActiveToken(cachedToken: CachedAuthToken): void {
+    this.lastToken = cachedToken.token;
+    this.lastTokenExpiresAt = cachedToken.expiresAt;
+  }
+
+  private getValidCachedToken(cacheKey: string, now = Date.now()): CachedAuthToken | undefined {
+    const cachedToken = this.authTokenCache.get(cacheKey);
+    if (!cachedToken) {
+      return undefined;
+    }
+
+    if (cachedToken.expiresAt == null) {
+      return cachedToken;
+    }
+
+    return now + TOKEN_REFRESH_BUFFER_MS < cachedToken.expiresAt ? cachedToken : undefined;
+  }
+
+  private async waitForInFlightTokenRefresh(cacheKey: string): Promise<boolean> {
+    const refreshLock = this.tokenRefreshLocks.get(cacheKey);
+    if (refreshLock == null) {
       return false;
     }
 
     logger.debug('[HTTP Provider Auth]: Token refresh already in progress, waiting...');
 
     try {
-      await refreshPromise;
-      if (this.hasValidCachedToken()) {
+      await refreshLock.promise;
+      if (this.getValidCachedToken(cacheKey)) {
         return true;
       }
       logger.debug('[HTTP Provider Auth]: Token expired while waiting, refreshing again...');
     } catch {
+      if (this.tokenRefreshLocks.get(cacheKey) === refreshLock) {
+        this.tokenRefreshLocks.delete(cacheKey);
+      }
       logger.debug('[HTTP Provider Auth]: Previous token refresh failed, retrying...');
     }
 
     return false;
   }
 
-  private async refreshTokenWithLock(refreshToken: () => Promise<void>): Promise<void> {
-    while (this.tokenRefreshLock != null) {
-      if (await this.waitForInFlightTokenRefresh()) {
+  private async refreshTokenWithLock(
+    cacheKey: string,
+    refreshToken: () => Promise<void>,
+  ): Promise<void> {
+    while (this.tokenRefreshLocks.has(cacheKey)) {
+      if (await this.waitForInFlightTokenRefresh(cacheKey)) {
         return;
       }
     }
 
-    const refreshLock = { promise: refreshToken() };
-    this.tokenRefreshLock = refreshLock;
+    const refreshLock = { promise: Promise.resolve().then(refreshToken) };
+    this.tokenRefreshLocks.set(cacheKey, refreshLock);
 
     try {
       await refreshLock.promise;
     } finally {
       // Only clear the lock if it's still the one we created (prevents race conditions)
-      if (this.tokenRefreshLock === refreshLock) {
-        this.tokenRefreshLock = undefined;
+      if (this.tokenRefreshLocks.get(cacheKey) === refreshLock) {
+        this.tokenRefreshLocks.delete(cacheKey);
       }
     }
   }
@@ -1810,27 +1911,38 @@ export class HttpProvider implements ApiProvider {
     prompt: string,
     vars: Record<string, any>,
     context?: CallApiContextParams,
-  ): Promise<void> {
+  ): Promise<CachedAuthToken> {
     if (!this.config.auth || this.config.auth.type !== 'file') {
       logger.debug('[HTTP Provider Auth]: No file auth configured');
-      return;
+      throw new Error('File auth is not configured');
     }
 
-    if (this.hasValidCachedToken()) {
+    const cacheKey = getFileAuthTokenCacheKey(this.config.auth.path, prompt, vars, context);
+    const cachedToken = this.getValidCachedToken(cacheKey);
+    if (cachedToken) {
       logger.debug('[HTTP Provider Auth]: Using cached file auth token');
-      return;
+      this.setActiveToken(cachedToken);
+      return cachedToken;
     }
 
     logger.debug('[HTTP Provider Auth]: Starting or waiting for file auth token refresh');
-    await this.refreshTokenWithLock(() => this.performFileTokenRefresh(prompt, vars, context));
+    await this.refreshTokenWithLock(cacheKey, () =>
+      this.performFileTokenRefresh(prompt, vars, context, cacheKey),
+    );
+    const refreshedToken = this.authTokenCache.get(cacheKey);
+    invariant(refreshedToken, 'File auth token should be cached after refresh');
+    this.setActiveToken(refreshedToken);
+    return refreshedToken;
   }
 
   private async performFileTokenRefresh(
     prompt: string,
     vars: Record<string, any>,
     context?: CallApiContextParams,
+    cacheKey?: string,
   ): Promise<void> {
     invariant(this.config.auth?.type === 'file', 'File auth should be configured');
+    invariant(cacheKey, 'File auth cache key should be defined');
 
     const { filePath, functionName } = parseFileAuthReference(this.config.auth.path);
     const defaultFunctionName = filePath.endsWith('.py') ? 'get_auth' : 'default';
@@ -1849,15 +1961,14 @@ export class HttpProvider implements ApiProvider {
         defaultFunctionName,
       });
       const result = FileAuthResultSchema.parse(await authFn(authContext));
-      this.lastToken = result.token;
-      this.lastTokenExpiresAt = result.expiration ?? undefined;
+      this.cacheToken(cacheKey, result.token, result.expiration ?? undefined);
       logger.debug('[HTTP Provider Auth]: Successfully refreshed file auth token');
     } catch (err) {
       logger.error(`[HTTP Provider Auth]: Failed to refresh file auth token: ${String(err)}`);
       throw new Error(`Failed to refresh file auth token: ${String(err)}`);
     }
 
-    invariant(this.lastToken, 'File auth token should be defined at this point');
+    invariant(this.authTokenCache.has(cacheKey), 'File auth token should be cached at this point');
   }
 
   private async refreshSignatureIfNeeded(vars: Record<string, any>): Promise<void> {
@@ -2231,8 +2342,7 @@ export class HttpProvider implements ApiProvider {
     } as Record<string, any>;
 
     if (this.config.auth?.type === 'oauth') {
-      await this.refreshOAuthTokenIfNeeded(vars);
-      invariant(this.lastToken, 'OAuth token should be defined at this point');
+      const authToken = await this.refreshOAuthTokenIfNeeded(vars);
 
       if (hasOwnProperty(vars, 'token')) {
         logger.warn(
@@ -2240,10 +2350,9 @@ export class HttpProvider implements ApiProvider {
         );
       }
 
-      vars.token = this.lastToken;
+      vars.token = authToken.token;
     } else if (this.config.auth?.type === 'file') {
-      await this.refreshFileTokenIfNeeded(prompt, vars, context);
-      invariant(this.lastToken, 'File auth token should be defined at this point');
+      const authToken = await this.refreshFileTokenIfNeeded(prompt, vars, context);
 
       if (hasOwnProperty(vars, 'token')) {
         logger.warn(
@@ -2256,8 +2365,8 @@ export class HttpProvider implements ApiProvider {
         );
       }
 
-      vars.token = this.lastToken;
-      vars.expiration = this.lastTokenExpiresAt;
+      vars.token = authToken.token;
+      vars.expiration = authToken.expiresAt;
     }
 
     // Add signature values to vars if signature auth is enabled
