@@ -338,11 +338,18 @@ describe('init command', () => {
           '.',
           'compare-gpt-mmlu-pro',
         );
+        const shortMmluAliasResult = await init.handleExampleDownload('.', 'gpt-mmlu-pro');
+        const modelTiersMmluAliasResult = await init.handleExampleDownload(
+          '.',
+          'gpt-model-tiers-mmlu-pro',
+        );
 
         expect(legacyFolderResult).toEqual('compare-gpt-model-tiers');
         expect(legacyAliasResult).toEqual('compare-gpt-model-tiers');
         expect(legacyMmluResult).toEqual('compare-gpt-model-tiers-mmlu-pro');
         expect(agnosticMmluAliasResult).toEqual('compare-gpt-model-tiers-mmlu-pro');
+        expect(shortMmluAliasResult).toEqual('compare-gpt-model-tiers-mmlu-pro');
+        expect(modelTiersMmluAliasResult).toEqual('compare-gpt-model-tiers-mmlu-pro');
       });
 
       it('should use legacy ref for removed examples', async () => {
