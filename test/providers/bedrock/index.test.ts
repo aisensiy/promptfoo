@@ -3168,7 +3168,9 @@ describe('AwsBedrockCompletionProvider', () => {
     expect(mockCache.get).toHaveBeenCalledTimes(1);
 
     const cacheKey = mockCache.get.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}$`));
+    expect(cacheKey).toMatch(
+      new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}:[a-f0-9]{64}$`),
+    );
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain(apiKey);
     expect(cacheKey).not.toContain(otherApiKey);
@@ -3183,7 +3185,9 @@ describe('AwsBedrockCompletionProvider', () => {
     await otherProvider.callApi(prompt);
 
     const otherCacheKey = mockCache.get.mock.calls[1][0] as string;
-    expect(otherCacheKey).toMatch(new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}$`));
+    expect(otherCacheKey).toMatch(
+      new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}:[a-f0-9]{64}$`),
+    );
     expect(otherCacheKey).not.toBe(cacheKey);
     expect(otherCacheKey).not.toContain(prompt);
     expect(otherCacheKey).not.toContain(apiKey);
@@ -3250,7 +3254,7 @@ describe('AwsBedrockCompletionProvider', () => {
 
     expect(new Set(cacheKeys).size).toBe(cacheKeys.length);
     for (const cacheKey of cacheKeys) {
-      expect(cacheKey).toMatch(/^[a-f0-9]{64}$/);
+      expect(cacheKey).toMatch(/^[a-f0-9]{64}:[a-f0-9]{64}$/);
       expect(cacheKey).not.toContain('PFQA_BEDROCK');
       expect(cacheKey).not.toContain('promptfoo-profile');
     }

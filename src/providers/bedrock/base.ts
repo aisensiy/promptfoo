@@ -91,11 +91,10 @@ export function createBedrockCacheKeyHash({
     ...(config.endpoint ? { endpoint: config.endpoint } : {}),
   });
 
-  return hashBedrockCacheValue({
-    auth: authFingerprint,
+  return `${authFingerprint}:${hashBedrockCacheValue({
     params: omitBedrockCredentialFields(params),
     region,
-  });
+  })}`;
 }
 
 export abstract class AwsBedrockGenericProvider {
