@@ -21,6 +21,16 @@ describe('server CORS', () => {
     expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 
+  it('does not trust arbitrary same-host browser origins', async () => {
+    const response = await request(app)
+      .get('/health')
+      .set('Origin', 'https://evil.example')
+      .set('Host', 'evil.example:15500');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
   it('allows localhost browser origins', async () => {
     const response = await request(app)
       .get('/health')

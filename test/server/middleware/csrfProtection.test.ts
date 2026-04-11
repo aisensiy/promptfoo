@@ -144,7 +144,7 @@ describe('csrfProtection', () => {
 
   // Path 2: No Sec-Fetch-Site, Origin present
   describe('with Origin header only (no Sec-Fetch-Site)', () => {
-    it('allows POST when origin hostname matches host', () => {
+    it('allows POST for known local origin and host', () => {
       const req = mockReq({
         headers: {
           origin: 'http://localhost:5173',
@@ -154,6 +154,19 @@ describe('csrfProtection', () => {
       const res = mockRes();
       csrfProtection(req, res, next);
       expect(next).toHaveBeenCalled();
+    });
+
+    it('blocks POST when an arbitrary origin hostname matches host', () => {
+      const req = mockReq({
+        headers: {
+          origin: 'https://evil.example',
+          host: 'evil.example:15500',
+        },
+      });
+      const res = mockRes();
+      csrfProtection(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
     });
 
     it('blocks POST when origin hostname differs from host', () => {

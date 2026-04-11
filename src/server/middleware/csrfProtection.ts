@@ -55,16 +55,6 @@ export function isAllowedBrowserOrigin(origin: string | undefined, host: string)
     return true;
   }
 
-  try {
-    const originHostname = new URL(origin).hostname;
-    const targetHostname = stripPort(host);
-    if (originHostname === targetHostname) {
-      return true;
-    }
-  } catch {
-    return false;
-  }
-
   return isAllowedCrossSite(origin, host);
 }
 
