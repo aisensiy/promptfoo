@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
 import logger from '../logger';
@@ -258,6 +260,12 @@ export class MistralChatCompletionProvider implements ApiProvider {
     return apiKeyCandidate;
   }
 
+  private getCacheIdentityHash(apiKey: string, apiUrl: string): string {
+    return crypto
+      .scryptSync(`${apiKey}:${apiUrl}`, 'promptfoo:mistral-cache-identity:v1', 32)
+      .toString('hex');
+  }
+
   async callApi(prompt: string, context?: CallApiContextParams): Promise<ProviderResponse> {
     // Merge configs from the provider and the prompt
     const config = {
@@ -337,9 +345,10 @@ export class MistralChatCompletionProvider implements ApiProvider {
       ...(config?.response_format ? { response_format: config.response_format } : {}),
     };
 
-    const cacheKey = `mistral:chat:${this.modelName}:${sha256(
-      JSON.stringify({ apiKey, apiUrl, params }),
-    )}`;
+    const cacheKey = `mistral:chat:${this.modelName}:${this.getCacheIdentityHash(
+      apiKey,
+      apiUrl,
+    )}:${sha256(JSON.stringify(params))}`;
     if (isCacheEnabled()) {
       const cache = getCache();
       if (cache) {

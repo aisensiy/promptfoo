@@ -326,7 +326,7 @@ describe('Mistral', () => {
       await provider.callApi('Sensitive prompt sk-mistral-secret');
 
       const cacheKey = cacheGet.mock.calls[0]?.[0] as string;
-      expect(cacheKey).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}$/);
+      expect(cacheKey).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}$/);
       expect(cacheKey).not.toContain('Sensitive prompt');
       expect(cacheKey).not.toContain('sk-mistral-secret');
       expect(cacheSet).toHaveBeenCalledWith(
@@ -389,8 +389,8 @@ describe('Mistral', () => {
       await providerB.callApi('Shared sensitive prompt');
 
       const [cacheKeyA, cacheKeyB] = cacheGet.mock.calls.map(([key]) => key as string);
-      expect(cacheKeyA).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}$/);
-      expect(cacheKeyB).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}$/);
+      expect(cacheKeyA).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKeyB).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}$/);
       expect(cacheKeyA).not.toBe(cacheKeyB);
       expect(fetchWithCache).toHaveBeenCalledTimes(2);
       for (const cacheKey of [cacheKeyA, cacheKeyB]) {
