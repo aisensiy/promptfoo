@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearCache, disableCache, enableCache } from '../../../src/cache';
+import { clearCache, disableCache, enableCache, getCache } from '../../../src/cache';
 import { AnthropicCompletionProvider } from '../../../src/providers/anthropic/completion';
 
 vi.mock('proxy-agent', async (importOriginal) => {
@@ -72,6 +72,28 @@ describe('AnthropicCompletionProvider', () => {
         output: 'Test output',
         tokenUsage: {},
       });
+    });
+
+    it('should hash request params in cache keys', async () => {
+      const provider = new AnthropicCompletionProvider('claude-1');
+      const cache = await getCache();
+      const getSpy = vi.spyOn(cache, 'get');
+      const setSpy = vi.spyOn(cache, 'set');
+      vi.spyOn(provider.anthropic.completions, 'create').mockResolvedValue({
+        id: 'test-id',
+        model: 'claude-1',
+        stop_reason: 'stop_sequence',
+        type: 'completion',
+        completion: 'Test output',
+      });
+
+      await provider.callApi('Sensitive prompt sk-ant-secret');
+
+      const cacheKey = getSpy.mock.calls[0]?.[0] as string;
+      expect(cacheKey).toMatch(/^anthropic:completion:claude-1:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain('Sensitive prompt');
+      expect(cacheKey).not.toContain('sk-ant-secret');
+      expect(setSpy).toHaveBeenCalledWith(cacheKey, JSON.stringify('Test output'));
     });
 
     it('should return fresh output with caching disabled', async () => {

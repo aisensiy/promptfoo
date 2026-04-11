@@ -5,6 +5,7 @@ import { clearCache, disableCache, enableCache, getCache } from '../../../src/ca
 import logger from '../../../src/logger';
 import { AnthropicMessagesProvider } from '../../../src/providers/anthropic/messages';
 import { MCPClient } from '../../../src/providers/mcp/client';
+import { sha256 } from '../../../src/util/createHash';
 import { maybeLoadResponseFormatFromExternalFile } from '../../../src/util/file';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Mocked, MockedFunction } from 'vitest';
@@ -73,6 +74,9 @@ const createProvider = (
   }
   return created;
 };
+
+const anthropicMessagesCacheKey = (modelName: string, params: unknown) =>
+  `anthropic:messages:${modelName}:${sha256(JSON.stringify(params))}`;
 
 describe('AnthropicMessagesProvider', () => {
   let provider: AnthropicMessagesProvider;
@@ -451,6 +455,24 @@ describe('AnthropicMessagesProvider', () => {
       expect(cachedResult.output).toBe('Test response');
     });
 
+    it('should hash request params in cache keys', async () => {
+      const provider = createProvider('claude-3-5-sonnet-20241022');
+      const cache = await getCache();
+      const getSpy = vi.spyOn(cache, 'get');
+      const setSpy = vi.spyOn(cache, 'set');
+      vi.spyOn(provider.anthropic.messages, 'create').mockResolvedValue({
+        content: [{ type: 'text', text: 'Test response' }],
+      } as Anthropic.Messages.Message);
+
+      await provider.callApi('Sensitive prompt sk-ant-secret');
+
+      const cacheKey = getSpy.mock.calls[0]?.[0] as string;
+      expect(cacheKey).toMatch(/^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain('Sensitive prompt');
+      expect(cacheKey).not.toContain('sk-ant-secret');
+      expect(setSpy).toHaveBeenCalledWith(cacheKey, expect.any(String));
+    });
+
     it('should not use cache if caching is disabled for ToolUse requests', async () => {
       vi.spyOn(provider.anthropic.messages, 'create').mockResolvedValue({
         content: [
@@ -484,13 +506,24 @@ describe('AnthropicMessagesProvider', () => {
       enableCache();
     });
 
-    it('should return cached response for legacy caching behavior', async () => {
+    it('should return cached plain-string responses', async () => {
       vi.spyOn(provider.anthropic.messages, 'create').mockResolvedValue({
         content: [],
       } as unknown as Anthropic.Messages.Message);
 
-      const cacheKey =
-        'anthropic:{"model":"claude-3-5-sonnet-20241022","max_tokens":1024,"messages":[{"role":"user","content":[{"type":"text","text":"What is the forecast in San Francisco?"}]}],"stream":false,"temperature":0,"tools":[{"name":"get_weather","description":"Get the current weather in a given location","input_schema":{"type":"object","properties":{"location":{"type":"string","description":"The city and state, e.g. San Francisco, CA"},"unit":{"type":"string","enum":["celsius","fahrenheit"]}},"required":["location"]}}]}';
+      const cacheKey = anthropicMessagesCacheKey('claude-3-5-sonnet-20241022', {
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'What is the forecast in San Francisco?' }],
+          },
+        ],
+        stream: false,
+        temperature: 0,
+        tools,
+      });
 
       await getCache().set(cacheKey, 'Test output');
 
@@ -1076,15 +1109,13 @@ describe('AnthropicMessagesProvider', () => {
         // Set up specific cache key for our test
         vi.spyOn(provider.anthropic.messages, 'create').mockResolvedValue({} as any);
 
-        const specificCacheKey =
-          'anthropic:' +
-          JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 1024,
-            messages: [{ role: 'user', content: [{ type: 'text', text: 'Test prompt' }] }],
-            stream: false,
-            temperature: 0,
-          });
+        const specificCacheKey = anthropicMessagesCacheKey('claude-3-5-sonnet-20241022', {
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'Test prompt' }] }],
+          stream: false,
+          temperature: 0,
+        });
 
         await getCache().set(
           specificCacheKey,
@@ -1960,8 +1991,13 @@ describe('AnthropicMessagesProvider', () => {
         type: 'message',
         usage: { input_tokens: 10, output_tokens: 0 },
       };
-      const cacheKey =
-        'anthropic:{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":[{"type":"text","text":"Hack something"}]}],"stream":false,"temperature":0}';
+      const cacheKey = anthropicMessagesCacheKey('claude-sonnet-4-6', {
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Hack something' }] }],
+        stream: false,
+        temperature: 0,
+      });
       const cache = await getCache();
       await cache.set(cacheKey, JSON.stringify(refusalMessage));
 

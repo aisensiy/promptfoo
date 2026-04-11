@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getCache, isCacheEnabled } from '../../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../../envars';
 import logger from '../../logger';
+import { sha256 } from '../../util/createHash';
 import { createEmptyTokenUsage } from '../../util/tokenUsageUtils';
 import { AnthropicGenericProvider } from './generic';
 
@@ -59,7 +60,7 @@ export class AnthropicCompletionProvider extends AnthropicGenericProvider {
     logger.debug('Calling Anthropic API', { params });
 
     const cache = await getCache();
-    const cacheKey = `anthropic:${JSON.stringify(params)}`;
+    const cacheKey = `anthropic:completion:${this.modelName}:${sha256(JSON.stringify(params))}`;
 
     if (isCacheEnabled()) {
       // Try to get the cached response

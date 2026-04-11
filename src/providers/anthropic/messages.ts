@@ -7,6 +7,7 @@ import {
   type GenAISpanResult,
   withGenAISpan,
 } from '../../tracing/genaiTracer';
+import { sha256 } from '../../util/createHash';
 import { maybeLoadResponseFormatFromExternalFile } from '../../util/file';
 import { normalizeFinishReason } from '../../util/finishReason';
 import { maybeLoadToolsFromExternalFile } from '../../util/index';
@@ -326,7 +327,9 @@ export class AnthropicMessagesProvider extends AnthropicGenericProvider {
 
     const cache = await getCache();
     const { metadata: _metadata, ...cacheKeyParams } = params;
-    const cacheKey = `anthropic:${JSON.stringify(cacheKeyParams)}`;
+    const cacheKey = `anthropic:messages:${this.modelName}:${sha256(
+      JSON.stringify(cacheKeyParams),
+    )}`;
 
     if (isCacheEnabled()) {
       // Try to get the cached response
