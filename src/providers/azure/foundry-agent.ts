@@ -473,6 +473,7 @@ export class AzureFoundryAgentProvider extends AzureGenericProvider {
     _callApiOptions?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
     const { body, effectiveConfig } = await this.buildResponsesBody(prompt, context);
+    // codeql[js/insufficient-password-hash] This digest is only an opaque provider response cache key, not stored password verification material.
     const cacheKey = `azure_foundry_agent:${this.deploymentName}:${sha256(JSON.stringify(body))}`;
 
     if (isCacheEnabled()) {

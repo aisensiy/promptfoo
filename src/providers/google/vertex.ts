@@ -68,6 +68,7 @@ function getVertexApiHost(
 }
 
 function getVertexBodyCacheKey(prefix: string, body: unknown): string {
+  // codeql[js/insufficient-password-hash] This digest is only an opaque provider response cache key, not stored password verification material.
   return `${prefix}:${sha256(JSON.stringify(body))}`;
 }
 
