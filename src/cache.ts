@@ -293,7 +293,7 @@ function getOptionsForFetchCacheKey(options: RequestInit, bodyIdentity: unknown)
     return { cacheable: false, identity: undefined };
   }
 
-  if (!Object.hasOwn(options, 'body') && bodyIdentity !== undefined) {
+  if (!Object.prototype.hasOwnProperty.call(options, 'body') && bodyIdentity !== undefined) {
     identity.body = bodyIdentity;
   }
 
