@@ -51,7 +51,7 @@ import type {
   TokenUsage,
 } from '../types/index';
 
-const AUTH_TOKEN_CACHE_KEY = crypto.randomBytes(32);
+const AUTH_TOKEN_CACHE_SALT = 'promptfoo:http-auth-token-cache-key';
 
 /**
  * Escapes string values in variables for safe JSON template substitution.
@@ -1067,13 +1067,7 @@ function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
 }
 
 function digestAuthCacheInput(value: unknown): string {
-  return (
-    crypto
-      .createHmac('sha256', AUTH_TOKEN_CACHE_KEY)
-      // codeql[js/insufficient-password-hash] This keyed digest is only an opaque in-memory cache key, not stored password verification material.
-      .update(stableSerialize(value))
-      .digest('hex')
-  );
+  return crypto.scryptSync(stableSerialize(value), AUTH_TOKEN_CACHE_SALT, 32).toString('hex');
 }
 
 function getOAuthTokenCacheKey(oauthConfig: {
