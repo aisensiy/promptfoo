@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getEnvString } from '../../envars';
+import { sha256 } from '../../util/createHash';
 
 import type { EnvOverrides } from '../../types/env';
 import type { ApiProvider, CallApiContextParams, ProviderResponse } from '../../types/index';
@@ -65,6 +66,16 @@ export class AnthropicGenericProvider implements ApiProvider {
     return (
       this.config?.apiBaseUrl || this.env?.ANTHROPIC_BASE_URL || getEnvString('ANTHROPIC_BASE_URL')
     );
+  }
+
+  protected getCacheIdentityHash(): string {
+    const apiKeySource = this.config?.apiKey
+      ? 'config'
+      : this.env?.ANTHROPIC_API_KEY
+        ? 'env-override:ANTHROPIC_API_KEY'
+        : 'env:ANTHROPIC_API_KEY';
+
+    return sha256(JSON.stringify({ apiBaseUrl: this.getApiBaseUrl(), apiKeySource }));
   }
 
   /**

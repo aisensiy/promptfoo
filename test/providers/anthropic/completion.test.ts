@@ -90,7 +90,7 @@ describe('AnthropicCompletionProvider', () => {
       await provider.callApi('Sensitive prompt sk-ant-secret');
 
       const cacheKey = getSpy.mock.calls[0]?.[0] as string;
-      expect(cacheKey).toMatch(/^anthropic:completion:claude-1:[a-f0-9]{64}$/);
+      expect(cacheKey).toMatch(/^anthropic:completion:claude-1:[a-f0-9]{64}:[a-f0-9]{64}$/);
       expect(cacheKey).not.toContain('Sensitive prompt');
       expect(cacheKey).not.toContain('sk-ant-secret');
       expect(setSpy).toHaveBeenCalledWith(cacheKey, JSON.stringify('Test output'));

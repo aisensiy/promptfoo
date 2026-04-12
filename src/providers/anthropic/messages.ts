@@ -50,13 +50,25 @@ function isThinkingEnabled(thinking: Anthropic.Messages.ThinkingConfigParam | un
   return thinking?.type === 'enabled' || thinking?.type === 'adaptive';
 }
 
+const CACHE_KEY_HEADER_VALUE_ALLOWLIST = new Set(['anthropic-beta']);
+
 function normalizeHeadersForCacheKey(headers: Record<string, string>) {
   return Object.keys(headers).length > 0
     ? Object.fromEntries(
-        Object.entries(headers).sort(([nameA, valueA], [nameB, valueB]) => {
-          const nameComparison = nameA.localeCompare(nameB);
-          return nameComparison === 0 ? valueA.localeCompare(valueB) : nameComparison;
-        }),
+        Object.entries(headers)
+          .map(([name, value]): [string, string | boolean] => {
+            const normalizedName = name.toLowerCase();
+            return [
+              normalizedName,
+              CACHE_KEY_HEADER_VALUE_ALLOWLIST.has(normalizedName) ? value : Boolean(value),
+            ];
+          })
+          .sort(([nameA, valueA], [nameB, valueB]) => {
+            const nameComparison = nameA.localeCompare(nameB);
+            return nameComparison === 0
+              ? JSON.stringify(valueA).localeCompare(JSON.stringify(valueB))
+              : nameComparison;
+          }),
       )
     : undefined;
 }
@@ -339,7 +351,7 @@ export class AnthropicMessagesProvider extends AnthropicGenericProvider {
     const cache = await getCache();
     const { metadata: _metadata, ...cacheKeyParams } = params;
     const cacheKeyHeaders = normalizeHeadersForCacheKey(headers);
-    const cacheKey = `anthropic:messages:${this.modelName}:${sha256(
+    const cacheKey = `anthropic:messages:${this.modelName}:${this.getCacheIdentityHash()}:${sha256(
       JSON.stringify({
         ...cacheKeyParams,
         ...(cacheKeyHeaders ? { headers: cacheKeyHeaders } : {}),
@@ -350,7 +362,7 @@ export class AnthropicMessagesProvider extends AnthropicGenericProvider {
       // Try to get the cached response
       const cachedResponse = await cache.get<string | undefined>(cacheKey);
       if (cachedResponse) {
-        logger.debug(`Returning cached response for ${prompt}: ${cachedResponse}`);
+        logger.debug('Returning cached Anthropic Messages response', { model: this.modelName });
         try {
           const parsedCachedResponse = JSON.parse(cachedResponse) as Anthropic.Messages.Message;
           const finishReason = normalizeFinishReason(parsedCachedResponse.stop_reason);

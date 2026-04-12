@@ -60,13 +60,15 @@ export class AnthropicCompletionProvider extends AnthropicGenericProvider {
     logger.debug('Calling Anthropic API', { params });
 
     const cache = await getCache();
-    const cacheKey = `anthropic:completion:${this.modelName}:${sha256(JSON.stringify(params))}`;
+    const cacheKey = `anthropic:completion:${this.modelName}:${this.getCacheIdentityHash()}:${sha256(
+      JSON.stringify(params),
+    )}`;
 
     if (isCacheEnabled()) {
       // Try to get the cached response
       const cachedResponse = await cache.get(cacheKey);
       if (cachedResponse) {
-        logger.debug(`Returning cached response for ${prompt}: ${cachedResponse}`);
+        logger.debug('Returning cached Anthropic completion response', { model: this.modelName });
         return {
           output: JSON.parse(cachedResponse as string),
           tokenUsage: createEmptyTokenUsage(),
