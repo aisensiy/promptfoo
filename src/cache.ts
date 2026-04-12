@@ -1,5 +1,4 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createHmac } from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -10,6 +9,7 @@ import { getEnvBool, getEnvInt, getEnvString } from './envars';
 import logger from './logger';
 import { REQUEST_TIMEOUT_MS } from './providers/shared';
 import { getConfigDirectoryPath } from './util/config/manage';
+import { sha256 } from './util/createHash';
 import { isTransientConnectionError } from './util/fetch/errors';
 import { fetchWithRetries } from './util/fetch/index';
 import { sleep } from './util/time';
@@ -216,7 +216,6 @@ type PreparedFetchResponse = {
 };
 
 const inflightFetchResponses = new Map<string, Promise<SerializedFetchResponse>>();
-const FETCH_CACHE_KEY_HMAC_KEY = 'promptfoo-fetch-cache-key-v1';
 const IGNORED_FETCH_CACHE_OPTION_KEYS = new Set(['signal']);
 
 function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
@@ -230,12 +229,7 @@ function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
 }
 
 function hashFetchCacheKey(identity: unknown) {
-  return (
-    createHmac('sha256', FETCH_CACHE_KEY_HMAC_KEY)
-      // codeql[js/insufficient-password-hash] This digest is an opaque fetch cache key, not stored password verification material.
-      .update(JSON.stringify(identity))
-      .digest('hex')
-  );
+  return sha256(JSON.stringify(identity));
 }
 
 function hashBytesForCacheKey(bytes: ArrayBuffer | ArrayBufferView) {
@@ -244,10 +238,7 @@ function hashBytesForCacheKey(bytes: ArrayBuffer | ArrayBufferView) {
     : Buffer.from(bytes);
   return {
     byteLength: buffer.byteLength,
-    sha256: createHmac('sha256', FETCH_CACHE_KEY_HMAC_KEY)
-      // codeql[js/insufficient-password-hash] This digest is an opaque body component for a fetch cache key, not stored password verification material.
-      .update(buffer)
-      .digest('hex'),
+    sha256: sha256(buffer),
   };
 }
 
