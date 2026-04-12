@@ -81,6 +81,28 @@ function sanitizeAttributes(
   return sanitized;
 }
 
+function serializeSpan(
+  span: typeof spansTable.$inferSelect,
+  shouldSanitizeAttributes = true,
+): SpanData {
+  const rawAttributes = span.attributes ?? undefined;
+
+  return {
+    spanId: span.spanId,
+    parentSpanId: span.parentSpanId ?? undefined,
+    name: span.name,
+    startTime: span.startTime,
+    endTime: span.endTime ?? undefined,
+    attributes: rawAttributes
+      ? shouldSanitizeAttributes
+        ? sanitizeAttributes(rawAttributes)
+        : rawAttributes
+      : undefined,
+    statusCode: span.statusCode ?? undefined,
+    statusMessage: span.statusMessage ?? undefined,
+  };
+}
+
 function computeDepth(
   span: SpanData,
   spanMap: Map<string, SpanData>,
@@ -204,7 +226,7 @@ export class TraceStore {
     }
   }
 
-  async getTracesByEvaluation(evaluationId: string): Promise<any[]> {
+  async getTracesByEvaluation(evaluationId: string): Promise<TraceData[]> {
     try {
       logger.debug(`[TraceStore] Fetching traces for evaluation ${evaluationId}`);
       const db = this.getDatabase();
@@ -227,8 +249,11 @@ export class TraceStore {
           logger.debug(`[TraceStore] Found ${spans.length} spans for trace ${trace.traceId}`);
 
           return {
-            ...trace,
-            spans,
+            traceId: trace.traceId,
+            evaluationId: trace.evaluationId,
+            testCaseId: trace.testCaseId,
+            metadata: trace.metadata ?? undefined,
+            spans: spans.map((span) => serializeSpan(span)),
           };
         }),
       );
@@ -241,7 +266,7 @@ export class TraceStore {
     }
   }
 
-  async getTrace(traceId: string): Promise<import('../types/tracing').TraceData | null> {
+  async getTrace(traceId: string): Promise<TraceData | null> {
     try {
       logger.debug(`[TraceStore] Fetching trace ${traceId}`);
       const db = this.getDatabase();
@@ -267,16 +292,7 @@ export class TraceStore {
         evaluationId: trace.evaluationId,
         testCaseId: trace.testCaseId,
         metadata: trace.metadata ?? undefined,
-        spans: spans.map((span) => ({
-          spanId: span.spanId,
-          parentSpanId: span.parentSpanId ?? undefined,
-          name: span.name,
-          startTime: span.startTime,
-          endTime: span.endTime ?? undefined,
-          attributes: span.attributes ?? undefined,
-          statusCode: span.statusCode ?? undefined,
-          statusMessage: span.statusMessage ?? undefined,
-        })),
+        spans: spans.map((span) => serializeSpan(span)),
       };
     } catch (error) {
       logger.error(`[TraceStore] Failed to get trace: ${error}`);
