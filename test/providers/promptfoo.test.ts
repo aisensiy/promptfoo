@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getEnvBool, getEnvString } from '../../src/envars';
 import { getUserEmail } from '../../src/globalConfig/accounts';
+import logger from '../../src/logger';
 import {
   PromptfooChatCompletionProvider,
   PromptfooHarmfulCompletionProvider,
@@ -77,6 +78,36 @@ describe('PromptfooHarmfulCompletionProvider', () => {
     const result = await provider.callApi('test prompt');
 
     expect(result).toEqual({ output: ['test output'] });
+  });
+
+  it('should not log harmful generation request content', async () => {
+    provider = new PromptfooHarmfulCompletionProvider({
+      ...options,
+      purpose: 'secret-purpose-sentinel',
+      config: {
+        prompt: 'secret-config-sentinel',
+      },
+    });
+    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const mockResponse = new Response(JSON.stringify({ output: 'test output' }), {
+      status: 200,
+      statusText: 'OK',
+    });
+    vi.mocked(fetchWithRetries).mockResolvedValue(mockResponse);
+
+    try {
+      await provider.callApi('test prompt');
+
+      const debugLogs = JSON.stringify(debugSpy.mock.calls);
+      expect(debugLogs).toContain('[HarmfulCompletionProvider] Calling generate harmful API');
+      expect(debugLogs).toContain('purposeLength');
+      expect(debugLogs).toContain('configKeys');
+      expect(debugLogs).not.toContain('secret-purpose-sentinel');
+      expect(debugLogs).not.toContain('secret-config-sentinel');
+      expect(debugLogs).not.toContain('test@example.com');
+    } finally {
+      debugSpy.mockRestore();
+    }
   });
 
   it('should filter out null and undefined values from output array', async () => {

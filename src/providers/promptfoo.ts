@@ -28,6 +28,26 @@ interface PromptfooHarmfulCompletionOptions {
   config?: PluginConfig;
 }
 
+function getHarmfulGenerationLogMetadata(body: {
+  config?: PluginConfig;
+  email?: string | null;
+  harmCategory: string;
+  n: number;
+  purpose: string;
+  version: string;
+}) {
+  return {
+    url: getRemoteGenerationUrlForUnaligned(),
+    harmCategory: body.harmCategory,
+    n: body.n,
+    purposeLength: body.purpose.length,
+    hasEmail: Boolean(body.email),
+    version: body.version,
+    hasConfig: Boolean(body.config),
+    configKeys: body.config ? Object.keys(body.config) : [],
+  };
+}
+
 /**
  * Provider for generating harmful/adversarial content using Promptfoo's unaligned models.
  * Used by red team plugins to generate test cases for harmful content categories.
@@ -84,7 +104,8 @@ export class PromptfooHarmfulCompletionProvider implements ApiProvider {
 
     try {
       logger.debug(
-        `[HarmfulCompletionProvider] Calling generate harmful API (${getRemoteGenerationUrlForUnaligned()}) with body: ${JSON.stringify(body)}`,
+        '[HarmfulCompletionProvider] Calling generate harmful API',
+        getHarmfulGenerationLogMetadata(body),
       );
       // We're using the promptfoo API to avoid having users provide their own unaligned model.
       const response = await fetchWithRetries(
