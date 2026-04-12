@@ -230,9 +230,12 @@ function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
 }
 
 function hashFetchCacheKey(identity: unknown) {
-  return createHmac('sha256', FETCH_CACHE_KEY_HMAC_KEY)
-    .update(JSON.stringify(identity))
-    .digest('hex');
+  return (
+    createHmac('sha256', FETCH_CACHE_KEY_HMAC_KEY)
+      // codeql[js/insufficient-password-hash] This digest is an opaque fetch cache key, not stored password verification material.
+      .update(JSON.stringify(identity))
+      .digest('hex')
+  );
 }
 
 function hashBytesForCacheKey(bytes: ArrayBuffer | ArrayBufferView) {
@@ -241,7 +244,10 @@ function hashBytesForCacheKey(bytes: ArrayBuffer | ArrayBufferView) {
     : Buffer.from(bytes);
   return {
     byteLength: buffer.byteLength,
-    sha256: createHmac('sha256', FETCH_CACHE_KEY_HMAC_KEY).update(buffer).digest('hex'),
+    sha256: createHmac('sha256', FETCH_CACHE_KEY_HMAC_KEY)
+      // codeql[js/insufficient-password-hash] This digest is an opaque body component for a fetch cache key, not stored password verification material.
+      .update(buffer)
+      .digest('hex'),
   };
 }
 
