@@ -21,6 +21,10 @@ vi.mock('../../../src/logger', () => ({
   getLogLevel: vi.fn().mockReturnValue('info'),
 }));
 
+function stringifyLoggerCalls(...mocks: ReturnType<typeof vi.fn>[]) {
+  return JSON.stringify(mocks.flatMap((mock) => mock.mock.calls));
+}
+
 describe('gcg strategy', () => {
   const mockFetchWithCache = vi.mocked(fetchWithCache);
   const mockGetUserEmail = vi.mocked(getUserEmail);
@@ -113,6 +117,72 @@ describe('gcg strategy', () => {
 
     expect(result).toHaveLength(0);
     expect(logger.warn).toHaveBeenCalledWith('No GCG test cases were generated');
+  });
+
+  it('redacts prompts and generated responses from logs', async () => {
+    const originalPrompt = 'SECRET_GCG_ORIGINAL_PROMPT';
+    const generatedResponse = 'SECRET_GCG_GENERATED_RESPONSE';
+    const metadataSecret = 'SECRET_GCG_METADATA_VALUE';
+    const assertionSecret = 'SECRET_GCG_ASSERTION_VALUE';
+
+    mockFetchWithCache.mockResolvedValueOnce({
+      data: {
+        responses: [generatedResponse],
+      },
+      cached: false,
+      status: 200,
+      statusText: 'OK',
+    });
+
+    const result = await addGcgTestCases(
+      [
+        {
+          vars: {
+            prompt: originalPrompt,
+          },
+          assert: [
+            {
+              type: 'contains',
+              value: assertionSecret,
+              metric: 'secret-metric',
+            },
+          ],
+          metadata: {
+            pluginId: 'plugin-secret-key',
+            secret: metadataSecret,
+          },
+        },
+      ],
+      'prompt',
+      {},
+    );
+
+    expect(result[0].vars?.prompt).toBe(generatedResponse);
+
+    const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
+    expect(logs).not.toContain(originalPrompt);
+    expect(logs).not.toContain(generatedResponse);
+    expect(logs).not.toContain(metadataSecret);
+    expect(logs).not.toContain(assertionSecret);
+  });
+
+  it('redacts remote error bodies from logs', async () => {
+    const remoteError = 'SECRET_GCG_REMOTE_ERROR_WITH_PROMPT';
+
+    mockFetchWithCache.mockResolvedValueOnce({
+      data: { error: remoteError },
+      cached: false,
+      status: 500,
+      statusText: 'Error',
+    });
+
+    const result = await addGcgTestCases(testCases, 'prompt', {});
+
+    expect(result).toHaveLength(0);
+    expect(logger.error).toHaveBeenCalledWith('[GCG] Error in GCG generation for case 1');
+
+    const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
+    expect(logs).not.toContain(remoteError);
   });
 
   it('should handle network errors gracefully', async () => {

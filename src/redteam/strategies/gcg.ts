@@ -33,11 +33,16 @@ async function generateGcgPrompts(
     }
 
     await async.forEachOfLimit(testCases, CONCURRENCY, async (testCase, index) => {
-      logger.debug(`[GCG] Processing test case: ${JSON.stringify(testCase)}`);
-      invariant(
-        testCase.vars,
-        `GCG: testCase.vars is required, but got ${JSON.stringify(testCase)}`,
-      );
+      const caseNumber = Number(index) + 1;
+      logger.debug('[GCG] Processing test case', {
+        caseNumber,
+        totalCases: testCases.length,
+        injectVar,
+        varsKeys: Object.keys(testCase.vars ?? {}),
+        assertionCount: testCase.assert?.length ?? 0,
+        metadataKeys: Object.keys(testCase.metadata ?? {}),
+      });
+      invariant(testCase.vars, `GCG: testCase.vars is required for case ${caseNumber}`);
 
       const payload = {
         task: 'gcg',
@@ -63,13 +68,18 @@ async function generateGcgPrompts(
         REQUEST_TIMEOUT_MS,
       );
 
-      logger.debug(
-        `Got GCG generation result for case ${Number(index) + 1}: ${JSON.stringify(data)}`,
-      );
+      logger.debug('[GCG] Got generation result', {
+        caseNumber,
+        hasError: Boolean(data.error),
+        responseCount: Array.isArray(data.responses) ? data.responses.length : 0,
+      });
 
       if (data.error) {
-        logger.error(`[GCG] Error in GCG generation: ${data.error}`);
-        logger.debug(`[GCG] Response: ${JSON.stringify(data)}`);
+        logger.error(`[GCG] Error in GCG generation for case ${caseNumber}`);
+        logger.debug('[GCG] Error response metadata', {
+          caseNumber,
+          hasError: true,
+        });
         return;
       }
 
@@ -99,7 +109,7 @@ async function generateGcgPrompts(
       if (progressBar) {
         progressBar.increment(1);
       } else {
-        logger.debug(`Processed case ${Number(index) + 1} of ${testCases.length}`);
+        logger.debug(`Processed case ${caseNumber} of ${testCases.length}`);
       }
     });
 
