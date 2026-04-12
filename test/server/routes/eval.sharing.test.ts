@@ -126,6 +126,17 @@ describe('Eval Routes - Sharing behavior', () => {
     expect(mockedEvaluate).not.toHaveBeenCalled();
   });
 
+  it('rejects local prompt file sources that contain spaces', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['prompts/my runner.txt'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
   it('rejects executable prompt files from web job creation', async () => {
     const response = await postJob({
       ...minimalTestSuite,
@@ -135,6 +146,51 @@ describe('Eval Routes - Sharing behavior', () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toContain('Server-side prompt sources are disabled');
     expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects executable prompt files with generic file extensions', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['payload.bin'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects object prompt sources from web job creation', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: [{ raw: 'exec:/bin/echo PROMPTFOO_EXEC_SENTINEL', label: 'unsafe' }],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects object prompt id sources when raw is omitted', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: [{ id: 'prompts/runner', label: 'unsafe' }],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('allows inline templated and JSON-like prompt strings', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['{{prompt}}', '{"role":"user","content":"hello"}'],
+    });
+
+    expect(response.status).toBe(200);
+    await vi.waitFor(() => {
+      expect(mockedEvaluate).toHaveBeenCalled();
+    });
   });
 
   it('allows server-side prompt sources when explicitly enabled', async () => {

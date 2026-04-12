@@ -8,7 +8,7 @@ import promptfoo from '../../index';
 import logger from '../../logger';
 import Eval, { EvalQueries } from '../../models/eval';
 import EvalResult from '../../models/evalResult';
-import { VALID_FILE_EXTENSIONS } from '../../prompts/constants';
+import { maybeFilePath } from '../../prompts/utils';
 import { EvalSchemas } from '../../types/api/eval';
 import { deleteEval, deleteEvals, updateResult, writeResultsToDatabase } from '../../util/database';
 import invariant from '../../util/invariant';
@@ -40,8 +40,7 @@ export const evalRouter = Router();
 export const evalJobs = new Map<string, Job>();
 
 const SERVER_PROMPT_SOURCE_OPT_IN = 'PROMPTFOO_ALLOW_SERVER_PROMPT_SOURCES';
-const SERVER_PROMPT_SOURCE_EXTENSIONS = [
-  ...VALID_FILE_EXTENSIONS,
+const SERVER_PROMPT_SOURCE_EXECUTABLE_EXTENSIONS = [
   '.bash',
   '.bat',
   '.cmd',
@@ -54,6 +53,10 @@ const SERVER_PROMPT_SOURCE_EXTENSIONS = [
 
 function isServerPromptSourceReference(prompt: string): boolean {
   const trimmed = prompt.trim();
+  if (!trimmed) {
+    return false;
+  }
+
   const lower = trimmed.toLowerCase();
 
   if (lower.startsWith('exec:') || lower.startsWith('file://')) {
@@ -64,26 +67,36 @@ function isServerPromptSourceReference(prompt: string): boolean {
     return true;
   }
 
-  if (/\s/.test(trimmed)) {
-    return false;
-  }
-
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     return false;
   }
 
-  if (trimmed.includes('/') || trimmed.includes('\\')) {
-    return true;
-  }
-
-  if (/[*?[\]{}]/.test(trimmed)) {
-    return true;
+  if (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  ) {
+    return false;
   }
 
   const pathOrFunctionToken = trimmed.split(':')[0].toLowerCase();
-  return SERVER_PROMPT_SOURCE_EXTENSIONS.some((extension) =>
-    pathOrFunctionToken.endsWith(extension),
+  return (
+    maybeFilePath(trimmed) ||
+    SERVER_PROMPT_SOURCE_EXECUTABLE_EXTENSIONS.some((extension) =>
+      pathOrFunctionToken.endsWith(extension),
+    )
   );
+}
+
+function getPromptSourceReferences(prompt: string | Record<string, unknown>): string[] {
+  if (typeof prompt === 'string') {
+    return [prompt];
+  }
+
+  if (typeof prompt.raw === 'string') {
+    return [prompt.raw];
+  }
+
+  return typeof prompt.id === 'string' ? [prompt.id] : [];
 }
 
 function validateWebEvalPrompts(prompts: (string | Record<string, unknown>)[]): string | undefined {
@@ -92,7 +105,11 @@ function validateWebEvalPrompts(prompts: (string | Record<string, unknown>)[]): 
   }
 
   if (
-    prompts.some((prompt) => typeof prompt === 'string' && isServerPromptSourceReference(prompt))
+    prompts.some((prompt) =>
+      getPromptSourceReferences(prompt).some((reference) =>
+        isServerPromptSourceReference(reference),
+      ),
+    )
   ) {
     return `Server-side prompt sources are disabled for web eval jobs. Set ${SERVER_PROMPT_SOURCE_OPT_IN}=true to allow trusted local usage.`;
   }
