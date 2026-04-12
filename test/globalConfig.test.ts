@@ -157,6 +157,25 @@ describe('Global Config', () => {
       expect(fs.chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
       expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('promptfoo.yaml'), 0o600);
     });
+
+    it('should tighten existing config file permissions before rewriting', () => {
+      globalConfig.writeGlobalConfig({
+        ...mockConfig,
+      });
+
+      const writeOrder = vi.mocked(fs.writeFileSync).mock.invocationCallOrder[0]!;
+      const configFileChmodOrders = vi
+        .mocked(fs.chmodSync)
+        .mock.calls.map(([filePath], index) => ({
+          filePath: filePath.toString(),
+          order: vi.mocked(fs.chmodSync).mock.invocationCallOrder[index]!,
+        }))
+        .filter(({ filePath }) => filePath.includes('promptfoo.yaml'))
+        .map(({ order }) => order);
+
+      expect(configFileChmodOrders.some((order) => order < writeOrder)).toBe(true);
+      expect(configFileChmodOrders.some((order) => order > writeOrder)).toBe(true);
+    });
   });
 
   describe('writeGlobalConfigPartial', () => {

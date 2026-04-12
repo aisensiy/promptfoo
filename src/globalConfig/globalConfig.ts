@@ -22,6 +22,7 @@ function chmodBestEffort(filePath: string, mode: number): void {
 }
 
 function writeGlobalConfigFile(configFilePath: string, config: GlobalConfig): void {
+  chmodBestEffort(configFilePath, GLOBAL_CONFIG_FILE_MODE);
   fs.writeFileSync(configFilePath, yaml.dump(config), { mode: GLOBAL_CONFIG_FILE_MODE });
   chmodBestEffort(configFilePath, GLOBAL_CONFIG_FILE_MODE);
 }
