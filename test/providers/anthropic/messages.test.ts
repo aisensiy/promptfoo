@@ -76,7 +76,7 @@ const createProvider = (
 };
 
 const anthropicCacheIdentityHash = () =>
-  sha256(JSON.stringify({ apiBaseUrl: undefined, apiKeySource: 'env:ANTHROPIC_API_KEY' }));
+  sha256(JSON.stringify({ apiBaseUrl: undefined, authSource: 'env:ANTHROPIC_API_KEY' }));
 
 const anthropicMessagesCacheKey = (modelName: string, params: unknown) =>
   `anthropic:messages:${modelName}:${anthropicCacheIdentityHash()}:${sha256(JSON.stringify(params))}`;

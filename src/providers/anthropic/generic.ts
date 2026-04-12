@@ -69,13 +69,13 @@ export class AnthropicGenericProvider implements ApiProvider {
   }
 
   protected getCacheIdentityHash(): string {
-    const apiKeySource = this.config?.apiKey
+    const authSource = Object.prototype.hasOwnProperty.call(this.config, 'apiKey')
       ? 'config'
-      : this.env?.ANTHROPIC_API_KEY
+      : Object.prototype.hasOwnProperty.call(this.env ?? {}, 'ANTHROPIC_API_KEY')
         ? 'env-override:ANTHROPIC_API_KEY'
         : 'env:ANTHROPIC_API_KEY';
 
-    return sha256(JSON.stringify({ apiBaseUrl: this.getApiBaseUrl(), apiKeySource }));
+    return sha256(JSON.stringify({ apiBaseUrl: this.getApiBaseUrl(), authSource }));
   }
 
   /**
