@@ -159,10 +159,18 @@ function pickGenerateOptions(config: VercelAiConfig) {
 }
 
 function getGatewayCacheConfig(config: VercelAiConfig, env?: EnvOverrides) {
+  const authSource = Object.prototype.hasOwnProperty.call(config, 'apiKey')
+    ? 'config'
+    : Object.prototype.hasOwnProperty.call(config, 'apiKeyEnvar')
+      ? 'custom-env'
+      : Object.prototype.hasOwnProperty.call(env ?? {}, 'VERCEL_AI_GATEWAY_API_KEY')
+        ? 'env-override'
+        : 'env';
+
   return {
-    apiKey: resolveApiKey(config, env),
+    authSource,
     baseUrl: resolveBaseUrl(config, env),
-    headers: config.headers,
+    headerNames: config.headers ? Object.keys(config.headers).sort() : undefined,
   };
 }
 
