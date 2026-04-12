@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { ZodError } from 'zod';
 import { generateConfigFile } from '../../code-scan-action/src/config';
 
 describe('generateConfigFile', () => {
@@ -37,6 +38,7 @@ describe('generateConfigFile', () => {
   });
 
   it('rejects invalid severities', () => {
-    expect(() => generateConfigFile('high!')).toThrow();
+    expect(() => generateConfigFile('high!')).toThrowError(ZodError);
+    expect(() => generateConfigFile('high!')).toThrowError(/Invalid option/);
   });
 });
