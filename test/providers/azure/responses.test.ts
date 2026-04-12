@@ -560,24 +560,31 @@ describe('AzureResponsesProvider', () => {
           metadata: { trace: 'secret-metadata-sentinel' },
         } as any,
       });
-      const result = await provider.callApi('secret-prompt-sentinel');
 
-      expect(result.output).toBe('secret-response-sentinel');
-      const azureDebugLogs = JSON.stringify(
-        debugSpy.mock.calls.filter(([message]) => String(message).includes('Azure Responses API')),
-      );
-      expect(azureDebugLogs).toContain('inputType');
-      expect(azureDebugLogs).toContain('outputCount');
-      expect(azureDebugLogs).toContain('inputTokens');
-      expect(azureDebugLogs).not.toContain('secret-prompt-sentinel');
-      expect(azureDebugLogs).not.toContain('secret-instructions-sentinel');
-      expect(azureDebugLogs).not.toContain('secret-metadata-sentinel');
-      expect(azureDebugLogs).not.toContain('secret-response-sentinel');
+      try {
+        const result = await provider.callApi('secret-prompt-sentinel');
+
+        expect(result.output).toBe('secret-response-sentinel');
+        const azureDebugLogs = JSON.stringify(
+          debugSpy.mock.calls.filter(([message]) =>
+            String(message).includes('Azure Responses API'),
+          ),
+        );
+        expect(azureDebugLogs).toContain('inputType');
+        expect(azureDebugLogs).toContain('outputCount');
+        expect(azureDebugLogs).toContain('inputTokens');
+        expect(azureDebugLogs).not.toContain('secret-prompt-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-instructions-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-metadata-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-response-sentinel');
+      } finally {
+        debugSpy.mockRestore();
+      }
     });
 
     it('should handle API errors', async () => {
       mockFetchWithCache.mockResolvedValue({
-        data: { error: { message: 'Invalid API key' } },
+        data: { error: { message: 'secret-azure-responses-error-body' } },
         cached: false,
         status: 401,
         statusText: 'Unauthorized',
@@ -587,6 +594,28 @@ describe('AzureResponsesProvider', () => {
       const result = await provider.callApi('Hello');
 
       expect(result.error).toContain('API error: 401');
+      expect(result.error).toContain('Response metadata');
+      expect(result.error).not.toContain('secret-azure-responses-error-body');
+    });
+
+    it('should redact thrown API call errors', async () => {
+      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+      mockFetchWithCache.mockRejectedValue(new Error('secret-azure-responses-thrown-error'));
+
+      const provider = new AzureResponsesProvider('gpt-4.1-test');
+
+      try {
+        const result = await provider.callApi('Hello');
+
+        expect(result.error).toContain('API call error');
+        expect(result.error).toContain('Error metadata');
+        expect(result.error).not.toContain('secret-azure-responses-thrown-error');
+        expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+          'secret-azure-responses-thrown-error',
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
     });
 
     it('should handle deep research model timeout', async () => {

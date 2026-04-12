@@ -46,11 +46,16 @@ function getAzureResponsesRequestLogMetadata(body: Record<string, any>): Record<
 function getAzureResponsesResponseLogMetadata(data: any): Record<string, any> {
   const output = Array.isArray(data?.output) ? data.output : undefined;
   return {
+    responseType: Array.isArray(data) ? 'array' : typeof data,
+    responseLength: typeof data === 'string' ? data.length : undefined,
     id: data?.id,
     model: data?.model,
     status: data?.status,
+    hasError: Boolean(data?.error),
     outputCount: output?.length ?? 0,
-    outputTypes: output?.map((item: any) => item?.type).filter(Boolean),
+    outputTypes: output
+      ?.map((item: any) => item?.type)
+      .filter((type: unknown): type is string => typeof type === 'string'),
     usage: data?.usage
       ? {
           inputTokens: data.usage.input_tokens,
@@ -58,6 +63,14 @@ function getAzureResponsesResponseLogMetadata(data: any): Record<string, any> {
           totalTokens: data.usage.total_tokens,
         }
       : undefined,
+  };
+}
+
+function getAzureResponsesErrorLogMetadata(err: unknown): Record<string, any> {
+  return {
+    errorType: err instanceof Error ? err.constructor.name : typeof err,
+    errorName: err instanceof Error ? err.name : undefined,
+    errorMessageLength: err instanceof Error ? err.message.length : String(err).length,
   };
 }
 
@@ -331,15 +344,13 @@ export class AzureResponsesProvider extends AzureGenericProvider {
 
       if (status < 200 || status >= 300) {
         return {
-          error: `API error: ${status} ${statusText}\n${
-            typeof data === 'string' ? data : JSON.stringify(data)
-          }`,
+          error: `API error: ${status} ${statusText}\nResponse metadata: ${JSON.stringify(getAzureResponsesResponseLogMetadata(data), null, 2)}`,
         };
       }
     } catch (err) {
-      logger.error(`API call error: ${String(err)}`);
+      logger.error('Azure Responses API call error', getAzureResponsesErrorLogMetadata(err));
       return {
-        error: `API call error: ${String(err)}`,
+        error: `API call error\nError metadata: ${JSON.stringify(getAzureResponsesErrorLogMetadata(err), null, 2)}`,
       };
     }
 
