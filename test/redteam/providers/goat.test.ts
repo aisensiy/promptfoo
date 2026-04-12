@@ -250,7 +250,7 @@ describe('RedteamGoatProvider', () => {
       maxTurns: 2,
       excludeTargetOutputFromAgenticAttackGeneration: true,
     });
-    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => ({}) as any);
     const targetProvider = createMockTargetProvider(
       'secret-target-output-sentinel',
       {},
@@ -1318,7 +1318,8 @@ describe('RedteamGoatProvider', () => {
         maxTurns: 2,
       });
 
-      const regularError = new Error('Network error');
+      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+      const regularError = new Error('Network error secret-goat-network-error-sentinel');
       // First turn fails with non-AbortError, second turn succeeds
       mockFetch.mockRejectedValueOnce(regularError).mockImplementationOnce(async () => ({
         json: async () => ({
@@ -1330,11 +1331,18 @@ describe('RedteamGoatProvider', () => {
       const targetProvider = createMockTargetProvider();
       const context = createMockContext(targetProvider);
 
-      // Should NOT throw - should continue to next turn
-      const result = await provider.callApi('test prompt', context);
+      try {
+        // Should NOT throw - should continue to next turn
+        const result = await provider.callApi('test prompt', context);
 
-      // Should complete without throwing
-      expect(result.metadata?.stopReason).toBe('Max turns reached');
+        // Should complete without throwing
+        expect(result.metadata?.stopReason).toBe('Max turns reached');
+        expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+          'secret-goat-network-error-sentinel',
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
     });
   });
 
