@@ -48,6 +48,16 @@ const SENSITIVE_ATTRIBUTE_KEYS = [
   'passphrase',
 ];
 
+function isSensitiveAttributeKey(key: string): boolean {
+  const lowerKey = key.toLowerCase();
+  const normalizedKey = lowerKey.replace(/[^a-z0-9]/g, '');
+
+  return SENSITIVE_ATTRIBUTE_KEYS.some((sensitiveKey) => {
+    const normalizedSensitiveKey = sensitiveKey.replace(/[^a-z0-9]/g, '');
+    return lowerKey.includes(sensitiveKey) || normalizedKey.includes(normalizedSensitiveKey);
+  });
+}
+
 function sanitizeAttributes(
   attributes: Record<string, any> | null | undefined,
 ): Record<string, any> {
@@ -70,8 +80,7 @@ function sanitizeAttributes(
 
   const sanitized: Record<string, any> = {};
   for (const [key, value] of Object.entries(attributes)) {
-    const lowerKey = key.toLowerCase();
-    if (SENSITIVE_ATTRIBUTE_KEYS.some((sensitiveKey) => lowerKey.includes(sensitiveKey))) {
+    if (isSensitiveAttributeKey(key)) {
       sanitized[key] = '<redacted>';
       continue;
     }

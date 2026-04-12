@@ -357,6 +357,12 @@ describe('TraceStore', () => {
           endTime: null,
           attributes: {
             authorization: 'Bearer trace-secret',
+            'x-api-key': 'gateway-secret',
+            headers: {
+              'api-key': 'header-secret',
+              set_cookie: 'session=trace-secret',
+              accept: 'application/json',
+            },
             nested: {
               api_token: 'nested-secret',
               safe: 'ok',
@@ -385,6 +391,12 @@ describe('TraceStore', () => {
 
       expect(result[0].spans[0].attributes).toEqual({
         authorization: '<redacted>',
+        'x-api-key': '<redacted>',
+        headers: {
+          'api-key': '<redacted>',
+          set_cookie: '<redacted>',
+          accept: 'application/json',
+        },
         nested: {
           api_token: '<redacted>',
           safe: 'ok',
@@ -436,9 +448,11 @@ describe('TraceStore', () => {
             authorization: 'Bearer trace-secret',
             headers: {
               Cookie: 'session=trace-secret',
+              'x-api-key': 'gateway-secret',
               accept: 'application/json',
             },
             nested: {
+              'api-key': 'nested-header-secret',
               api_key: 'nested-secret',
               safe: 'ok',
             },
@@ -495,9 +509,11 @@ describe('TraceStore', () => {
               authorization: '<redacted>',
               headers: {
                 Cookie: '<redacted>',
+                'x-api-key': '<redacted>',
                 accept: 'application/json',
               },
               nested: {
+                'api-key': '<redacted>',
                 api_key: '<redacted>',
                 safe: 'ok',
               },
