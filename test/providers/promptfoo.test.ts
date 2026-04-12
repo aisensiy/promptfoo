@@ -98,13 +98,20 @@ describe('PromptfooHarmfulCompletionProvider', () => {
     try {
       await provider.callApi('test prompt');
 
-      const debugLogs = JSON.stringify(debugSpy.mock.calls);
-      expect(debugLogs).toContain('[HarmfulCompletionProvider] Calling generate harmful API');
-      expect(debugLogs).toContain('purposeLength');
-      expect(debugLogs).toContain('configKeys');
-      expect(debugLogs).not.toContain('secret-purpose-sentinel');
-      expect(debugLogs).not.toContain('secret-config-sentinel');
-      expect(debugLogs).not.toContain('test@example.com');
+      const debugCall = debugSpy.mock.calls.find(
+        ([message]) => message === '[HarmfulCompletionProvider] Calling generate harmful API',
+      );
+      expect(debugCall?.[1]).toEqual(
+        expect.objectContaining({
+          purposeLength: 'secret-purpose-sentinel'.length,
+          configKeys: ['prompt'],
+        }),
+      );
+
+      const loggedContext = JSON.stringify(debugCall?.[1]);
+      expect(loggedContext).not.toContain('secret-purpose-sentinel');
+      expect(loggedContext).not.toContain('secret-config-sentinel');
+      expect(loggedContext).not.toContain('test@example.com');
     } finally {
       debugSpy.mockRestore();
     }
@@ -138,15 +145,30 @@ describe('PromptfooHarmfulCompletionProvider', () => {
   });
 
   it('should handle API error', async () => {
-    const mockResponse = new Response('API Error', {
+    const responseBody = 'secret-harmful-api-error-body';
+    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    const mockResponse = new Response(responseBody, {
       status: 400,
       statusText: 'Bad Request',
     });
     vi.mocked(fetchWithRetries).mockResolvedValue(mockResponse);
 
-    const result = await provider.callApi('test prompt');
+    try {
+      const result = await provider.callApi('test prompt');
 
-    expect(result.error).toContain('[HarmfulCompletionProvider]');
+      expect(result.error).toBe('[HarmfulCompletionProvider] API call failed with status 400');
+      expect(infoSpy).toHaveBeenCalledWith(
+        '[HarmfulCompletionProvider] Generate harmful API failed',
+        expect.objectContaining({
+          status: 400,
+          statusText: 'Bad Request',
+          responseBodyLength: responseBody.length,
+        }),
+      );
+      expect(JSON.stringify([result, infoSpy.mock.calls])).not.toContain(responseBody);
+    } finally {
+      infoSpy.mockRestore();
+    }
   });
 
   it('should return error when PROMPTFOO_DISABLE_REMOTE_GENERATION is set', async () => {

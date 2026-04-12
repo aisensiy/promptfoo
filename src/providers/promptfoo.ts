@@ -48,6 +48,13 @@ function getHarmfulGenerationLogMetadata(body: {
   };
 }
 
+function getErrorMetadata(err: unknown) {
+  return {
+    errorType: err instanceof Error ? err.constructor.name : typeof err,
+    errorName: err instanceof Error ? err.name : undefined,
+  };
+}
+
 /**
  * Provider for generating harmful/adversarial content using Promptfoo's unaligned models.
  * Used by red team plugins to generate test cases for harmful content categories.
@@ -123,7 +130,15 @@ export class PromptfooHarmfulCompletionProvider implements ApiProvider {
       );
 
       if (!response.ok) {
-        throw new Error(`API call failed with status ${response.status}: ${await response.text()}`);
+        const responseBody = await response.text();
+        logger.info('[HarmfulCompletionProvider] Generate harmful API failed', {
+          status: response.status,
+          statusText: response.statusText,
+          responseBodyLength: responseBody.length,
+        });
+        return {
+          error: `[HarmfulCompletionProvider] API call failed with status ${response.status}`,
+        };
       }
 
       const data = await response.json();
@@ -143,9 +158,12 @@ export class PromptfooHarmfulCompletionProvider implements ApiProvider {
       if (err instanceof Error && err.name === 'AbortError') {
         throw err;
       }
-      logger.info(`[HarmfulCompletionProvider] ${err}`);
+      logger.info(
+        '[HarmfulCompletionProvider] Error generating harmful content',
+        getErrorMetadata(err),
+      );
       return {
-        error: `[HarmfulCompletionProvider] ${err}`,
+        error: '[HarmfulCompletionProvider] Error generating harmful content',
       };
     }
   }
