@@ -3003,8 +3003,8 @@ describe('Language configuration', () => {
       expect(pluginListMessage).not.toContain('"policy":');
     });
 
-    it('should log full config at debug level for policy plugins', async () => {
-      const policyText = 'Test policy for debug logging';
+    it('should log config shape at debug level for policy plugins', async () => {
+      const policyText = 'SECRET_POLICY_DEBUG_TEXT';
       const mockPluginAction = vi.fn().mockResolvedValue([{ vars: { query: 'test' } }]);
       vi.spyOn(Plugins, 'find').mockReturnValue({
         action: mockPluginAction,
@@ -3019,11 +3019,11 @@ describe('Language configuration', () => {
         targetIds: ['test-provider'],
       });
 
-      // Check that debug log uses structured logging with plugin config
       expect(logger.debug).toHaveBeenCalledWith('Plugin config', {
         pluginId: 'policy',
-        config: expect.objectContaining({ policy: policyText }),
+        configKeys: ['policy'],
       });
+      expect(JSON.stringify(vi.mocked(logger.debug).mock.calls)).not.toContain(policyText);
     });
 
     it('should show "(custom config)" for non-policy plugins with config', async () => {

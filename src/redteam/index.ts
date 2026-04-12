@@ -939,8 +939,10 @@ export async function synthesize({
               // For other plugins with config, just indicate config exists
               configSummary = ' (custom config)';
             }
-            // Log full config at debug level for troubleshooting (structured for auto-sanitization)
-            logger.debug('Plugin config', { pluginId: p.id, config: p.config });
+            logger.debug('Plugin config', {
+              pluginId: p.id,
+              configKeys: Object.keys(p.config),
+            });
           }
           return `${p.id} (${formatTestCount(actualTestCount, false)})${configSummary}`;
         })
