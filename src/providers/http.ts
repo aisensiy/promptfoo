@@ -1067,10 +1067,13 @@ function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
 }
 
 function digestAuthCacheInput(value: unknown): string {
-  return crypto
-    .createHmac('sha256', AUTH_TOKEN_CACHE_KEY)
-    .update(stableSerialize(value))
-    .digest('hex');
+  return (
+    crypto
+      .createHmac('sha256', AUTH_TOKEN_CACHE_KEY)
+      // codeql[js/insufficient-password-hash] This keyed digest is only an opaque in-memory cache key, not stored password verification material.
+      .update(stableSerialize(value))
+      .digest('hex')
+  );
 }
 
 function getOAuthTokenCacheKey(oauthConfig: {
