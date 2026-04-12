@@ -371,10 +371,23 @@ describe('redteamConfigSchema', () => {
     expect(result.data?.strategies).toBeDefined();
 
     // Verify the structure is correct
-    const filteredPlugins = samplePlugins.filter((id) => !COLLECTIONS.includes(id as any));
+    const collectionIds = new Set<string>(COLLECTIONS);
+    const filteredPlugins = samplePlugins.filter((id) => !collectionIds.has(id));
     expect(result.data?.plugins).toHaveLength(filteredPlugins.length);
 
     expect(result.data?.strategies?.length).toBeGreaterThan(0);
+  });
+
+  it('should validate every defined plugin id individually', () => {
+    for (const pluginId of REDTEAM_ALL_PLUGINS) {
+      expect(RedteamPluginSchema.safeParse(pluginId).success, pluginId).toBe(true);
+    }
+  });
+
+  it('should validate every defined strategy id individually', () => {
+    for (const strategyId of REDTEAM_ALL_STRATEGIES) {
+      expect(RedteamStrategySchema.safeParse(strategyId).success, strategyId).toBe(true);
+    }
   });
 
   it('should expand harmful plugin to all harm categories', () => {
@@ -853,6 +866,32 @@ describe('redteamConfigSchema', () => {
       const strategies = result.data!.strategies!;
       const strategyIds = new Set(strategies.map((s) => (typeof s === 'string' ? s : s.id)));
       expect(strategies).toHaveLength(strategyIds.size);
+    });
+
+    it('should expand current and legacy MITRE ATLAS aliases', () => {
+      const currentAlias = RedteamConfigSchema.safeParse({
+        plugins: ['mitre:atlas:persistence'],
+        numTests: 3,
+      });
+      expect(currentAlias.success).toBe(true);
+      expect(currentAlias.data?.plugins).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'agentic:memory-poisoning', numTests: 3 }),
+          expect.objectContaining({ id: 'rag-poisoning', numTests: 3 }),
+        ]),
+      );
+
+      const legacyAlias = RedteamConfigSchema.safeParse({
+        plugins: ['mitre:atlas:ml-attack-staging'],
+        numTests: 3,
+      });
+      expect(legacyAlias.success).toBe(true);
+      expect(legacyAlias.data?.plugins).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'ascii-smuggling', numTests: 3 }),
+          expect.objectContaining({ id: 'rag-poisoning', numTests: 3 }),
+        ]),
+      );
     });
 
     it('should not duplicate strategies when using multiple aliased names', () => {

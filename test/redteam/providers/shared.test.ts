@@ -6,6 +6,7 @@ import {
   TEMPERATURE,
 } from '../../../src/redteam/providers/constants';
 import {
+  BLOCKING_QUESTION_ANALYSIS_FEATURE_FLAG_TIMESTAMP,
   formatRedteamHistoryAsTranscript,
   getTargetResponse,
   type Message,
@@ -87,7 +88,6 @@ vi.mock('../../../src/util/server', () => ({
 const mockedSleep = vi.mocked(sleep);
 const mockedLoadApiProviders = mockLoadApiProviders;
 const mockedCheckServerFeatureSupport = mockCheckServerFeatureSupport;
-const _mockedOpenAiProvider = MockOpenAiChatCompletionProvider;
 
 describe('shared redteam provider utilities', () => {
   beforeEach(() => {
@@ -993,7 +993,7 @@ describe('shared redteam provider utilities', () => {
       expect(result.success).toBe(false);
       expect(mockedCheckServerFeatureSupport).toHaveBeenCalledWith(
         'blocking-question-analysis',
-        '2025-06-16T14:49:11-07:00',
+        BLOCKING_QUESTION_ANALYSIS_FEATURE_FLAG_TIMESTAMP,
       );
     });
   });
