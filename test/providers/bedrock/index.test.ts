@@ -3188,30 +3188,21 @@ describe('AwsBedrockCompletionProvider', () => {
     expect(otherCacheKey).toMatch(
       new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}:[a-f0-9]{64}$`),
     );
-    expect(otherCacheKey).not.toBe(cacheKey);
     expect(otherCacheKey).not.toContain(prompt);
     expect(otherCacheKey).not.toContain(apiKey);
     expect(otherCacheKey).not.toContain(otherApiKey);
   });
 
-  it('should separate cache keys across Bedrock auth material', () => {
+  it('should separate cache keys across Bedrock auth configuration', () => {
     const params = { prompt: 'PFQA_BEDROCK_PROMPT_SENTINEL' };
     const region = 'us-east-1';
     const baseConfig = {
       region,
-      endpoint: 'https://bedrock-runtime.us-east-1.amazonaws.com',
-      profile: 'promptfoo-profile-a',
     } as BedrockClaudeMessagesCompletionOptions;
 
     const cacheKeys = [
       createBedrockCacheKeyHash({
         apiKey: 'PFQA_BEDROCK_API_KEY_A',
-        config: baseConfig,
-        params,
-        region,
-      }),
-      createBedrockCacheKeyHash({
-        apiKey: 'PFQA_BEDROCK_API_KEY_B',
         config: baseConfig,
         params,
         region,
@@ -3228,8 +3219,9 @@ describe('AwsBedrockCompletionProvider', () => {
       createBedrockCacheKeyHash({
         config: {
           ...baseConfig,
-          accessKeyId: 'PFQA_BEDROCK_ACCESS_KEY_B',
-          secretAccessKey: 'PFQA_BEDROCK_SECRET_ACCESS_KEY_B',
+          accessKeyId: 'PFQA_BEDROCK_ACCESS_KEY_A',
+          secretAccessKey: 'PFQA_BEDROCK_SECRET_ACCESS_KEY_A',
+          sessionToken: 'PFQA_BEDROCK_SESSION_TOKEN_A',
         } as BedrockClaudeMessagesCompletionOptions,
         params,
         region,
@@ -3257,6 +3249,7 @@ describe('AwsBedrockCompletionProvider', () => {
       expect(cacheKey).toMatch(/^[a-f0-9]{64}:[a-f0-9]{64}$/);
       expect(cacheKey).not.toContain('PFQA_BEDROCK');
       expect(cacheKey).not.toContain('promptfoo-profile');
+      expect(cacheKey).not.toContain('bedrock-runtime');
     }
   });
 });
