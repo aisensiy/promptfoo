@@ -15,11 +15,14 @@ vi.mock('../../src/database/signal', () => ({
   }),
 }));
 
-vi.mock('../../src/util/server', () => ({
-  BrowserBehavior: { OPEN: 0, SKIP: 1, ASK: 2 },
-  BrowserBehaviorNames: { 0: 'OPEN', 1: 'SKIP', 2: 'ASK' },
-  openBrowser: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('../../src/util/server', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../src/util/server')>('../../src/util/server');
+  return {
+    ...actual,
+    openBrowser: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 vi.mock('../../src/logger', () => ({
   default: {
@@ -41,6 +44,7 @@ import { setupSignalWatcher } from '../../src/database/signal';
 import logger from '../../src/logger';
 // Import after mocks are set up
 import { handleServerError, startServer } from '../../src/server/server';
+import { BrowserBehavior, openBrowser } from '../../src/util/server';
 
 describe('server', () => {
   describe('handleServerError', () => {
@@ -91,6 +95,11 @@ describe('server', () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      vi.mocked(openBrowser).mockResolvedValue(undefined);
+      vi.mocked(setupSignalWatcher).mockReturnValue({
+        close: vi.fn(),
+        on: vi.fn(),
+      } as never);
 
       // Track signal handlers using a Map to support multiple handlers per event
       signalHandlers = new Map();
@@ -139,6 +148,7 @@ describe('server', () => {
     afterEach(() => {
       http.createServer = originalCreateServer;
       vi.unstubAllEnvs();
+      vi.resetAllMocks();
       vi.restoreAllMocks();
     });
 
@@ -149,6 +159,12 @@ describe('server', () => {
           handler();
         }
       }
+    };
+
+    const waitForServerStart = async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
     };
 
     it('should register SIGINT and SIGTERM handlers', async () => {
@@ -242,9 +258,10 @@ describe('server', () => {
     it('should bind to loopback by default', async () => {
       const serverPromise = startServer(0);
 
-      await new Promise((resolve) => setImmediate(resolve));
+      await waitForServerStart();
 
-      expect(mockHttpServer.listen).toHaveBeenCalledWith(0, '127.0.0.1', expect.any(Function));
+      expect(mockHttpServer.listen).toHaveBeenCalledWith(0, 'localhost', expect.any(Function));
+      expect(openBrowser).toHaveBeenCalledWith(BrowserBehavior.ASK, 0, 'http://localhost:0');
 
       triggerSignal('SIGINT');
       await serverPromise;
@@ -254,9 +271,31 @@ describe('server', () => {
       vi.stubEnv('PROMPTFOO_SERVER_HOST', '0.0.0.0');
       const serverPromise = startServer(0);
 
-      await new Promise((resolve) => setImmediate(resolve));
+      await waitForServerStart();
 
       expect(mockHttpServer.listen).toHaveBeenCalledWith(0, '0.0.0.0', expect.any(Function));
+      expect(openBrowser).toHaveBeenCalledWith(BrowserBehavior.ASK, 0, 'http://localhost:0');
+
+      triggerSignal('SIGINT');
+      await serverPromise;
+    });
+
+    it('should pass non-loopback host URLs to browser handling', async () => {
+      vi.stubEnv('PROMPTFOO_SERVER_HOST', '192.168.1.10');
+      const serverPromise = startServer(5000, BrowserBehavior.OPEN);
+
+      await waitForServerStart();
+
+      expect(mockHttpServer.listen).toHaveBeenCalledWith(
+        5000,
+        '192.168.1.10',
+        expect.any(Function),
+      );
+      expect(openBrowser).toHaveBeenCalledWith(
+        BrowserBehavior.OPEN,
+        5000,
+        'http://192.168.1.10:5000',
+      );
 
       triggerSignal('SIGINT');
       await serverPromise;

@@ -13,7 +13,6 @@ import { Server as SocketIOServer } from 'socket.io';
 import { z } from 'zod';
 import { getDefaultPort, VERSION } from '../constants';
 import { readSignalEvalId, setupSignalWatcher } from '../database/signal';
-import { getEnvString } from '../envars';
 import { getDirectory } from '../esm';
 import { cloudConfig } from '../globalConfig/cloud';
 import logger from '../logger';
@@ -32,7 +31,13 @@ import {
   readResult,
 } from '../util/database';
 import invariant from '../util/invariant';
-import { BrowserBehavior, BrowserBehaviorNames, openBrowser } from '../util/server';
+import {
+  BrowserBehavior,
+  BrowserBehaviorNames,
+  getServerBaseUrl,
+  getServerHost,
+  openBrowser,
+} from '../util/server';
 import { csrfProtection } from './middleware/csrfProtection';
 import { blobsRouter } from './routes/blobs';
 import { configsRouter } from './routes/configs';
@@ -57,18 +62,6 @@ const JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 
 // Express middleware limits
 const REQUEST_SIZE_LIMIT = '100mb';
-const DEFAULT_SERVER_HOST = '127.0.0.1';
-
-function getServerHost(): string {
-  return getEnvString('PROMPTFOO_SERVER_HOST', DEFAULT_SERVER_HOST).trim() || DEFAULT_SERVER_HOST;
-}
-
-function formatServerUrlHost(host: string): string {
-  if (host === '0.0.0.0' || host === '::') {
-    return 'localhost';
-  }
-  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
-}
 
 /**
  * Middleware to set proper MIME types for JavaScript files.
@@ -367,9 +360,9 @@ export async function startServer(
   return new Promise<void>((resolve) => {
     httpServer
       .listen(port, host, () => {
-        const url = `http://${formatServerUrlHost(host)}:${port}`;
+        const url = getServerBaseUrl(port, host);
         logger.info(`Server running at ${url} and monitoring for new evals.`);
-        openBrowser(browserBehavior, port).catch((error) => {
+        openBrowser(browserBehavior, port, url).catch((error) => {
           logger.error(
             `Failed to handle browser behavior (${BrowserBehaviorNames[browserBehavior]}): ${error instanceof Error ? error.message : error}`,
           );

@@ -118,6 +118,21 @@ describe('Server Utilities', () => {
         },
       });
     });
+
+    it('should use custom base URL when provided', async () => {
+      const customPort = 3001;
+      mockFetchWithProxy.mockResolvedValueOnce({
+        json: async () => ({ status: 'OK', version: VERSION }),
+      } as Response);
+
+      await checkServerRunning(customPort, 'http://192.168.1.10:3001');
+
+      expect(mockFetchWithProxy).toHaveBeenCalledWith('http://192.168.1.10:3001/health', {
+        headers: {
+          'x-promptfoo-silent': 'true',
+        },
+      });
+    });
   });
 
   describe('openBrowser', () => {
@@ -188,6 +203,12 @@ describe('Server Utilities', () => {
       await openBrowser(BrowserBehavior.OPEN, customPort);
 
       expect(opener).toHaveBeenCalledWith(`http://localhost:${customPort}`);
+    });
+
+    it('should use custom base URL when provided', async () => {
+      await openBrowser(BrowserBehavior.OPEN, 5000, 'http://192.168.1.10:5000');
+
+      expect(opener).toHaveBeenCalledWith('http://192.168.1.10:5000');
     });
   });
 

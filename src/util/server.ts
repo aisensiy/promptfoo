@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import opener from 'opener';
 import { getDefaultPort, VERSION } from '../constants';
+import { getEnvString } from '../envars';
 import logger from '../logger';
 import { getRemoteVersionUrl } from '../redteam/remoteGeneration';
 import { fetchWithProxy } from './fetch/index';
@@ -28,6 +29,22 @@ export const BrowserBehaviorNames: Record<BrowserBehavior, string> = {
 
 // Cache for feature detection results to avoid repeated version checks
 const featureCache = new Map<string, boolean>();
+export const DEFAULT_SERVER_HOST = 'localhost';
+
+export function getServerHost(): string {
+  return getEnvString('PROMPTFOO_SERVER_HOST', DEFAULT_SERVER_HOST).trim() || DEFAULT_SERVER_HOST;
+}
+
+export function formatServerUrlHost(host: string): string {
+  if (host === '0.0.0.0' || host === '::') {
+    return 'localhost';
+  }
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+}
+
+export function getServerBaseUrl(port = getDefaultPort(), host = getServerHost()): string {
+  return `http://${formatServerUrlHost(host)}:${port}`;
+}
 
 /**
  * Clears the feature detection cache - used for testing
@@ -99,10 +116,13 @@ export async function checkServerFeatureSupport(
   return supported;
 }
 
-export async function checkServerRunning(port = getDefaultPort()): Promise<boolean> {
+export async function checkServerRunning(
+  port = getDefaultPort(),
+  baseUrl = getServerBaseUrl(port),
+): Promise<boolean> {
   logger.debug(`Checking for existing server on port ${port}...`);
   try {
-    const response = await fetchWithProxy(`http://localhost:${port}/health`, {
+    const response = await fetchWithProxy(`${baseUrl}/health`, {
       headers: {
         'x-promptfoo-silent': 'true',
       },
@@ -118,8 +138,8 @@ export async function checkServerRunning(port = getDefaultPort()): Promise<boole
 export async function openBrowser(
   browserBehavior: BrowserBehavior,
   port = getDefaultPort(),
+  baseUrl = getServerBaseUrl(port),
 ): Promise<void> {
-  const baseUrl = `http://localhost:${port}`;
   let url = baseUrl;
   if (browserBehavior === BrowserBehavior.OPEN_TO_REPORT) {
     url = `${baseUrl}/report`;

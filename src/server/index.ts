@@ -1,13 +1,13 @@
 import { getDefaultPort } from '../constants';
 import logger from '../logger';
-import { BrowserBehavior, checkServerRunning } from '../util/server';
+import { BrowserBehavior, checkServerRunning, getServerBaseUrl } from '../util/server';
 import { startServer } from './server';
 
 async function main() {
   const port = getDefaultPort();
   const isRunning = await checkServerRunning(port);
   if (isRunning) {
-    logger.info(`Promptfoo server already running at http://localhost:${port}`);
+    logger.info(`Promptfoo server already running at ${getServerBaseUrl(port)}`);
     process.exitCode = 1;
     return;
   }
