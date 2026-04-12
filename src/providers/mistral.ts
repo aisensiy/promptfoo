@@ -259,13 +259,13 @@ export class MistralChatCompletionProvider implements ApiProvider {
   }
 
   private getCacheIdentityHash(apiUrl: string): string {
-    const apiKeySource = this.config.apiKey
+    const authSource = Object.prototype.hasOwnProperty.call(this.config, 'apiKey')
       ? 'config'
-      : this.config.apiKeyEnvar
-        ? `env:${this.config.apiKeyEnvar}`
+      : Object.prototype.hasOwnProperty.call(this.config, 'apiKeyEnvar')
+        ? 'custom-env'
         : 'env:MISTRAL_API_KEY';
 
-    return sha256(JSON.stringify({ apiKeySource, apiUrl }));
+    return sha256(JSON.stringify({ apiUrl, authSource }));
   }
 
   async callApi(prompt: string, context?: CallApiContextParams): Promise<ProviderResponse> {
