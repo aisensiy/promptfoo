@@ -361,6 +361,42 @@ describe('AzureChatCompletionProvider', () => {
       expect(result.output).toEqual({ test: 'value' });
     });
 
+    it('should redact invalid structured output parse logs', async () => {
+      const secretOutput = 'secret-invalid-structured-output-sentinel';
+      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+
+      provider.config.response_format = {
+        type: 'json_object',
+      };
+
+      vi.mocked(fetchWithCache).mockResolvedValueOnce({
+        data: {
+          choices: [
+            {
+              message: {
+                content: secretOutput,
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        },
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      const result = await provider.callApi('test prompt');
+
+      expect(result.output).toBe(secretOutput);
+      expect(errorSpy).toHaveBeenCalledWith('Failed to parse JSON output', {
+        errorType: 'SyntaxError',
+        outputType: 'string',
+        outputLength: secretOutput.length,
+      });
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(secretOutput);
+    });
+
     it('should handle API errors', async () => {
       vi.mocked(fetchWithCache).mockRejectedValueOnce(new Error('API Error'));
 
@@ -370,7 +406,7 @@ describe('AzureChatCompletionProvider', () => {
 
     it('should handle invalid JSON response', async () => {
       vi.mocked(fetchWithCache).mockResolvedValueOnce({
-        data: 'invalid json',
+        data: 'invalid json with secret-response-body-sentinel',
         cached: false,
         status: 200,
         statusText: 'OK',
@@ -378,10 +414,32 @@ describe('AzureChatCompletionProvider', () => {
 
       const result = await provider.callApi('secret-user-prompt-sentinel');
       expect(result.error).toContain('API returned invalid JSON response');
+      expect(result.error).toContain('Response metadata');
       expect(result.error).toContain('Request metadata');
       expect(result.error).toContain('messageCount');
       expect(result.error).not.toContain('Request body');
       expect(result.error).not.toContain('secret-user-prompt-sentinel');
+      expect(result.error).not.toContain('secret-response-body-sentinel');
+    });
+
+    it('should redact malformed API response bodies from response errors', async () => {
+      vi.mocked(fetchWithCache).mockResolvedValueOnce({
+        data: {
+          result: 'secret-malformed-response-body-sentinel',
+          usage: {
+            total_tokens: 3,
+          },
+        },
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      const result = await provider.callApi('test prompt');
+
+      expect(result.error).toContain('API response error');
+      expect(result.error).toContain('Response metadata');
+      expect(result.error).not.toContain('secret-malformed-response-body-sentinel');
     });
 
     it('should handle tool calls in response', async () => {

@@ -47,6 +47,32 @@ function getAzureChatRequestMetadata(body: any) {
   };
 }
 
+function getAzureChatResponseMetadata(data: unknown) {
+  if (typeof data === 'string') {
+    return {
+      responseType: 'string',
+      responseLength: data.length,
+    };
+  }
+
+  if (!data || typeof data !== 'object') {
+    return {
+      responseType: typeof data,
+    };
+  }
+
+  const response = data as Record<string, any>;
+
+  return {
+    responseType: Array.isArray(data) ? 'array' : 'object',
+    responseKeys: Object.keys(response),
+    hasError: Boolean(response.error),
+    errorCode: typeof response.error?.code === 'string' ? response.error.code : undefined,
+    choiceCount: Array.isArray(response.choices) ? response.choices.length : undefined,
+    hasUsage: Boolean(response.usage),
+  };
+}
+
 export class AzureChatCompletionProvider extends AzureGenericProvider {
   declare config: AzureChatResponsesOptions;
 
@@ -372,7 +398,7 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
           data = JSON.parse(responseData);
         } catch {
           return {
-            error: `API returned invalid JSON response (status ${status}): ${responseData}\n\nRequest metadata: ${JSON.stringify(getAzureChatRequestMetadata(body), null, 2)}`,
+            error: `API returned invalid JSON response (status ${status})\n\nResponse metadata: ${JSON.stringify(getAzureChatResponseMetadata(responseData), null, 2)}\n\nRequest metadata: ${JSON.stringify(getAzureChatRequestMetadata(body), null, 2)}`,
           };
         }
       } else {
@@ -467,7 +493,11 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
           try {
             output = JSON.parse(output);
           } catch (err) {
-            logger.error(`Failed to parse JSON output: ${err}. Output was: ${output}`);
+            logger.error('Failed to parse JSON output', {
+              errorType: err instanceof Error ? err.constructor.name : typeof err,
+              outputType: typeof output,
+              outputLength: typeof output === 'string' ? output.length : undefined,
+            });
           }
         }
 
@@ -514,7 +544,7 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
       };
     } catch (err) {
       return {
-        error: `API response error: ${String(err)}: ${JSON.stringify(data)}`,
+        error: `API response error: ${String(err)}\n\nResponse metadata: ${JSON.stringify(getAzureChatResponseMetadata(data), null, 2)}`,
       };
     }
   }
