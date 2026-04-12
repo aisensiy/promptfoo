@@ -1,6 +1,7 @@
 import { cloudConfig } from '../globalConfig/cloud';
 import logger from '../logger';
 import { fetchWithProxy } from '../util/fetch/index';
+import { sanitizeUrl } from '../util/sanitizer';
 
 import type {
   ApiProvider,
@@ -51,6 +52,18 @@ interface ModelApiResponse {
 interface PromptfooModelOptions extends ProviderOptions {
   model: string;
   config?: Record<string, any>;
+}
+
+function getErrorLogMetadata(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      errorType: error.constructor.name,
+      errorName: error.name,
+      errorMessageLength: error.message.length,
+    };
+  }
+
+  return { errorType: typeof error };
 }
 
 /**
@@ -113,7 +126,7 @@ export class PromptfooModelProvider implements ApiProvider {
 
       const body = JSON.stringify(payload);
       logger.debug('[PromptfooModel] Sending request', {
-        url,
+        url: sanitizeUrl(url),
         model: this.model,
         messageCount: messages.length,
         configKeyCount: Object.keys(this.config).length,
@@ -129,7 +142,11 @@ export class PromptfooModelProvider implements ApiProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`PromptfooModel task API error: ${response.status} ${errorText}`);
+        logger.debug('[PromptfooModel] Received error response', {
+          status: response.status,
+          responseBodyLength: errorText.length,
+        });
+        throw new Error(`PromptfooModel task API error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -164,9 +181,7 @@ export class PromptfooModelProvider implements ApiProvider {
         },
       };
     } catch (error) {
-      logger.error(
-        `[PromptfooModel] Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      logger.error('[PromptfooModel] Error', getErrorLogMetadata(error));
       throw error;
     }
   }

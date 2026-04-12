@@ -8,12 +8,16 @@ describe('PromptfooModelProvider', () => {
   let mockFetch: Mock;
   let mockCloudConfig: ReturnType<typeof vi.spyOn>;
   const mockLogger = vi.spyOn(logger, 'debug').mockImplementation(function () {});
+  const mockErrorLogger = vi.spyOn(logger, 'error').mockImplementation(function () {});
 
   beforeEach(() => {
     mockFetch = vi.fn();
     global.fetch = mockFetch;
     mockCloudConfig = vi.spyOn(cloudConfig, 'getApiKey').mockReturnValue('test-token');
     mockLogger.mockClear();
+    mockLogger.mockImplementation(function () {});
+    mockErrorLogger.mockClear();
+    mockErrorLogger.mockImplementation(function () {});
   });
 
   afterEach(() => {
@@ -103,6 +107,34 @@ describe('PromptfooModelProvider', () => {
     expect(debugLogs).not.toContain('secret-response-sentinel');
   });
 
+  it('should sanitize sensitive API host URL details in request logs', async () => {
+    vi.spyOn(cloudConfig, 'getApiHost').mockReturnValue(
+      'https://user:secret-url-password@api.promptfoo.example?api_key=secret-url-token',
+    );
+    const provider = new PromptfooModelProvider('test-model');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          result: {
+            choices: [{ message: { content: 'test response' } }],
+            usage: {
+              total_tokens: 10,
+              prompt_tokens: 5,
+              completion_tokens: 5,
+            },
+          },
+        }),
+    });
+
+    await provider.callApi('test prompt');
+
+    const debugLogs = JSON.stringify(mockLogger.mock.calls);
+    expect(debugLogs).toContain('[PromptfooModel] Sending request');
+    expect(debugLogs).not.toContain('secret-url-password');
+    expect(debugLogs).not.toContain('secret-url-token');
+  });
+
   it('should handle JSON array messages', async () => {
     const provider = new PromptfooModelProvider('test-model');
     const messages = JSON.stringify([
@@ -146,10 +178,14 @@ describe('PromptfooModelProvider', () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 500,
-      text: () => Promise.resolve('Internal server error'),
+      text: () => Promise.resolve('secret-error-body-sentinel'),
     });
 
     await expect(provider.callApi('test')).rejects.toThrow('PromptfooModel task API error: 500');
+
+    const logs = JSON.stringify([...mockLogger.mock.calls, ...mockErrorLogger.mock.calls]);
+    expect(logs).toContain('responseBodyLength');
+    expect(logs).not.toContain('secret-error-body-sentinel');
   });
 
   it('should handle invalid API responses', async () => {
