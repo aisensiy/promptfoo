@@ -376,8 +376,12 @@ describe('AzureChatCompletionProvider', () => {
         statusText: 'OK',
       });
 
-      const result = await provider.callApi('test prompt');
+      const result = await provider.callApi('secret-user-prompt-sentinel');
       expect(result.error).toContain('API returned invalid JSON response');
+      expect(result.error).toContain('Request metadata');
+      expect(result.error).toContain('messageCount');
+      expect(result.error).not.toContain('Request body');
+      expect(result.error).not.toContain('secret-user-prompt-sentinel');
     });
 
     it('should handle tool calls in response', async () => {

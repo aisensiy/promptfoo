@@ -29,6 +29,24 @@ import type {
 } from '../../types/index';
 import type { AzureChatResponsesOptions, AzureProviderOptions } from './types';
 
+function getAzureChatRequestMetadata(body: any) {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+
+  return {
+    messageCount: messages.length,
+    messageRoles: messages
+      .map((message: any) => message?.role)
+      .filter((role: unknown): role is string => typeof role === 'string'),
+    messageContentLengths: messages.map((message: any) =>
+      typeof message?.content === 'string' ? message.content.length : undefined,
+    ),
+    toolCount: Array.isArray(body?.tools) ? body.tools.length : undefined,
+    hasResponseFormat: Boolean(body?.response_format),
+    responseFormatType: body?.response_format?.type,
+    maxTokens: body?.max_tokens ?? body?.max_completion_tokens,
+  };
+}
+
 export class AzureChatCompletionProvider extends AzureGenericProvider {
   declare config: AzureChatResponsesOptions;
 
@@ -354,7 +372,7 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
           data = JSON.parse(responseData);
         } catch {
           return {
-            error: `API returned invalid JSON response (status ${status}): ${responseData}\n\nRequest body: ${JSON.stringify(body, null, 2)}`,
+            error: `API returned invalid JSON response (status ${status}): ${responseData}\n\nRequest metadata: ${JSON.stringify(getAzureChatRequestMetadata(body), null, 2)}`,
           };
         }
       } else {
