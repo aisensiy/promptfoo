@@ -75,7 +75,7 @@ export class ScriptCompletionProvider implements ApiProvider {
 
     const cacheKey = `exec:${this.scriptPath}:${fileHashes.join(':')}:${sha256(prompt)}:${sha256(
       JSON.stringify(this.options) ?? 'undefined',
-    )}`;
+    )}:${sha256(safeJsonStringify(context?.vars) ?? 'undefined')}`;
 
     let cachedResult;
     if (fileHashes.length > 0 && isCacheEnabled()) {
