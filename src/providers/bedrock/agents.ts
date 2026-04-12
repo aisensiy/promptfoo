@@ -444,8 +444,17 @@ export class AwsBedrockAgentsProvider extends AwsBedrockGenericProvider implemen
     const cacheKey = `bedrock-agent:${this.config.agentId}:${this.config.agentAliasId}:${this.getRegion()}:${sha256(
       JSON.stringify({
         prompt,
+        actionGroups: this.config.actionGroups,
+        enableTrace: this.config.enableTrace,
+        endSession: this.config.endSession,
+        guardrailConfiguration: this.config.guardrailConfiguration,
         inferenceConfig: this.buildInferenceConfig(),
+        inputDataConfig: this.config.inputDataConfig,
         knowledgeBaseConfigurations: this.config.knowledgeBaseConfigurations,
+        memoryId: this.config.memoryId,
+        promptOverrideConfiguration: this.config.promptOverrideConfiguration,
+        sessionId: this.config.sessionId,
+        sessionState: this.config.sessionState,
       }),
     )}`;
 

@@ -63,21 +63,48 @@ function buildAgentCacheKey({
   agentAliasId,
   prompt,
   region,
+  actionGroups,
+  enableTrace,
+  endSession,
+  guardrailConfiguration,
   inferenceConfig,
+  inputDataConfig,
   knowledgeBaseConfigurations,
+  memoryId,
+  promptOverrideConfiguration,
+  sessionId,
+  sessionState,
 }: {
   agentId: string;
   agentAliasId: string;
   prompt: string;
   region: string;
+  actionGroups?: Array<Record<string, unknown>>;
+  enableTrace?: boolean;
+  endSession?: boolean;
+  guardrailConfiguration?: Record<string, unknown>;
   inferenceConfig?: Record<string, unknown>;
+  inputDataConfig?: Record<string, unknown>;
   knowledgeBaseConfigurations?: Array<Record<string, unknown>>;
+  memoryId?: string;
+  promptOverrideConfiguration?: Record<string, unknown>;
+  sessionId?: string;
+  sessionState?: Record<string, unknown>;
 }) {
   return `bedrock-agent:${agentId}:${agentAliasId}:${region}:${sha256(
     JSON.stringify({
       prompt,
+      actionGroups,
+      enableTrace,
+      endSession,
+      guardrailConfiguration,
       inferenceConfig,
+      inputDataConfig,
       knowledgeBaseConfigurations,
+      memoryId,
+      promptOverrideConfiguration,
+      sessionId,
+      sessionState,
     }),
   )}`;
 }
@@ -132,6 +159,11 @@ describe('AwsBedrockAgentsProvider', () => {
         agentId: 'agent-123',
         agentAliasId: 'alias-456',
         region: 'us-east-1',
+        sessionState: {
+          promptSessionAttributes: {
+            tenant: 'SECRET_SESSION_ATTRIBUTE',
+          },
+        },
         knowledgeBaseConfigurations: [
           {
             knowledgeBaseId: 'kb-123',
@@ -168,6 +200,11 @@ describe('AwsBedrockAgentsProvider', () => {
         agentAliasId: 'alias-456',
         prompt,
         region: 'us-east-1',
+        sessionState: {
+          promptSessionAttributes: {
+            tenant: 'SECRET_SESSION_ATTRIBUTE',
+          },
+        },
         knowledgeBaseConfigurations: [
           {
             knowledgeBaseId: 'kb-123',
@@ -184,6 +221,7 @@ describe('AwsBedrockAgentsProvider', () => {
     );
     expect(firstKey).not.toContain(prompt);
     expect(firstKey).not.toContain('SECRET_FILTER_VALUE');
+    expect(firstKey).not.toContain('SECRET_SESSION_ATTRIBUTE');
     expect(secondKey).toBe(firstKey);
     expect(mockSet).toHaveBeenCalledWith(firstKey, expect.any(String));
     expect(mockSend).toHaveBeenCalledTimes(1);
@@ -200,6 +238,50 @@ describe('AwsBedrockAgentsProvider', () => {
       },
       cached: true,
     });
+
+    mockIsCacheEnabled.mockReturnValue(false);
+  });
+
+  it('should separate cache keys for response-shaping agent configuration', async () => {
+    mockIsCacheEnabled.mockReturnValue(true);
+
+    const firstProvider = new AwsBedrockAgentsProvider('agent-123', {
+      config: {
+        agentId: 'agent-123',
+        agentAliasId: 'alias-456',
+        region: 'us-east-1',
+        sessionState: {
+          promptSessionAttributes: {
+            tenant: 'SECRET_TENANT_A',
+          },
+        },
+      },
+    });
+    const secondProvider = new AwsBedrockAgentsProvider('agent-123', {
+      config: {
+        agentId: 'agent-123',
+        agentAliasId: 'alias-456',
+        region: 'us-east-1',
+        sessionState: {
+          promptSessionAttributes: {
+            tenant: 'SECRET_TENANT_B',
+          },
+        },
+      },
+    });
+
+    mockGet.mockResolvedValue(null);
+    mockSend.mockImplementation(async () => makeCompletionResponse('fresh response'));
+
+    await firstProvider.callApi('same prompt');
+    await secondProvider.callApi('same prompt');
+
+    const firstKey = mockGet.mock.calls[0][0];
+    const secondKey = mockGet.mock.calls[1][0];
+
+    expect(firstKey).not.toBe(secondKey);
+    expect(firstKey).not.toContain('SECRET_TENANT_A');
+    expect(secondKey).not.toContain('SECRET_TENANT_B');
 
     mockIsCacheEnabled.mockReturnValue(false);
   });
