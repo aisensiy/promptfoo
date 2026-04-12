@@ -158,6 +158,14 @@ function pickGenerateOptions(config: VercelAiConfig) {
   );
 }
 
+function getGatewayCacheConfig(config: VercelAiConfig, env?: EnvOverrides) {
+  return {
+    apiKey: resolveApiKey(config, env),
+    baseUrl: resolveBaseUrl(config, env),
+    headers: config.headers,
+  };
+}
+
 /**
  * Creates an AbortController with timeout and returns cleanup function.
  */
@@ -221,6 +229,7 @@ export class VercelAiProvider implements ApiProvider {
     return `vercel:${this.modelName}:${sha256(
       JSON.stringify({
         prompt,
+        gateway: getGatewayCacheConfig(this.config, this.env),
         config: {
           temperature: this.config.temperature,
           maxTokens: this.config.maxTokens,
@@ -459,7 +468,12 @@ export class VercelAiEmbeddingProvider implements ApiEmbeddingProvider {
     context?: CallApiContextParams,
   ): Promise<ProviderEmbeddingResponse> {
     const cache = await getCache();
-    const cacheKey = `vercel:embedding:${this.modelName}:${sha256(input)}`;
+    const cacheKey = `vercel:embedding:${this.modelName}:${sha256(
+      JSON.stringify({
+        input,
+        gateway: getGatewayCacheConfig(this.config, this.env),
+      }),
+    )}`;
 
     // Check cache first
     if (isCacheEnabled() && !(context?.bustCache ?? context?.debug)) {

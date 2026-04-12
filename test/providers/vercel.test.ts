@@ -429,6 +429,47 @@ describe('VercelAiProvider', () => {
       );
     });
 
+    it('should include gateway identity in cache keys without leaking secrets', async () => {
+      const { generateText } = await import('ai');
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(generateText).mockResolvedValue({
+        text: 'Fresh response',
+        usage: { promptTokens: 10, completionTokens: 20 },
+        finishReason: 'stop',
+      } as any);
+
+      const prompt = 'PFQA_VERCEL_PROMPT_SENTINEL';
+      const firstProvider = new VercelAiProvider('openai/gpt-4o-mini', {
+        config: {
+          apiKey: 'PFQA_VERCEL_API_KEY_A',
+          baseUrl: 'https://gateway.example.com/PFQA_VERCEL_BASE_A',
+          headers: { 'X-Tenant': 'PFQA_VERCEL_TENANT_A' },
+        },
+      });
+      const secondProvider = new VercelAiProvider('openai/gpt-4o-mini', {
+        config: {
+          apiKey: 'PFQA_VERCEL_API_KEY_B',
+          baseUrl: 'https://gateway.example.com/PFQA_VERCEL_BASE_B',
+          headers: { 'X-Tenant': 'PFQA_VERCEL_TENANT_B' },
+        },
+      });
+
+      await firstProvider.callApi(prompt);
+      await secondProvider.callApi(prompt);
+
+      const firstKey = mockCache.get.mock.calls[0][0] as string;
+      const secondKey = mockCache.get.mock.calls[1][0] as string;
+
+      expect(firstKey).not.toBe(secondKey);
+      expect(firstKey).not.toContain(prompt);
+      expect(firstKey).not.toContain('PFQA_VERCEL_API_KEY_A');
+      expect(firstKey).not.toContain('PFQA_VERCEL_BASE_A');
+      expect(firstKey).not.toContain('PFQA_VERCEL_TENANT_A');
+      expect(secondKey).not.toContain('PFQA_VERCEL_API_KEY_B');
+      expect(secondKey).not.toContain('PFQA_VERCEL_BASE_B');
+      expect(secondKey).not.toContain('PFQA_VERCEL_TENANT_B');
+    });
+
     it('should not cache error responses', async () => {
       const { generateText } = await import('ai');
       vi.mocked(isCacheEnabled).mockReturnValue(true);
@@ -695,6 +736,46 @@ describe('VercelAiEmbeddingProvider', () => {
       expect(cacheKey).not.toContain(input);
       expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
       expect(mockCache.set).toHaveBeenCalledWith(cacheKey, expect.any(String));
+    });
+
+    it('should include gateway identity in embedding cache keys without leaking secrets', async () => {
+      const { embed } = await import('ai');
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(embed).mockResolvedValue({
+        embedding: [0.1, 0.2, 0.3],
+        usage: { tokens: 5 },
+      } as any);
+
+      const input = 'PFQA_VERCEL_EMBEDDING_INPUT_SENTINEL';
+      const firstProvider = new VercelAiEmbeddingProvider('openai/text-embedding-3-small', {
+        config: {
+          apiKey: 'PFQA_VERCEL_EMBEDDING_API_KEY_A',
+          baseUrl: 'https://gateway.example.com/PFQA_VERCEL_EMBEDDING_BASE_A',
+          headers: { 'X-Tenant': 'PFQA_VERCEL_EMBEDDING_TENANT_A' },
+        },
+      });
+      const secondProvider = new VercelAiEmbeddingProvider('openai/text-embedding-3-small', {
+        config: {
+          apiKey: 'PFQA_VERCEL_EMBEDDING_API_KEY_B',
+          baseUrl: 'https://gateway.example.com/PFQA_VERCEL_EMBEDDING_BASE_B',
+          headers: { 'X-Tenant': 'PFQA_VERCEL_EMBEDDING_TENANT_B' },
+        },
+      });
+
+      await firstProvider.callEmbeddingApi(input);
+      await secondProvider.callEmbeddingApi(input);
+
+      const firstKey = mockCache.get.mock.calls[0][0] as string;
+      const secondKey = mockCache.get.mock.calls[1][0] as string;
+
+      expect(firstKey).not.toBe(secondKey);
+      expect(firstKey).not.toContain(input);
+      expect(firstKey).not.toContain('PFQA_VERCEL_EMBEDDING_API_KEY_A');
+      expect(firstKey).not.toContain('PFQA_VERCEL_EMBEDDING_BASE_A');
+      expect(firstKey).not.toContain('PFQA_VERCEL_EMBEDDING_TENANT_A');
+      expect(secondKey).not.toContain('PFQA_VERCEL_EMBEDDING_API_KEY_B');
+      expect(secondKey).not.toContain('PFQA_VERCEL_EMBEDDING_BASE_B');
+      expect(secondKey).not.toContain('PFQA_VERCEL_EMBEDDING_TENANT_B');
     });
 
     it('should return cached embedding when available', async () => {
