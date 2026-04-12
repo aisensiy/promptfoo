@@ -217,6 +217,7 @@ type PreparedFetchResponse = {
 
 const inflightFetchResponses = new Map<string, Promise<SerializedFetchResponse>>();
 const FETCH_CACHE_KEY_HMAC_KEY = 'promptfoo-fetch-cache-key-v1';
+const IGNORED_FETCH_CACHE_OPTION_KEYS = new Set(['signal']);
 
 function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
   const headers = new Headers(
@@ -271,6 +272,34 @@ function getBodyForFetchCacheKey(body: RequestInit['body'] | ReadableStream | nu
   return { cacheable: false, identity: undefined };
 }
 
+function getOptionsForFetchCacheKey(options: RequestInit, bodyIdentity: unknown) {
+  const identity: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(options)) {
+    if (key === 'headers' || IGNORED_FETCH_CACHE_OPTION_KEYS.has(key)) {
+      continue;
+    }
+
+    if (key === 'body') {
+      identity.body = bodyIdentity;
+      continue;
+    }
+
+    if (value == null || ['boolean', 'number', 'string'].includes(typeof value)) {
+      identity[key] = value;
+      continue;
+    }
+
+    return { cacheable: false, identity: undefined };
+  }
+
+  if (!Object.hasOwn(options, 'body') && bodyIdentity !== undefined) {
+    identity.body = bodyIdentity;
+  }
+
+  return { cacheable: true, identity };
+}
+
 function getFetchCacheKey(
   url: RequestInfo,
   options: RequestInit,
@@ -284,15 +313,17 @@ function getFetchCacheKey(
     return null;
   }
 
-  const optionsWithoutHeaders = { ...options, body: bodyForCacheKey.identity };
-  delete optionsWithoutHeaders.headers;
+  const optionsForCacheKey = getOptionsForFetchCacheKey(options, bodyForCacheKey.identity);
+  if (!optionsForCacheKey.cacheable) {
+    return null;
+  }
 
   return getScopedCacheKey(
     `fetch:v3:${hashFetchCacheKey({
       format,
       headers: getHeadersForCacheKey(url, options),
       method,
-      options: optionsWithoutHeaders,
+      options: optionsForCacheKey.identity,
       url: url instanceof Request ? url.url : String(url),
     })}`,
   );

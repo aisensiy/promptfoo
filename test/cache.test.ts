@@ -640,6 +640,29 @@ describe('fetchWithCache', () => {
       expect(vi.mocked(cache.set)).not.toHaveBeenCalled();
     });
 
+    it('should not cache requests with opaque transport options', async () => {
+      const cache = getCache();
+      mockFetchWithRetries
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'first identity' }))
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'second identity' }));
+
+      const firstResult = await fetchWithCache(
+        url,
+        { dispatcher: { clientCert: 'first-cert' }, method: 'GET' } as unknown as RequestInit,
+        1000,
+      );
+      const secondResult = await fetchWithCache(
+        url,
+        { dispatcher: { clientCert: 'second-cert' }, method: 'GET' } as unknown as RequestInit,
+        1000,
+      );
+
+      expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
+      expect(firstResult.data).toEqual({ data: 'first identity' });
+      expect(secondResult.data).toEqual({ data: 'second identity' });
+      expect(vi.mocked(cache.set)).not.toHaveBeenCalled();
+    });
+
     it('should isolate cached responses by request headers without storing secrets in the key', async () => {
       const cache = getCache();
       mockFetchWithRetries
