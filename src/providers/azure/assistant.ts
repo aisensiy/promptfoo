@@ -174,7 +174,7 @@ export class AzureAssistantProvider extends AzureGenericProvider {
         const cachedResult = await cache.get<ProviderResponse>(cacheKey);
 
         if (cachedResult) {
-          logger.debug(`Cache hit for assistant prompt: ${prompt.substring(0, 50)}...`);
+          logger.debug('Cache hit for assistant prompt', { promptLength: prompt.length });
           return { ...cachedResult, cached: true };
         }
       } catch (err) {
@@ -195,7 +195,10 @@ export class AzureAssistantProvider extends AzureGenericProvider {
         },
       );
 
-      logger.debug(`Created thread ${threadResponse.id} for prompt: ${prompt.substring(0, 30)}...`);
+      logger.debug('Created thread for assistant prompt', {
+        threadId: threadResponse.id,
+        promptLength: prompt.length,
+      });
 
       // Create a message
       await this.makeRequest(
@@ -323,7 +326,7 @@ export class AzureAssistantProvider extends AzureGenericProvider {
         try {
           const cache = await getCache();
           await cache.set(cacheKey, result);
-          logger.debug(`Cached assistant response for prompt: ${prompt.substring(0, 50)}...`);
+          logger.debug('Cached assistant response for prompt', { promptLength: prompt.length });
         } catch (err) {
           logger.warn(`Error caching result: ${err}`);
           // Continue even if caching fails

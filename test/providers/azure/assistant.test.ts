@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithCache, getCache, isCacheEnabled } from '../../../src/cache';
+import logger from '../../../src/logger';
 import { AzureAssistantProvider } from '../../../src/providers/azure/assistant';
 import { sleep } from '../../../src/util/time';
 
@@ -169,6 +170,7 @@ describe('Azure Assistant Provider', () => {
       expect(cacheKey).toMatch(/^azure_assistant:test-deployment:[a-f0-9]{64}$/);
       expect(cacheKey).not.toContain(prompt);
       expect(cacheKey).not.toContain(instructions);
+      expect(JSON.stringify(vi.mocked(logger.debug).mock.calls)).not.toContain(prompt);
     });
 
     it('should include Azure endpoint and auth in opaque cache keys', async () => {
