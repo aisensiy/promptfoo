@@ -189,6 +189,26 @@ describe('Codex default providers', () => {
     );
   });
 
+  it('isolates cached default providers by process OpenAI API credential', async () => {
+    const { getCodexDefaultProviders } = await import(
+      '../../../src/providers/openai/codexDefaults'
+    );
+
+    process.env.OPENAI_API_KEY = 'first-openai-key';
+    const firstProviders = getCodexDefaultProviders();
+    expect((firstProviders.gradingProvider as OpenAICodexSDKProvider).getApiKey()).toBe(
+      'first-openai-key',
+    );
+
+    process.env.OPENAI_API_KEY = 'second-openai-key';
+    const secondProviders = getCodexDefaultProviders();
+
+    expect(secondProviders).not.toBe(firstProviders);
+    expect((secondProviders.gradingProvider as OpenAICodexSDKProvider).getApiKey()).toBe(
+      'second-openai-key',
+    );
+  });
+
   it('isolates cached default providers by env override API credential', async () => {
     const { getCodexDefaultProviders } = await import(
       '../../../src/providers/openai/codexDefaults'
