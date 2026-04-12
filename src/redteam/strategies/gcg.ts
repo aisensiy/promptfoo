@@ -122,7 +122,9 @@ async function generateGcgPrompts(
     if (progressBar) {
       progressBar.stop();
     }
-    logger.error(`Error in GCG generation: ${error}`);
+    logger.error('Error in GCG generation', {
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
     return [];
   }
 }

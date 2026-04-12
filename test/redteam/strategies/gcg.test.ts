@@ -186,12 +186,19 @@ describe('gcg strategy', () => {
   });
 
   it('should handle network errors gracefully', async () => {
-    mockFetchWithCache.mockRejectedValueOnce(new Error('Network error'));
+    mockFetchWithCache.mockRejectedValueOnce(
+      new Error('Network error with SECRET_GCG_THROWN_ERROR'),
+    );
 
     const result = await addGcgTestCases(testCases, 'prompt', {});
 
     expect(result).toHaveLength(0);
-    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Error in GCG generation'));
+    expect(logger.error).toHaveBeenCalledWith('Error in GCG generation', {
+      errorType: 'Error',
+    });
+
+    const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
+    expect(logs).not.toContain('SECRET_GCG_THROWN_ERROR');
   });
 
   it('should respect configuration options', async () => {
