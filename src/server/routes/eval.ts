@@ -2,11 +2,13 @@ import dedent from 'dedent';
 import { Router } from 'express';
 import { z } from 'zod';
 import { HUMAN_ASSERTION_TYPE } from '../../constants';
+import { getEnvBool } from '../../envars';
 import { getUserEmail, setUserEmail } from '../../globalConfig/accounts';
 import promptfoo from '../../index';
 import logger from '../../logger';
 import Eval, { EvalQueries } from '../../models/eval';
 import EvalResult from '../../models/evalResult';
+import { VALID_FILE_EXTENSIONS } from '../../prompts/constants';
 import { EvalSchemas } from '../../types/api/eval';
 import { deleteEval, deleteEvals, updateResult, writeResultsToDatabase } from '../../util/database';
 import invariant from '../../util/invariant';
@@ -37,10 +39,75 @@ export const evalRouter = Router();
 // Running jobs
 export const evalJobs = new Map<string, Job>();
 
+const SERVER_PROMPT_SOURCE_OPT_IN = 'PROMPTFOO_ALLOW_SERVER_PROMPT_SOURCES';
+const SERVER_PROMPT_SOURCE_EXTENSIONS = [
+  ...VALID_FILE_EXTENSIONS,
+  '.bash',
+  '.bat',
+  '.cmd',
+  '.exe',
+  '.pl',
+  '.ps1',
+  '.rb',
+  '.sh',
+];
+
+function isServerPromptSourceReference(prompt: string): boolean {
+  const trimmed = prompt.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (lower.startsWith('exec:') || lower.startsWith('file://')) {
+    return true;
+  }
+
+  if (/^(?:~[/\\]|\.{1,2}[/\\]|[/\\]|[a-z]:[/\\])/i.test(trimmed)) {
+    return true;
+  }
+
+  if (/\s/.test(trimmed)) {
+    return false;
+  }
+
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    return false;
+  }
+
+  if (trimmed.includes('/') || trimmed.includes('\\')) {
+    return true;
+  }
+
+  if (/[*?[\]{}]/.test(trimmed)) {
+    return true;
+  }
+
+  const pathOrFunctionToken = trimmed.split(':')[0].toLowerCase();
+  return SERVER_PROMPT_SOURCE_EXTENSIONS.some((extension) =>
+    pathOrFunctionToken.endsWith(extension),
+  );
+}
+
+function validateWebEvalPrompts(prompts: (string | Record<string, unknown>)[]): string | undefined {
+  if (getEnvBool(SERVER_PROMPT_SOURCE_OPT_IN, false)) {
+    return undefined;
+  }
+
+  if (
+    prompts.some((prompt) => typeof prompt === 'string' && isServerPromptSourceReference(prompt))
+  ) {
+    return `Server-side prompt sources are disabled for web eval jobs. Set ${SERVER_PROMPT_SOURCE_OPT_IN}=true to allow trusted local usage.`;
+  }
+}
+
 evalRouter.post('/job', (req: Request, res: Response): void => {
   const result = EvalSchemas.CreateJob.Request.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: z.prettifyError(result.error) });
+    return;
+  }
+
+  const promptValidationError = validateWebEvalPrompts(result.data.prompts);
+  if (promptValidationError) {
+    res.status(400).json({ error: promptValidationError });
     return;
   }
 

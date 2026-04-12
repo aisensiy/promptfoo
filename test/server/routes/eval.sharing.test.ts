@@ -41,6 +41,7 @@ describe('Eval Routes - Sharing behavior', () => {
 
   afterEach(() => {
     vi.resetAllMocks();
+    vi.unstubAllEnvs();
   });
 
   const postJob = (body: Record<string, unknown>) => request(app).post('/api/eval/job').send(body);
@@ -101,5 +102,52 @@ describe('Eval Routes - Sharing behavior', () => {
 
     const evaluateArg = mockedEvaluate.mock.calls[0][0] as any;
     expect(evaluateArg.sharing).toBe(false);
+  });
+
+  it('rejects executable prompt sources from web job creation', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['exec:/bin/echo PROMPTFOO_EXEC_SENTINEL'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects local prompt file sources from web job creation', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['prompts/runner'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects executable prompt files from web job creation', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['runner.sh'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('allows server-side prompt sources when explicitly enabled', async () => {
+    vi.stubEnv('PROMPTFOO_ALLOW_SERVER_PROMPT_SOURCES', 'true');
+
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['exec:/bin/echo trusted-local'],
+    });
+
+    expect(response.status).toBe(200);
+    await vi.waitFor(() => {
+      expect(mockedEvaluate).toHaveBeenCalled();
+    });
   });
 });
