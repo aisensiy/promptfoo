@@ -42,7 +42,9 @@ function persistThemePreference(preference: ThemePreference) {
     }
 
     localStorage.setItem(DARK_MODE_STORAGE_KEY, String(preference === 'dark'));
-  } catch {}
+  } catch (error) {
+    console.debug('[ThemeSelector] Failed to persist theme preference', { error, preference });
+  }
 }
 
 function applyResolvedTheme(theme: ResolvedTheme) {

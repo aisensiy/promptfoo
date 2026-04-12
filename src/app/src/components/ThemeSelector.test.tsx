@@ -28,8 +28,17 @@ const installSystemTheme = (isDark = false) => {
 };
 
 const emitSystemThemeChange = (matches: boolean) => {
-  const mediaQueryList = matchMedia.mock.results[matchMedia.mock.results.length - 1]
-    ?.value as MediaQueryList;
+  const darkModeQueryCallIndex = matchMedia.mock.calls.findLastIndex(
+    ([query]) => query === SYSTEM_DARK_MODE_QUERY,
+  );
+
+  if (darkModeQueryCallIndex === -1) {
+    throw new Error(
+      `Cannot emit system theme change: no matchMedia call for ${SYSTEM_DARK_MODE_QUERY}`,
+    );
+  }
+
+  const mediaQueryList = matchMedia.mock.results[darkModeQueryCallIndex]?.value as MediaQueryList;
 
   act(() => {
     mediaQueryList.dispatchEvent({ matches } as MediaQueryListEvent);
@@ -55,7 +64,7 @@ describe('ThemeSelector', () => {
 
     expect(
       screen.getByRole('button', {
-        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+        name: 'Theme preference: System theme (light). Switch to Dark theme.',
       }),
     ).toHaveClass('size-9');
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
@@ -68,26 +77,26 @@ describe('ThemeSelector', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+        name: 'Theme preference: System theme (light). Switch to Dark theme.',
       }),
     );
     expect(
       screen.getByRole('button', {
-        name: 'Theme preference: Dark theme (currently dark). Switch to Light theme.',
+        name: 'Theme preference: Dark theme. Switch to Light theme.',
       }),
     ).toBeInTheDocument();
 
     await user.click(getThemeButton());
     expect(
       screen.getByRole('button', {
-        name: 'Theme preference: Light theme (currently light). Switch to System theme.',
+        name: 'Theme preference: Light theme. Switch to System theme.',
       }),
     ).toBeInTheDocument();
 
     await user.click(getThemeButton());
     expect(
       screen.getByRole('button', {
-        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+        name: 'Theme preference: System theme (light). Switch to Dark theme.',
       }),
     ).toBeInTheDocument();
   });
@@ -130,7 +139,7 @@ describe('ThemeSelector', () => {
 
     expect(
       screen.getByRole('button', {
-        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+        name: 'Theme preference: System theme (light). Switch to Dark theme.',
       }),
     ).toBeInTheDocument();
   });
@@ -191,7 +200,7 @@ describe('ThemeSelector', () => {
     });
     expect(
       screen.getByRole('button', {
-        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+        name: 'Theme preference: System theme (light). Switch to Dark theme.',
       }),
     ).toBeInTheDocument();
   });

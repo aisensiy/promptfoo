@@ -90,7 +90,7 @@ describe('LauncherPage', () => {
     await act(async () => {
       await userEvent.click(
         screen.getByRole('button', {
-          name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+          name: 'Theme preference: System theme (light). Switch to Dark theme.',
         }),
       );
     });

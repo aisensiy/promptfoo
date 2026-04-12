@@ -119,7 +119,7 @@ describe('Navigation', () => {
     renderNavigation();
 
     const themeButton = screen.getByRole('button', {
-      name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+      name: 'Theme preference: System theme (light). Switch to Dark theme.',
     });
     expect(themeButton).toHaveClass('size-9');
 
@@ -131,7 +131,7 @@ describe('Navigation', () => {
     expect(localStorage.getItem('darkMode')).toBe('true');
     expect(
       screen.getByRole('button', {
-        name: 'Theme preference: Dark theme (currently dark). Switch to Light theme.',
+        name: 'Theme preference: Dark theme. Switch to Light theme.',
       }),
     ).toBeInTheDocument();
   });
@@ -141,7 +141,7 @@ describe('Navigation', () => {
 
     expect(
       screen.getByRole('button', {
-        name: 'Theme preference: System theme (currently light). Switch to Dark theme.',
+        name: 'Theme preference: System theme (light). Switch to Dark theme.',
       }),
     ).toHaveClass('size-9');
   });
