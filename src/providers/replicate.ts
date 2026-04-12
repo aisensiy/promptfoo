@@ -1,4 +1,4 @@
-import { createHash, scryptSync } from 'crypto';
+import { createHash } from 'crypto';
 
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../envars';
@@ -61,17 +61,12 @@ interface ReplicatePrediction {
   };
 }
 
-const REPLICATE_CACHE_KEY_SALT = 'promptfoo-replicate-cache-key-v1';
 const REPLICATE_SECRET_FIELD_NAMES = new Set(['apiKey']);
 
 function hashReplicateCacheValue(value: unknown) {
   return createHash('sha256')
     .update(safeJsonStringify(value) ?? '')
     .digest('hex');
-}
-
-function fingerprintReplicateSecret(label: string, secret: string) {
-  return scryptSync(secret, `${REPLICATE_CACHE_KEY_SALT}:${label}`, 32).toString('hex');
 }
 
 function omitReplicateSecretFields(value: unknown): unknown {
@@ -86,6 +81,10 @@ function omitReplicateSecretFields(value: unknown): unknown {
       .filter(([key]) => !REPLICATE_SECRET_FIELD_NAMES.has(key))
       .map(([key, fieldValue]) => [key, omitReplicateSecretFields(fieldValue)]),
   );
+}
+
+function getReplicateAuthCacheHash(apiKey: string | undefined) {
+  return hashReplicateCacheValue({ hasApiKey: Boolean(apiKey) });
 }
 
 export class ReplicateProvider implements ApiProvider {
@@ -176,13 +175,12 @@ export class ReplicateProvider implements ApiProvider {
     let cacheKey;
     if (isCacheEnabled()) {
       cache = await getCache();
-      cacheKey = `replicate:${this.modelName}:${fingerprintReplicateSecret(
-        'apiKey',
-        this.apiKey,
-      )}:${hashReplicateCacheValue({
-        config: this.config,
-        prompt,
-      })}`;
+      cacheKey = `replicate:${this.modelName}:${getReplicateAuthCacheHash(this.apiKey)}:${hashReplicateCacheValue(
+        {
+          config: this.config,
+          prompt,
+        },
+      )}`;
 
       // Try to get the cached response
       const cachedResponse = await cache.get(cacheKey);
@@ -433,14 +431,13 @@ export class ReplicateImageProvider extends ReplicateProvider {
     }
 
     const cache = getCache();
-    const cacheKey = `replicate:image:${this.modelName}:${fingerprintReplicateSecret(
-      'apiKey',
-      this.apiKey,
-    )}:${hashReplicateCacheValue({
-      config: this.config,
-      context: omitReplicateSecretFields(context),
-      prompt,
-    })}`;
+    const cacheKey = `replicate:image:${this.modelName}:${getReplicateAuthCacheHash(this.apiKey)}:${hashReplicateCacheValue(
+      {
+        config: this.config,
+        context: omitReplicateSecretFields(context),
+        prompt,
+      },
+    )}`;
 
     let response: any | undefined;
     let cached = false;
