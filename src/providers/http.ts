@@ -51,6 +51,8 @@ import type {
   TokenUsage,
 } from '../types/index';
 
+const AUTH_TOKEN_CACHE_KEY = crypto.randomBytes(32);
+
 /**
  * Escapes string values in variables for safe JSON template substitution.
  * Converts { key: "value\nwith\nnewlines" } to { key: "value\\nwith\\nnewlines" }
@@ -1026,32 +1028,49 @@ function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
   if (value === undefined) {
     return 'undefined';
   }
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value);
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value === 'bigint') {
+    return JSON.stringify({ bigint: value.toString() });
+  }
+  if (typeof value === 'function') {
+    return JSON.stringify({ function: value.name || 'anonymous' });
+  }
+  if (typeof value === 'symbol') {
+    return JSON.stringify({ symbol: String(value) });
+  }
+  if (typeof value !== 'object') {
+    return JSON.stringify(value) ?? String(value);
   }
   if (seen.has(value)) {
     return '"[Circular]"';
   }
   seen.add(value);
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableSerialize(item, seen)).join(',')}]`;
+
+  try {
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => stableSerialize(item, seen)).join(',')}]`;
+    }
+    if (value instanceof Date) {
+      return JSON.stringify(value.toISOString());
+    }
+
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key], seen)}`)
+      .join(',')}}`;
+  } finally {
+    seen.delete(value);
   }
-
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key], seen)}`)
-    .join(',')}}`;
 }
 
-function hashAuthCacheInput(value: unknown): string {
-  return crypto.createHash('sha256').update(stableSerialize(value)).digest('hex');
-}
-
-function fingerprintAuthSecret(value: string | undefined, label: string): string | undefined {
-  return value
-    ? crypto.scryptSync(value, `promptfoo:http-auth-token-cache:${label}`, 32).toString('hex')
-    : undefined;
+function digestAuthCacheInput(value: unknown): string {
+  return crypto
+    .createHmac('sha256', AUTH_TOKEN_CACHE_KEY)
+    .update(stableSerialize(value))
+    .digest('hex');
 }
 
 function getOAuthTokenCacheKey(oauthConfig: {
@@ -1063,19 +1082,7 @@ function getOAuthTokenCacheKey(oauthConfig: {
   username?: string;
   password?: string;
 }): string {
-  const metadataHash = hashAuthCacheInput({
-    grantType: oauthConfig.grantType,
-    clientId: oauthConfig.clientId,
-    hasClientSecret: Boolean(oauthConfig.clientSecret),
-    hasPassword: Boolean(oauthConfig.password),
-    tokenUrl: oauthConfig.tokenUrl,
-    scopes: oauthConfig.scopes,
-    username: oauthConfig.username,
-  });
-  const clientSecretFingerprint = fingerprintAuthSecret(oauthConfig.clientSecret, 'client-secret');
-  const passwordFingerprint = fingerprintAuthSecret(oauthConfig.password, 'password');
-
-  return `oauth:${metadataHash}:${clientSecretFingerprint ?? 'none'}:${passwordFingerprint ?? 'none'}`;
+  return `oauth:${digestAuthCacheInput(oauthConfig)}`;
 }
 
 function getFileAuthTokenCacheKey(
@@ -1084,7 +1091,7 @@ function getFileAuthTokenCacheKey(
   vars: Record<string, any>,
   context?: CallApiContextParams,
 ): string {
-  return `file:${hashAuthCacheInput({
+  return `file:${digestAuthCacheInput({
     path: authPath,
     prompt: {
       raw: context?.prompt?.raw ?? prompt,

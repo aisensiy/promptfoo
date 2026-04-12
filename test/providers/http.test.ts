@@ -6133,6 +6133,16 @@ describe('HttpProvider - OAuth Token Refresh Deduplication', () => {
       .mock.calls.filter((call) => call[0] === tokenUrl);
     expect(tokenRefreshCalls).toHaveLength(2);
     expect(apiAuthHeaders).toEqual(['Bearer token-a', 'Bearer token-b']);
+
+    const cacheKeys = Array.from((provider as any).authTokenCache.keys());
+    expect(cacheKeys).toHaveLength(2);
+    expect(cacheKeys).toEqual([
+      expect.stringMatching(/^oauth:[a-f0-9]{64}$/),
+      expect.stringMatching(/^oauth:[a-f0-9]{64}$/),
+    ]);
+    expect(cacheKeys.join('\n')).not.toContain('secret-a');
+    expect(cacheKeys.join('\n')).not.toContain('secret-b');
+    expect(cacheKeys.join('\n')).not.toContain('test-client-id');
   });
 
   it('should not cross-use OAuth tokens across concurrent raw requests', async () => {
@@ -7058,11 +7068,11 @@ describe('HttpProvider - File Auth', () => {
 
     await provider.callApi('same prompt', {
       prompt: { raw: 'same prompt', label: 'same prompt' },
-      vars: { userId: 'alice' },
+      vars: { userId: 'alice', apiKey: 'secret-file-a' },
     });
     await provider.callApi('same prompt', {
       prompt: { raw: 'same prompt', label: 'same prompt' },
-      vars: { userId: 'bob' },
+      vars: { userId: 'bob', apiKey: 'secret-file-b' },
     });
 
     expect(authFn).toHaveBeenCalledTimes(2);
@@ -7080,6 +7090,16 @@ describe('HttpProvider - File Auth', () => {
         }),
       }),
     );
+
+    const cacheKeys = Array.from((provider as any).authTokenCache.keys());
+    expect(cacheKeys).toHaveLength(2);
+    expect(cacheKeys).toEqual([
+      expect.stringMatching(/^file:[a-f0-9]{64}$/),
+      expect.stringMatching(/^file:[a-f0-9]{64}$/),
+    ]);
+    expect(cacheKeys.join('\n')).not.toContain('alice');
+    expect(cacheKeys.join('\n')).not.toContain('bob');
+    expect(cacheKeys.join('\n')).not.toContain('secret-file');
   });
 
   it('should refresh a file auth token when it is within the oauth refresh buffer', async () => {
