@@ -13,6 +13,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { z } from 'zod';
 import { getDefaultPort, VERSION } from '../constants';
 import { readSignalEvalId, setupSignalWatcher } from '../database/signal';
+import { getEnvString } from '../envars';
 import { getDirectory } from '../esm';
 import { cloudConfig } from '../globalConfig/cloud';
 import logger from '../logger';
@@ -56,6 +57,18 @@ const JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs']);
 
 // Express middleware limits
 const REQUEST_SIZE_LIMIT = '100mb';
+const DEFAULT_SERVER_HOST = '127.0.0.1';
+
+function getServerHost(): string {
+  return getEnvString('PROMPTFOO_SERVER_HOST', DEFAULT_SERVER_HOST).trim() || DEFAULT_SERVER_HOST;
+}
+
+function formatServerUrlHost(host: string): string {
+  if (host === '0.0.0.0' || host === '::') {
+    return 'localhost';
+  }
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+}
 
 /**
  * Middleware to set proper MIME types for JavaScript files.
@@ -314,6 +327,7 @@ export async function startServer(
   browserBehavior: BrowserBehavior = BrowserBehavior.ASK,
 ) {
   const app = createApp();
+  const host = getServerHost();
 
   const httpServer = http.createServer(app);
   const io = new SocketIOServer(httpServer, {
@@ -352,8 +366,8 @@ export async function startServer(
   // This keeps long-running commands (like `view`) running until SIGINT/SIGTERM
   return new Promise<void>((resolve) => {
     httpServer
-      .listen(port, () => {
-        const url = `http://localhost:${port}`;
+      .listen(port, host, () => {
+        const url = `http://${formatServerUrlHost(host)}:${port}`;
         logger.info(`Server running at ${url} and monitoring for new evals.`);
         openBrowser(browserBehavior, port).catch((error) => {
           logger.error(
