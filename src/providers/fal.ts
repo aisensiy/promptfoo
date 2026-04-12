@@ -1,4 +1,4 @@
-import { createHash, scryptSync } from 'crypto';
+import { createHash } from 'crypto';
 
 import { getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
@@ -17,8 +17,6 @@ interface FalResult<T = unknown> {
   data: T;
   requestId: string;
 }
-
-const FAL_CACHE_KEY_KDF_SALT = 'promptfoo-fal-cache-key-v1';
 
 function sortObject(obj: any): any {
   if (obj === null || obj === undefined) {
@@ -46,13 +44,15 @@ function omitFalSecretConfigFields(config: FalProviderOptions): Record<string, u
   return rest;
 }
 
-function fingerprintFalSecret(secret: string): string {
-  return scryptSync(secret, FAL_CACHE_KEY_KDF_SALT, 32).toString('hex');
-}
-
 function generateConfigHash(config: FalProviderOptions): string {
   const sortedConfig = sortObject(omitFalSecretConfigFields(config));
   return createHash('sha256').update(JSON.stringify(sortedConfig)).digest('hex');
+}
+
+function generateAuthHash(apiKey: string | undefined): string {
+  return createHash('sha256')
+    .update(JSON.stringify({ hasApiKey: Boolean(apiKey) }))
+    .digest('hex');
 }
 
 function generateInputHash(input: unknown): string {
@@ -119,7 +119,7 @@ class FalProvider<Input = Record<string, unknown>> implements ApiProvider {
       ...this.input,
       ...(context?.prompt?.config ?? {}),
     };
-    const cacheKey = `fal:${this.modelName}:${generateConfigHash(this.config)}:${fingerprintFalSecret(this.apiKey)}:${generateInputHash(input)}`;
+    const cacheKey = `fal:${this.modelName}:${generateConfigHash(this.config)}:${generateAuthHash(this.apiKey)}:${generateInputHash(input)}`;
     if (isCacheEnabled()) {
       cache = getCache();
       const cachedResponse = await cache.get<string>(cacheKey);
