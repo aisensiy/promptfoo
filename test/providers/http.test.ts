@@ -2114,8 +2114,13 @@ describe('HttpProvider', () => {
         GET /api/data?api_key=transform-query-secret HTTP/1.1
         Host: example.com
         Authorization: Bearer raw-transform-token-12345678901234567890
+        Content-Type: application/json
 
-        {"apiKey":"sk-123456789012345678901234567890","message":"ok"}
+        {
+          "apiKey": "sk-123456789012345678901234567890",
+          "password": "plain-secret",
+          "message": "ok"
+        }
       `;
       const provider = new HttpProvider('http', {
         config: {
@@ -2146,13 +2151,20 @@ describe('HttpProvider', () => {
       });
 
       expect(result.metadata?.transformedRequest).toContain('/api/data?api_key=%5BREDACTED%5D');
-      expect(result.metadata?.transformedRequest).toContain('Authorization: [REDACTED]');
+      expect(result.metadata?.transformedRequest).toContain('authorization: [REDACTED]');
       expect(result.metadata?.transformedRequest).toContain('"apiKey":"[REDACTED]"');
+      expect(result.metadata?.transformedRequest).toContain('"password":"[REDACTED]"');
       expect(result.metadata?.transformedRequest).not.toContain('transform-query-secret');
       expect(result.metadata?.transformedRequest).not.toContain('raw-transform-token');
+      expect(result.metadata?.transformedRequest).not.toContain('plain-secret');
       expect(result.metadata?.transformedRequest).not.toContain(
         'sk-123456789012345678901234567890',
       );
+      expect(result.metadata?.finalRequestBody).toContain('"apiKey":"[REDACTED]"');
+      expect(result.metadata?.finalRequestBody).toContain('"password":"[REDACTED]"');
+      expect(result.metadata?.finalRequestBody).not.toContain('raw-transform-token');
+      expect(result.metadata?.finalRequestBody).not.toContain('plain-secret');
+      expect(result.metadata?.finalRequestBody).not.toContain('sk-123456789012345678901234567890');
     });
 
     it('should handle case-insensitive header matching', async () => {

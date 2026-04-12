@@ -1287,6 +1287,40 @@ function sanitizeRequestBodyForMetadata(body: unknown, headers?: Record<string, 
   return sanitizedBody;
 }
 
+function looksLikeRawHttpRequest(value: string): boolean {
+  const firstLine = value.split(/\r?\n/, 1)[0].trim();
+  return /^[A-Z]+\s+\S+\s+HTTP\/\d(?:\.\d)?$/i.test(firstLine);
+}
+
+function decodeEscapedStringLiteral(value: string): string | undefined {
+  if (!/[\\](?:r|n|t|"|\\)/.test(value)) {
+    return undefined;
+  }
+
+  try {
+    const decoded = JSON.parse(`"${value}"`);
+    return typeof decoded === 'string' ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function sanitizeRawRequestStringForMetadata(value: string): string | undefined {
+  if (!looksLikeRawHttpRequest(value)) {
+    return undefined;
+  }
+
+  try {
+    const parsedRequest = parseRawRequest(value);
+    return formatRawRequestForDebugMetadata(
+      parsedRequest,
+      extractBodyFromRawRequest(value) ?? parsedRequest.body?.text,
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 function sanitizeTransformedRequestForMetadata(
   value: unknown,
   headers?: Record<string, string>,
@@ -1294,6 +1328,19 @@ function sanitizeTransformedRequestForMetadata(
   const sanitizedValue = sanitizeRequestBodyForMetadata(value, headers);
   if (typeof sanitizedValue !== 'string') {
     return sanitizedValue;
+  }
+
+  const sanitizedRawRequest = sanitizeRawRequestStringForMetadata(sanitizedValue);
+  if (sanitizedRawRequest) {
+    return sanitizedRawRequest;
+  }
+
+  const decodedValue = decodeEscapedStringLiteral(sanitizedValue);
+  if (decodedValue) {
+    const sanitizedDecodedRawRequest = sanitizeRawRequestStringForMetadata(decodedValue);
+    if (sanitizedDecodedRawRequest) {
+      return sanitizedDecodedRawRequest;
+    }
   }
 
   return sanitizedValue
@@ -2853,7 +2900,9 @@ export class HttpProvider implements ApiProvider {
         transformedRequest: this.config.transformRequest
           ? sanitizeTransformedRequestForMetadata(transformedPrompt, parsedRequest.headers)
           : formatRawRequestForDebugMetadata(parsedRequest, bodyContent),
-        finalRequestBody: sanitizeRequestBodyForMetadata(bodyContent, parsedRequest.headers),
+        finalRequestBody: this.config.transformRequest
+          ? sanitizeTransformedRequestForMetadata(bodyContent, parsedRequest.headers)
+          : sanitizeRequestBodyForMetadata(bodyContent, parsedRequest.headers),
         http: {
           status,
           statusText,
