@@ -613,13 +613,20 @@ evalRouter.post(
       return;
     }
 
-    const { id } = paramsResult.data;
+    const { evalId, id } = paramsResult.data;
     // Double-cast needed: Zod's .passthrough() adds index signature that doesn't overlap with GradingResult
     const gradingResult = bodyResult.data as unknown as GradingResult;
     const result = await EvalResult.findById(id);
-    invariant(result, 'Result not found');
-    const eval_ = await Eval.findById(result.evalId);
-    invariant(eval_, 'Eval not found');
+    if (!result || result.evalId !== evalId) {
+      res.status(404).json({ error: 'Result not found' });
+      return;
+    }
+
+    const eval_ = await Eval.findById(evalId);
+    if (!eval_) {
+      res.status(404).json({ error: 'Eval not found' });
+      return;
+    }
 
     // Capture the current state before we change it
     const hasExistingManualOverride = Boolean(

@@ -54,6 +54,43 @@ describe('eval routes', () => {
   }
 
   describe('post("/:evalId/results/:id/rating")', () => {
+    it('rejects result ratings when the URL eval does not own the result', async () => {
+      const evalA = await EvalFactory.create();
+      const evalB = await EvalFactory.create();
+      testEvalIds.add(evalA.id);
+      testEvalIds.add(evalB.id);
+
+      const resultsB = await evalB.getResults();
+      const resultB = resultsB[0];
+      invariant(resultB.id, 'Result ID is required');
+      const originalResultB = {
+        gradingResult: structuredClone(resultB.gradingResult),
+        score: resultB.score,
+        success: resultB.success,
+      };
+      const originalEvalAMetrics = structuredClone(evalA.prompts[resultB.promptIdx].metrics);
+      const originalEvalBMetrics = structuredClone(evalB.prompts[resultB.promptIdx].metrics);
+
+      const res = await request(app)
+        .post(`/api/eval/${evalA.id}/results/${resultB.id}/rating`)
+        .send(createManualRatingPayload(resultB, false));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('Result not found');
+
+      const updatedResultB = await EvalResult.findById(resultB.id);
+      expect(updatedResultB?.gradingResult).toEqual(originalResultB.gradingResult);
+      expect(updatedResultB?.score).toBe(originalResultB.score);
+      expect(updatedResultB?.success).toBe(originalResultB.success);
+
+      const updatedEvalA = await Eval.findById(evalA.id);
+      const updatedEvalB = await Eval.findById(evalB.id);
+      invariant(updatedEvalA, 'Eval A is required');
+      invariant(updatedEvalB, 'Eval B is required');
+      expect(updatedEvalA.prompts[resultB.promptIdx].metrics).toEqual(originalEvalAMetrics);
+      expect(updatedEvalB.prompts[resultB.promptIdx].metrics).toEqual(originalEvalBMetrics);
+    });
+
     it('Passing test and the user marked it as passing (no change)', async () => {
       const eval_ = await EvalFactory.create();
       testEvalIds.add(eval_.id);
