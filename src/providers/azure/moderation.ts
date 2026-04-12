@@ -49,6 +49,13 @@ interface AzureModerationConfig {
   passthrough?: Record<string, any>;
 }
 
+function hashCacheValue(value: unknown): string {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(value) ?? 'undefined')
+    .digest('hex');
+}
+
 export function parseAzureModerationResponse(
   data: AzureAnalyzeTextResult,
 ): ProviderModerationResponse {
@@ -112,25 +119,18 @@ export function getModerationCacheKey(
     apiVersion: config.apiVersion,
     headersHash:
       config.headers && Object.keys(config.headers).length > 0
-        ? crypto
-            .createHash('sha256')
-            .update(
-              JSON.stringify(
-                Object.keys(config.headers)
-                  .sort()
-                  .map((k) => [k, config.headers![k]]),
-              ),
-            )
-            .digest('hex')
-            .slice(0, 16)
+        ? hashCacheValue(
+            Object.keys(config.headers)
+              .sort()
+              .map((k) => [k, config.headers![k]]),
+          )
         : undefined,
     blocklistNames: config.blocklistNames || [],
     haltOnBlocklistHit: config.haltOnBlocklistHit ?? false,
     passthrough: config.passthrough || {},
   };
-  const contentHash = crypto.createHash('sha256').update(JSON.stringify(content)).digest('hex');
 
-  return `azure-moderation:${modelName}:${JSON.stringify(cacheConfig)}:${contentHash}`;
+  return `azure-moderation:${modelName}:${hashCacheValue(cacheConfig)}:${hashCacheValue(content)}`;
 }
 
 export class AzureModerationProvider extends AzureGenericProvider implements ApiModerationProvider {
