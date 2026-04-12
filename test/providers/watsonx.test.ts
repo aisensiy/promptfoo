@@ -382,7 +382,7 @@ describe('WatsonXProvider', () => {
       const cacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
       expect(cacheKey).toMatch(
         new RegExp(
-          `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$`,
+          `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}$`,
         ),
       );
       expect(cacheKey).not.toContain(prompt);
@@ -391,7 +391,7 @@ describe('WatsonXProvider', () => {
       expect(cache.set).toHaveBeenCalledWith(cacheKey, JSON.stringify(response));
     });
 
-    it('should include configured credential identity in cache keys without exposing secrets', async () => {
+    it('should include configured auth mode in cache keys without exposing secrets', async () => {
       const mockedWatsonXAIClient: Partial<any> = {
         generateText: vi.fn().mockResolvedValue({
           result: {
@@ -425,23 +425,24 @@ describe('WatsonXProvider', () => {
         return true;
       });
 
-      const firstApiKey = 'watsonx-config-secret-one';
-      const secondApiKey = 'watsonx-config-secret-two';
+      const apiKey = 'watsonx-config-secret-api-key';
+      const bearerToken = 'watsonx-config-secret-bearer-token';
       await new WatsonXProvider(modelName, {
-        config: { ...config, apiKey: firstApiKey },
+        config: { ...config, apiKey },
       }).callApi(prompt);
       await new WatsonXProvider(modelName, {
-        config: { ...config, apiKey: secondApiKey },
+        config: { ...config, apiKey: undefined, apiBearerToken: bearerToken },
+        env: { WATSONX_AI_AUTH_TYPE: 'bearertoken' },
       }).callApi(prompt);
 
       const firstCacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
       const secondCacheKey = vi.mocked(cache.set).mock.calls[1][0] as string;
       expect(firstCacheKey).not.toEqual(secondCacheKey);
-      expect(firstCacheKey).not.toContain(firstApiKey);
-      expect(secondCacheKey).not.toContain(secondApiKey);
+      expect(firstCacheKey).not.toContain(apiKey);
+      expect(secondCacheKey).not.toContain(bearerToken);
     });
 
-    it('should include env-sourced credential identity in cache keys without exposing secrets', async () => {
+    it('should include env-sourced auth mode in cache keys without exposing secrets', async () => {
       const mockedWatsonXAIClient: Partial<any> = {
         generateText: vi.fn().mockResolvedValue({
           result: {
@@ -475,23 +476,26 @@ describe('WatsonXProvider', () => {
         return true;
       });
 
-      const firstApiKey = 'watsonx-env-secret-one';
-      const secondApiKey = 'watsonx-env-secret-two';
+      const apiKey = 'watsonx-env-secret-api-key';
+      const bearerToken = 'watsonx-env-secret-bearer-token';
       const envConfig = { ...config, apiKey: undefined };
       await new WatsonXProvider(modelName, {
         config: envConfig,
-        env: { WATSONX_AI_APIKEY: firstApiKey },
+        env: { WATSONX_AI_APIKEY: apiKey },
       }).callApi(prompt);
       await new WatsonXProvider(modelName, {
         config: envConfig,
-        env: { WATSONX_AI_APIKEY: secondApiKey },
+        env: {
+          WATSONX_AI_BEARER_TOKEN: bearerToken,
+          WATSONX_AI_AUTH_TYPE: 'bearertoken',
+        },
       }).callApi(prompt);
 
       const firstCacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
       const secondCacheKey = vi.mocked(cache.set).mock.calls[1][0] as string;
       expect(firstCacheKey).not.toEqual(secondCacheKey);
-      expect(firstCacheKey).not.toContain(firstApiKey);
-      expect(secondCacheKey).not.toContain(secondApiKey);
+      expect(firstCacheKey).not.toContain(apiKey);
+      expect(secondCacheKey).not.toContain(bearerToken);
     });
 
     it('should preserve an explicit maxNewTokens value of 0', async () => {
@@ -586,7 +590,7 @@ describe('WatsonXProvider', () => {
       const cacheKey = vi.mocked(cache.get).mock.calls[0][0] as string;
       expect(cacheKey).toMatch(
         new RegExp(
-          `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$`,
+          `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}$`,
         ),
       );
       expect(cacheKey).not.toContain(prompt);
@@ -1231,7 +1235,7 @@ describe('WatsonXChatProvider', () => {
     const cacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
     expect(cacheKey).toMatch(
       new RegExp(
-        `^watsonx:chat:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$`,
+        `^watsonx:chat:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}$`,
       ),
     );
     expect(cacheKey).not.toContain(chatPrompt);

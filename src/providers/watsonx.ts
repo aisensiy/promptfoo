@@ -155,7 +155,6 @@ function sortObject(obj: any): any {
   return result;
 }
 
-const WATSONX_CACHE_KEY_SALT = 'promptfoo-watsonx-cache-key-v1';
 const WATSONX_SECRET_FIELD_NAMES = new Set(['apiKey', 'apiBearerToken']);
 
 function hashWatsonXCacheValue(value: unknown): string {
@@ -163,10 +162,6 @@ function hashWatsonXCacheValue(value: unknown): string {
     .createHash('sha256')
     .update(JSON.stringify(value) ?? '')
     .digest('hex');
-}
-
-function fingerprintWatsonXSecret(label: string, secret: string): string {
-  return crypto.scryptSync(secret, `${WATSONX_CACHE_KEY_SALT}:${label}`, 32).toString('hex');
 }
 
 function omitWatsonXSecretConfigFields(value: unknown): unknown {
@@ -357,19 +352,11 @@ export class WatsonXProvider implements ApiProvider {
 
   protected getAuthCacheHash(): string {
     const authSelection = this.getAuthSelection();
-    if (authSelection.type === 'iam') {
-      return `${hashWatsonXCacheValue({
-        type: authSelection.type,
-        forcedByAuthType: authSelection.forcedByAuthType,
-      })}:${fingerprintWatsonXSecret('apiKey', authSelection.apiKey)}`;
-    }
-    if (authSelection.type === 'bearertoken') {
-      return `${hashWatsonXCacheValue({
-        type: authSelection.type,
-        forcedByAuthType: authSelection.forcedByAuthType,
-      })}:${fingerprintWatsonXSecret('apiBearerToken', authSelection.bearerToken)}`;
-    }
-    return `${hashWatsonXCacheValue({ type: 'none' })}:${hashWatsonXCacheValue('none')}`;
+    return hashWatsonXCacheValue({
+      type: authSelection.type,
+      forcedByAuthType: authSelection.type === 'none' ? undefined : authSelection.forcedByAuthType,
+      hasCredential: authSelection.type !== 'none',
+    });
   }
 
   async getAuth(): Promise<IamAuthenticator | BearerTokenAuthenticator> {
