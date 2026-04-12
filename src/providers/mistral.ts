@@ -1,5 +1,3 @@
-import crypto from 'crypto';
-
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
 import logger from '../logger';
@@ -260,10 +258,14 @@ export class MistralChatCompletionProvider implements ApiProvider {
     return apiKeyCandidate;
   }
 
-  private getCacheIdentityHash(apiKey: string, apiUrl: string): string {
-    return crypto
-      .scryptSync(`${apiKey}:${apiUrl}`, 'promptfoo:mistral-cache-identity:v1', 32)
-      .toString('hex');
+  private getCacheIdentityHash(apiUrl: string): string {
+    const apiKeySource = this.config.apiKey
+      ? 'config'
+      : this.config.apiKeyEnvar
+        ? `env:${this.config.apiKeyEnvar}`
+        : 'env:MISTRAL_API_KEY';
+
+    return sha256(JSON.stringify({ apiKeySource, apiUrl }));
   }
 
   async callApi(prompt: string, context?: CallApiContextParams): Promise<ProviderResponse> {
@@ -345,16 +347,15 @@ export class MistralChatCompletionProvider implements ApiProvider {
       ...(config?.response_format ? { response_format: config.response_format } : {}),
     };
 
-    const cacheKey = `mistral:chat:${this.modelName}:${this.getCacheIdentityHash(
-      apiKey,
-      apiUrl,
-    )}:${sha256(JSON.stringify(params))}`;
+    const cacheKey = `mistral:chat:${this.modelName}:${this.getCacheIdentityHash(apiUrl)}:${sha256(
+      JSON.stringify(params),
+    )}`;
     if (isCacheEnabled()) {
       const cache = getCache();
       if (cache) {
         const cachedResult = await cache.get<ProviderResponse>(cacheKey);
         if (cachedResult) {
-          logger.debug(`Returning cached response for ${prompt}: ${JSON.stringify(cachedResult)}`);
+          logger.debug('Returning cached Mistral response', { model: this.modelName });
           return {
             ...cachedResult,
             cached: true,

@@ -335,7 +335,7 @@ describe('Mistral', () => {
       );
     });
 
-    it('should isolate hashed cache keys by resolved API identity', async () => {
+    it('should isolate hashed cache keys by non-secret API configuration', async () => {
       const cacheGet = vi.fn().mockResolvedValue(null);
       const cacheSet = vi.fn();
       vi.mocked(isCacheEnabled).mockReturnValue(true);
