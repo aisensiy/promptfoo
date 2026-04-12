@@ -3202,8 +3202,10 @@ describe('AwsBedrockCompletionProvider', () => {
 
     const cacheKeys = [
       createBedrockCacheKeyHash({
-        apiKey: 'PFQA_BEDROCK_API_KEY_A',
-        config: baseConfig,
+        config: {
+          ...baseConfig,
+          apiKey: 'PFQA_BEDROCK_API_KEY_A',
+        } as BedrockClaudeMessagesCompletionOptions,
         params,
         region,
       }),

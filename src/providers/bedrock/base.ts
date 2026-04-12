@@ -55,37 +55,47 @@ function omitBedrockCredentialFields(value: unknown): unknown {
   );
 }
 
-function createBedrockAuthCacheMetadata({
-  apiKey,
-  config,
-}: {
-  apiKey?: string;
-  config: BedrockOptions;
-}) {
-  const hasApiKey = Boolean(apiKey);
-  const hasExplicitCredentials = Boolean(config.accessKeyId && config.secretAccessKey);
+function hasBedrockOption(config: BedrockOptions, key: keyof BedrockOptions): boolean {
+  return Object.prototype.hasOwnProperty.call(config, key);
+}
+
+function createBedrockAuthCacheMetadata({ config }: { config: BedrockOptions }) {
+  const hasBearerConfig = hasBedrockOption(config, 'apiKey');
+  const hasBearerEnv = Object.prototype.hasOwnProperty.call(
+    process.env,
+    'AWS_BEARER_TOKEN_BEDROCK',
+  );
+  const hasExplicitCredentials =
+    hasBedrockOption(config, 'accessKeyId') && hasBedrockOption(config, 'secretAccessKey');
+  const authSource = hasBearerConfig
+    ? 'bearer-config'
+    : hasBearerEnv
+      ? 'bearer-env'
+      : hasExplicitCredentials
+        ? 'explicit-credentials'
+        : hasBedrockOption(config, 'profile')
+          ? 'profile'
+          : 'default';
 
   return {
+    authSource,
     endpoint: config.endpoint,
-    hasApiKey,
     hasExplicitCredentials,
-    hasSessionToken: hasExplicitCredentials && Boolean(config.sessionToken),
-    profile: hasApiKey || hasExplicitCredentials ? undefined : config.profile,
+    hasSessionToken: hasExplicitCredentials && hasBedrockOption(config, 'sessionToken'),
+    profile: authSource === 'profile' ? config.profile : undefined,
   };
 }
 
 export function createBedrockCacheKeyHash({
-  apiKey,
   config,
   params,
   region,
 }: {
-  apiKey?: string;
   config: BedrockOptions;
   params: unknown;
   region: string;
 }) {
-  const authFingerprint = hashBedrockCacheValue(createBedrockAuthCacheMetadata({ apiKey, config }));
+  const authFingerprint = hashBedrockCacheValue(createBedrockAuthCacheMetadata({ config }));
 
   return `${authFingerprint}:${hashBedrockCacheValue({
     params: omitBedrockCredentialFields(params),

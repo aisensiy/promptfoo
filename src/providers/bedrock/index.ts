@@ -2443,7 +2443,6 @@ export class AwsBedrockCompletionProvider extends AwsBedrockGenericProvider impl
     const cache = await getCache();
     const region = this.getRegion();
     const cacheKey = `bedrock:${this.modelName}:${region}:${createBedrockCacheKeyHash({
-      apiKey: this.getApiKey(),
       config: this.config,
       params,
       region,
