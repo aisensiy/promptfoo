@@ -5,6 +5,7 @@ import type { AssertionParams, GradingResult } from '../types/index';
 
 export const handleGEval = async ({
   assertion,
+  inverse,
   renderedValue,
   prompt,
   outputString,
@@ -44,27 +45,32 @@ export const handleGEval = async ({
       reasons.push(resp.reason);
     }
 
-    const scoresSum = scores.reduce((a, b) => a + b, 0);
+    const averageScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const passed = averageScore >= threshold !== !!inverse;
 
     return {
       assertion,
-      pass: scoresSum / scores.length >= threshold,
-      score: scoresSum / scores.length,
+      pass: passed,
+      score: inverse ? 1 - averageScore : averageScore,
       reason: reasons.join('\n\n'),
     };
-  } else {
-    const resp = await matchesGEval(
-      renderedValue,
-      prompt || '',
-      outputString,
-      threshold,
-      test.options,
-      providerCallContext,
-    );
-
-    return {
-      assertion,
-      ...resp,
-    };
   }
+
+  const resp = await matchesGEval(
+    renderedValue,
+    prompt || '',
+    outputString,
+    threshold,
+    test.options,
+    providerCallContext,
+  );
+
+  const passed = resp.score >= threshold !== !!inverse;
+
+  return {
+    assertion,
+    ...resp,
+    pass: passed,
+    score: inverse ? 1 - resp.score : resp.score,
+  };
 };
