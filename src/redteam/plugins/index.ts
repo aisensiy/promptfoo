@@ -386,11 +386,22 @@ async function fetchRemoteTestCases(
       REQUEST_TIMEOUT_MS,
     );
     if (status !== 200 || !data || !data.result || !Array.isArray(data.result)) {
-      logger.error(`Error generating test cases for ${key}: ${statusText} ${JSON.stringify(data)}`);
+      logger.error(`Error generating test cases for ${key}: ${statusText}`, {
+        status,
+        hasData: Boolean(data),
+        hasResult: Boolean(data?.result),
+        resultType: Array.isArray(data?.result) ? 'array' : typeof data?.result,
+        resultCount: Array.isArray(data?.result) ? data.result.length : undefined,
+      });
       return [];
     }
     const ret = data.result;
-    logger.debug(`Received remote generation for ${key}:\n${JSON.stringify(ret)}`);
+    logger.debug(`Received remote generation for ${key}`, {
+      count: ret.length,
+      hasVars: ret.some((testCase) => Boolean(testCase.vars)),
+      hasMetadata: ret.some((testCase) => Boolean(testCase.metadata)),
+      hasAssertions: ret.some((testCase) => Boolean(testCase.assert?.length)),
+    });
     return ret;
   } catch (err) {
     logger.error(`Error generating test cases for ${key}: ${err}`);

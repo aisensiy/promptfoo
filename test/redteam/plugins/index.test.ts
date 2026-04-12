@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithCache } from '../../../src/cache';
 import { VERSION } from '../../../src/constants';
+import logger from '../../../src/logger';
 import {
   ADDITIONAL_PLUGINS,
   ALL_PLUGINS,
@@ -19,6 +20,14 @@ import type { FetchWithCacheResult } from '../../../src/cache';
 import type { ApiProvider, TestCase } from '../../../src/types/index';
 
 vi.mock('../../../src/cache');
+vi.mock('../../../src/logger', () => ({
+  default: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
 vi.mock('../../../src/cliState', () => ({
   __esModule: true,
   default: { remote: false },
@@ -51,6 +60,10 @@ function mockFetchResponse(result: any[]): FetchWithCacheResult<unknown> {
     status: 200,
     statusText: 'OK',
   };
+}
+
+function stringifyLoggerCalls(...mocks: ReturnType<typeof vi.fn>[]) {
+  return JSON.stringify(mocks.flatMap((mock) => mock.mock.calls));
 }
 
 describe('Plugins', () => {
@@ -453,6 +466,97 @@ describe('Plugins', () => {
       });
 
       expect(result).toEqual([]);
+    });
+
+    it('should redact successful remote generation logs', async () => {
+      vi.mocked(shouldGenerateRemote).mockImplementation(function () {
+        return true;
+      });
+      vi.mocked(neverGenerateRemote).mockImplementation(function () {
+        return false;
+      });
+
+      const generatedPrompt = 'SECRET_REMOTE_GENERATED_PROMPT';
+      const metadataSecret = 'SECRET_REMOTE_METADATA_VALUE';
+      vi.mocked(fetchWithCache).mockResolvedValue(
+        mockFetchResponse([
+          {
+            vars: { testVar: generatedPrompt },
+            metadata: { secret: metadataSecret },
+            assert: [{ type: 'contains', value: 'SECRET_REMOTE_ASSERTION_VALUE' }],
+          },
+        ]),
+      );
+
+      const plugin = Plugins.find((p) => p.key === 'ssrf');
+      const result = await plugin?.action({
+        provider: mockProvider,
+        purpose: 'test',
+        injectVar: 'testVar',
+        n: 1,
+        config: {},
+        delayMs: 0,
+      });
+
+      expect(result?.[0].vars?.testVar).toBe(generatedPrompt);
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Received remote generation for ssrf',
+        expect.objectContaining({
+          count: 1,
+          hasVars: true,
+          hasMetadata: true,
+          hasAssertions: true,
+        }),
+      );
+
+      const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
+      expect(logs).not.toContain(generatedPrompt);
+      expect(logs).not.toContain(metadataSecret);
+      expect(logs).not.toContain('SECRET_REMOTE_ASSERTION_VALUE');
+    });
+
+    it('should redact malformed remote generation response logs', async () => {
+      vi.mocked(shouldGenerateRemote).mockImplementation(function () {
+        return true;
+      });
+      vi.mocked(neverGenerateRemote).mockImplementation(function () {
+        return false;
+      });
+
+      vi.mocked(fetchWithCache).mockResolvedValue({
+        data: {
+          result: { secret: 'SECRET_REMOTE_MALFORMED_RESULT' },
+          error: 'SECRET_REMOTE_ERROR_BODY',
+        },
+        cached: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+
+      const plugin = Plugins.find((p) => p.key === 'ssrf');
+      const result = await plugin?.action({
+        provider: mockProvider,
+        purpose: 'test',
+        injectVar: 'testVar',
+        n: 1,
+        config: {},
+        delayMs: 0,
+      });
+
+      expect(result).toEqual([]);
+      expect(logger.error).toHaveBeenCalledWith(
+        'Error generating test cases for ssrf: Internal Server Error',
+        expect.objectContaining({
+          status: 500,
+          hasData: true,
+          hasResult: true,
+          resultType: 'object',
+        }),
+      );
+
+      const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
+      expect(logs).not.toContain('SECRET_REMOTE_MALFORMED_RESULT');
+      expect(logs).not.toContain('SECRET_REMOTE_ERROR_BODY');
     });
 
     it('should add harmful assertions for harmful remote plugins', async () => {
