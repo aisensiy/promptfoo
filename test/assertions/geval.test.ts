@@ -653,4 +653,212 @@ describe('handleGEval', () => {
       expect(mockMatchesGEval).not.toHaveBeenCalled();
     });
   });
+
+  describe('grader failure propagation', () => {
+    const baseParams = {
+      prompt: 'test prompt',
+      outputString: 'test output',
+      test: {
+        vars: {},
+        assert: [],
+        options: {},
+      },
+      baseType: 'g-eval' as const,
+      assertionValueContext: {
+        prompt: 'test prompt',
+        vars: {},
+        test: {
+          vars: {},
+          assert: [],
+          options: {},
+        },
+        logProbs: undefined,
+        provider: {
+          id: () => 'test-provider',
+          callApi: async () => ({ output: 'test' }),
+        },
+        providerResponse: {
+          output: 'test output',
+          error: undefined,
+        },
+      },
+      output: 'test output',
+      providerResponse: {
+        output: 'test output',
+        error: undefined,
+      },
+    };
+
+    // A grader error surfaces as pass:false, score:0, reason:<error>, and
+    // metadata.gEvalError:true. These results must never be flipped to a pass
+    // under not-g-eval — a transport/parse failure is not evidence that the
+    // criterion was not met.
+    it('propagates a string-path grader failure as a failure for g-eval', async () => {
+      const mockMatchesGEval = vi.mocked(matchesGEval);
+      mockMatchesGEval.mockResolvedValue({
+        pass: false,
+        score: 0,
+        reason: 'No output',
+        metadata: { gEvalError: true },
+      });
+
+      const result = await handleGEval({
+        ...baseParams,
+        assertion: {
+          type: 'g-eval',
+          value: 'test criteria',
+          threshold: 0.7,
+        },
+        renderedValue: 'test criteria',
+        inverse: false,
+      });
+
+      expect(result).toEqual({
+        assertion: {
+          type: 'g-eval',
+          value: 'test criteria',
+          threshold: 0.7,
+        },
+        pass: false,
+        score: 0,
+        reason: 'No output',
+      });
+    });
+
+    it('propagates a string-path grader failure as a failure for not-g-eval', async () => {
+      const mockMatchesGEval = vi.mocked(matchesGEval);
+      mockMatchesGEval.mockResolvedValue({
+        pass: false,
+        score: 0,
+        reason: 'LLM-proposed evaluation result is not in JSON format: oops',
+        metadata: { gEvalError: true },
+      });
+
+      const result = await handleGEval({
+        ...baseParams,
+        assertion: {
+          type: 'not-g-eval',
+          value: 'test criteria',
+          threshold: 0.7,
+        },
+        renderedValue: 'test criteria',
+        inverse: true,
+      });
+
+      expect(result).toEqual({
+        assertion: {
+          type: 'not-g-eval',
+          value: 'test criteria',
+          threshold: 0.7,
+        },
+        pass: false,
+        score: 0,
+        reason: 'LLM-proposed evaluation result is not in JSON format: oops',
+      });
+    });
+
+    it('does not flip a grader failure to pass when threshold is 0', async () => {
+      const mockMatchesGEval = vi.mocked(matchesGEval);
+      mockMatchesGEval.mockResolvedValue({
+        pass: false,
+        score: 0,
+        reason: 'No output',
+        metadata: { gEvalError: true },
+      });
+
+      const result = await handleGEval({
+        ...baseParams,
+        assertion: {
+          type: 'g-eval',
+          value: 'test criteria',
+          threshold: 0,
+        },
+        renderedValue: 'test criteria',
+        inverse: false,
+      });
+
+      expect(result).toEqual({
+        assertion: {
+          type: 'g-eval',
+          value: 'test criteria',
+          threshold: 0,
+        },
+        pass: false,
+        score: 0,
+        reason: 'No output',
+      });
+    });
+
+    it('propagates an array-path grader failure as a failure for not-g-eval', async () => {
+      const mockMatchesGEval = vi.mocked(matchesGEval);
+      mockMatchesGEval.mockResolvedValueOnce({
+        pass: true,
+        score: 0.9,
+        reason: 'first criterion matched',
+      });
+      mockMatchesGEval.mockResolvedValueOnce({
+        pass: false,
+        score: 0,
+        reason: 'G-Eval result has invalid or missing score: "bad"',
+        metadata: { gEvalError: true },
+      });
+
+      const result = await handleGEval({
+        ...baseParams,
+        assertion: {
+          type: 'not-g-eval',
+          value: ['criteria1', 'criteria2'],
+          threshold: 0.7,
+        },
+        renderedValue: ['criteria1', 'criteria2'],
+        inverse: true,
+      });
+
+      expect(result).toEqual({
+        assertion: {
+          type: 'not-g-eval',
+          value: ['criteria1', 'criteria2'],
+          threshold: 0.7,
+        },
+        pass: false,
+        score: 0,
+        reason: 'G-Eval result has invalid or missing score: "bad"',
+      });
+    });
+
+    it('still inverts legitimate zero scores — a real 0 is not a failure', async () => {
+      const mockMatchesGEval = vi.mocked(matchesGEval);
+      // A genuine grader response where the criterion was "not observed at
+      // all" per the GEVAL_PROMPT_EVALUATE template — score 0 is a valid
+      // real score, distinguishable from a grader error by the absence of
+      // metadata.gEvalError.
+      mockMatchesGEval.mockResolvedValue({
+        pass: false,
+        score: 0,
+        reason: 'criterion not observed at all',
+      });
+
+      const result = await handleGEval({
+        ...baseParams,
+        assertion: {
+          type: 'not-g-eval',
+          value: 'test criteria',
+          threshold: 0.7,
+        },
+        renderedValue: 'test criteria',
+        inverse: true,
+      });
+
+      expect(result).toEqual({
+        assertion: {
+          type: 'not-g-eval',
+          value: 'test criteria',
+          threshold: 0.7,
+        },
+        pass: true,
+        score: 1,
+        reason: 'criterion not observed at all',
+      });
+    });
+  });
 });

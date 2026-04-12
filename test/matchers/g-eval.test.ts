@@ -170,6 +170,7 @@ describe('matchesGEval', () => {
         prompt: 1,
         completion: 2,
       }),
+      metadata: { gEvalError: true },
     });
     expect(DefaultGradingProvider.callApi).toHaveBeenCalledTimes(1);
   });
@@ -196,6 +197,7 @@ describe('matchesGEval', () => {
         prompt: 3,
         completion: 4,
       }),
+      metadata: { gEvalError: true },
     });
   });
 
@@ -219,6 +221,7 @@ describe('matchesGEval', () => {
       tokensUsed: expect.objectContaining({
         total: 7,
       }),
+      metadata: { gEvalError: true },
     });
   });
 

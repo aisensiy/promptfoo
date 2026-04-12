@@ -3,6 +3,10 @@ import invariant from '../util/invariant';
 
 import type { AssertionParams, GradingResult } from '../types/index';
 
+type MatcherResponse = Awaited<ReturnType<typeof matchesGEval>>;
+
+const isGEvalGraderFailure = (resp: MatcherResponse): boolean => resp.metadata?.gEvalError === true;
+
 export const handleGEval = async ({
   assertion,
   inverse,
@@ -29,30 +33,42 @@ export const handleGEval = async ({
       };
     }
 
-    const scores: number[] = [];
-    const reasons: string[] = [];
+    const responses: MatcherResponse[] = [];
     for (const value of renderedValue) {
-      const resp = await matchesGEval(
-        value,
-        prompt || '',
-        outputString,
-        threshold,
-        test.options,
-        providerCallContext,
+      responses.push(
+        await matchesGEval(
+          value,
+          prompt || '',
+          outputString,
+          threshold,
+          test.options,
+          providerCallContext,
+        ),
       );
-
-      scores.push(resp.score);
-      reasons.push(resp.reason);
     }
 
-    const averageScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+    // If any sub-evaluation is a grader failure, propagate it verbatim without
+    // inversion — a transport/parse failure is not evidence that the criterion
+    // was or was not met, and must not be flipped to a pass under not-g-eval.
+    const firstFailure = responses.find(isGEvalGraderFailure);
+    if (firstFailure) {
+      return {
+        assertion,
+        pass: false,
+        score: 0,
+        reason: firstFailure.reason,
+      };
+    }
+
+    const averageScore = responses.reduce((acc, r) => acc + r.score, 0) / responses.length;
+    const combinedReason = responses.map((r) => r.reason).join('\n\n');
     const passed = averageScore >= threshold !== !!inverse;
 
     return {
       assertion,
       pass: passed,
       score: inverse ? 1 - averageScore : averageScore,
-      reason: reasons.join('\n\n'),
+      reason: combinedReason,
     };
   }
 
@@ -64,6 +80,15 @@ export const handleGEval = async ({
     test.options,
     providerCallContext,
   );
+
+  if (isGEvalGraderFailure(resp)) {
+    return {
+      assertion,
+      pass: false,
+      score: 0,
+      reason: resp.reason,
+    };
+  }
 
   const passed = resp.score >= threshold !== !!inverse;
 
