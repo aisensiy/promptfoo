@@ -91,6 +91,33 @@ function getResponseLogMetadata(data: any): Record<string, any> {
   };
 }
 
+function getResponseItemLogMetadata(item: unknown): Record<string, any> {
+  if (!item || typeof item !== 'object') {
+    return {
+      itemType: typeof item,
+      itemLength: typeof item === 'string' ? item.length : undefined,
+    };
+  }
+
+  const itemObject = item as Record<string, any>;
+
+  return {
+    itemType: itemObject.type,
+    itemKeys: Object.keys(itemObject),
+    status: itemObject.status,
+    hasError: Boolean(itemObject.error),
+    errorLength: typeof itemObject.error === 'string' ? itemObject.error.length : undefined,
+  };
+}
+
+function getErrorLogMetadata(error: unknown): Record<string, any> {
+  return {
+    errorType: error instanceof Error ? error.constructor.name : typeof error,
+    errorName: error instanceof Error ? error.name : undefined,
+    errorMessageLength: error instanceof Error ? error.message.length : String(error).length,
+  };
+}
+
 /**
  * Shared response processor for OpenAI and Azure Responses APIs.
  * Handles all response types with identical logic to ensure feature parity.
@@ -168,7 +195,7 @@ export class ResponsesProcessor {
       return result;
     } catch (err) {
       return {
-        error: `Error parsing response: ${String(err)}\nResponse: ${JSON.stringify(data)}`,
+        error: `Error parsing response\nError metadata: ${JSON.stringify(getErrorLogMetadata(err), null, 2)}\nResponse metadata: ${JSON.stringify(getResponseLogMetadata(data), null, 2)}`,
       };
     }
   }
@@ -191,7 +218,7 @@ export class ResponsesProcessor {
     // Process all output items
     for (const item of output) {
       if (!item || typeof item !== 'object') {
-        logger.warn(`Skipping invalid output item: ${JSON.stringify(item)}`);
+        logger.warn('Skipping invalid output item', getResponseItemLogMetadata(item));
         continue;
       }
 
@@ -314,7 +341,7 @@ export class ResponsesProcessor {
     if (item.content) {
       for (const contentItem of item.content) {
         if (!contentItem || typeof contentItem !== 'object') {
-          logger.warn(`Skipping invalid content item: ${JSON.stringify(contentItem)}`);
+          logger.warn('Skipping invalid content item', getResponseItemLogMetadata(contentItem));
           continue;
         }
 

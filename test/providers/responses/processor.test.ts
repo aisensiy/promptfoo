@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import logger from '../../../src/logger';
 import { ResponsesProcessor } from '../../../src/providers/responses/processor';
 
@@ -23,6 +23,10 @@ describe('ResponsesProcessor', () => {
       functionCallbackHandler: mockFunctionCallbackHandler,
       costCalculator: mockCostCalculator,
     });
+  });
+
+  afterEach(() => {
+    vi.resetAllMocks();
   });
 
   describe('processResponseOutput', () => {
@@ -269,7 +273,47 @@ describe('ResponsesProcessor', () => {
 
       const result = await processor.processResponseOutput(mockData, {}, false);
 
-      expect(result.error).toContain('Invalid response format: Missing output array');
+      expect(result.error).toContain('Error parsing response');
+      expect(result.error).toContain('Response metadata');
+      expect(result.error).not.toContain('invalid output format');
+    });
+
+    it('should redact invalid output item warning logs', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+      const mockData = {
+        output: [
+          'secret-invalid-output-item-sentinel',
+          {
+            type: 'message',
+            role: 'assistant',
+            content: ['secret-invalid-content-item-sentinel'],
+          },
+        ],
+      };
+
+      const result = await processor.processResponseOutput(mockData, {}, false);
+
+      expect(result.output).toBe('');
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Skipping invalid output item',
+        expect.objectContaining({
+          itemType: 'string',
+          itemLength: 'secret-invalid-output-item-sentinel'.length,
+        }),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Skipping invalid content item',
+        expect.objectContaining({
+          itemType: 'string',
+          itemLength: 'secret-invalid-content-item-sentinel'.length,
+        }),
+      );
+      expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(
+        'secret-invalid-output-item-sentinel',
+      );
+      expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(
+        'secret-invalid-content-item-sentinel',
+      );
     });
 
     it('should preserve annotations for deep research', async () => {
