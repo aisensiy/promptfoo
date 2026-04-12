@@ -404,7 +404,9 @@ async function fetchRemoteTestCases(
     });
     return ret;
   } catch (err) {
-    logger.error(`Error generating test cases for ${key}: ${err}`);
+    logger.error(`Error generating test cases for ${key}`, {
+      errorType: err instanceof Error ? err.constructor.name : typeof err,
+    });
     return [];
   }
 }

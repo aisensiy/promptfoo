@@ -468,6 +468,34 @@ describe('Plugins', () => {
       expect(result).toEqual([]);
     });
 
+    it('should redact thrown remote generation errors', async () => {
+      vi.mocked(shouldGenerateRemote).mockImplementation(function () {
+        return true;
+      });
+
+      vi.mocked(fetchWithCache).mockRejectedValue(
+        new Error('Network error with SECRET_REMOTE_THROWN_ERROR'),
+      );
+
+      const plugin = Plugins.find((p) => p.key === 'contracts');
+      const result = await plugin?.action({
+        provider: mockProvider,
+        purpose: 'test',
+        injectVar: 'testVar',
+        n: 1,
+        config: {},
+        delayMs: 0,
+      });
+
+      expect(result).toEqual([]);
+      expect(logger.error).toHaveBeenCalledWith('Error generating test cases for contracts', {
+        errorType: 'Error',
+      });
+
+      const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
+      expect(logs).not.toContain('SECRET_REMOTE_THROWN_ERROR');
+    });
+
     it('should redact successful remote generation logs', async () => {
       vi.mocked(shouldGenerateRemote).mockImplementation(function () {
         return true;
