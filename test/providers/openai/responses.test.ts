@@ -1162,8 +1162,12 @@ describe('OpenAiResponsesProvider', () => {
     // Call the API
     const result = await provider.callApi('Test prompt');
 
-    // Verify error about missing output array
-    expect(result.error).toContain('Invalid response format: Missing output array');
+    // Verify sanitized error metadata about the malformed response.
+    expect(result.error).toContain('Error parsing response');
+    expect(result.error).toContain('Error metadata');
+    expect(result.error).toContain('Response metadata');
+    expect(result.error).toContain('"outputCount": 0');
+    expect(result.error).not.toContain('Invalid response format');
   });
 
   it('should handle JSON stringify errors during logging', async () => {
@@ -1297,9 +1301,14 @@ describe('OpenAiResponsesProvider', () => {
     // Call the API
     const result = await provider.callApi('Test prompt');
 
-    // This should have returned an invalid format error
+    // This should have returned a sanitized parsing error.
     expect(result.error).toBeTruthy();
-    expect(result.error).toContain('Invalid response format');
+    expect(result.error).toContain('Error parsing response');
+    expect(result.error).toContain('Error metadata');
+    expect(result.error).toContain('Response metadata');
+    expect(result.error).toContain('"outputCount": 0');
+    expect(result.error).not.toContain('Invalid response format');
+    expect(result.error).not.toContain('not-an-array');
     expect(result.output).toBeUndefined();
 
     // The implementation doesn't include raw data when format is invalid
