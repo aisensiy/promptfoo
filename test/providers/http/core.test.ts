@@ -2611,17 +2611,17 @@ describe('extractBodyFromRawRequest', () => {
     expect(extractBodyFromRawRequest(rawRequest)).toBeUndefined();
   });
 
-  it('should handle CRLF line endings', () => {
+  it('should handle body containing \\r\\n\\r\\n sequence', () => {
     const rawRequest = 'POST /api/submit HTTP/1.1\r\nHost: example.com\r\n\r\nline1\r\n\r\nline2';
     expect(extractBodyFromRawRequest(rawRequest)).toBe('line1\r\n\r\nline2');
   });
 
-  it('should handle body with leading whitespace', () => {
+  it('should normalize mixed line endings', () => {
     const rawRequest = 'POST /api/submit HTTP/1.1\nHost: example.com\n\nbody content';
     expect(extractBodyFromRawRequest(rawRequest)).toBe('body content');
   });
 
-  it('should handle body with trailing whitespace', () => {
+  it('should trim leading and trailing whitespace from body', () => {
     const rawRequest = dedent`
       POST /api/submit HTTP/1.1
       Host: example.com
@@ -2632,7 +2632,7 @@ describe('extractBodyFromRawRequest', () => {
     expect(extractBodyFromRawRequest(rawRequest)).toBe('body with whitespace');
   });
 
-  it('should handle JSON body with unicode characters', () => {
+  it('should handle special characters in body', () => {
     const rawRequest = dedent`
       POST /api/submit HTTP/1.1
       Host: example.com
