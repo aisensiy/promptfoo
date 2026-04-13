@@ -19,13 +19,14 @@ import { updateSignalFile } from './database/signal';
 import { getEnvBool, getEnvInt, getEvalTimeoutMs, getMaxEvalTimeMs, isCI } from './envars';
 import { collectFileMetadata, renderPrompt, runExtensionHook } from './evaluatorHelpers';
 import logger, { globalLogCallback, setLogCallback } from './logger';
-import { selectMaxScore } from './matchers';
+import { selectMaxScore } from './matchers/comparison';
 import { generateIdFromPrompt } from './models/prompt';
 import { CIProgressReporter } from './progress/ciProgressReporter';
 import { maybeEmitAzureOpenAiWarning } from './providers/azure/warnings';
 import { providerRegistry } from './providers/providerRegistry';
 import { isPromptfooSampleTarget } from './providers/shared';
 import { redteamProviderManager } from './redteam/providers/shared';
+import { throwIfTargetPromptExceedsMaxChars } from './redteam/shared/promptLength';
 import { getSessionId } from './redteam/util';
 import {
   createProviderRateLimitOptions,
@@ -613,6 +614,9 @@ async function renderRunEvalPrompt({
     provider,
     skipRenderVars,
   );
+  if (isRedteam) {
+    throwIfTargetPromptExceedsMaxChars(renderedPrompt, testSuite?.redteam?.maxCharsPerMessage);
+  }
   const promptConfig = {
     ...(promptForRender.config ?? {}),
     ...(test.options ?? {}),
@@ -1973,7 +1977,11 @@ async function prepareTestCaseForEval(
     `testCase.assert is not an array in test case #${index + 1}`,
   );
 
-  testCase.assert = [...(defaultTest?.assert || []), ...(testCase.assert || [])];
+  const disableDefaultAsserts = testCase.options?.disableDefaultAsserts === true;
+  testCase.assert = [
+    ...(disableDefaultAsserts ? [] : defaultTest?.assert || []),
+    ...(testCase.assert || []),
+  ];
   testCase.threshold = testCase.threshold ?? defaultTest?.threshold;
   testCase.options = {
     ...(defaultTest?.options || {}),
@@ -3205,11 +3213,9 @@ class Evaluator {
     serialRunEvalOptions: RunEvalOptions[];
     shouldGroupGradingByProvider: boolean;
   }): Promise<Eval | undefined> {
-    let flushGroupedRows: (() => Promise<void>) | undefined;
-
     try {
       if (shouldGroupGradingByProvider) {
-        flushGroupedRows = await this.runGroupedEvalSteps({
+        await this.runGroupedEvalSteps({
           checkAbort,
           evalStepIndexMap,
           groupedRunEvalOptions,
@@ -3242,7 +3248,6 @@ class Evaluator {
         throw err;
       }
 
-      await flushGroupedRows?.();
       if (isEvalTimedOut()) {
         logger.warn(`Evaluation stopped after reaching max duration (${maxEvalTimeMs}ms)`);
       } else if (!processingContext.targetUnavailable) {
@@ -3281,7 +3286,7 @@ class Evaluator {
     processingContext: EvalProcessingContext;
     processedIndices: Set<number>;
     prompts: CompletedPrompt[];
-  }) {
+  }): Promise<void> {
     const providerCallQueue = new ProviderGroupedCallQueue();
     const groupedRows: GroupedRows[] = [];
     const processGroupedRows = async ({ evalStep, index, rows }: GroupedRows) => {
@@ -3330,7 +3335,6 @@ class Evaluator {
     }
 
     await flushGroupedRows();
-    return undefined;
   }
 
   private async handleGroupedRowsAfterRun({
