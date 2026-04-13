@@ -843,9 +843,14 @@ function renderCellDetail({
   );
 }
 
+function getStatusClass(output: EvaluateTableOutput, counts: ReturnType<typeof getPassFailCounts>) {
+  return output.pass === true || (counts.passCount > 0 && counts.failCount === 0) ? 'pass' : 'fail';
+}
+
 function renderStatusBlock({
   showPassFail,
-  output,
+  statusClass,
+  namedScores,
   passFailText,
   scoreString,
   providerOverride,
@@ -854,7 +859,8 @@ function renderStatusBlock({
   passReasons,
 }: {
   showPassFail: boolean;
-  output: EvaluateTableOutput;
+  statusClass: string;
+  namedScores: Record<string, number>;
   passFailText: React.ReactNode;
   scoreString: string;
   providerOverride: React.ReactNode;
@@ -866,9 +872,6 @@ function renderStatusBlock({
     return null;
   }
 
-  const { passCount, failCount } = getPassFailCounts(output);
-  const statusClass = output.pass === true || (passCount > 0 && failCount === 0) ? 'pass' : 'fail';
-
   return (
     <div className={`status ${statusClass}`}>
       <div className="status-row">
@@ -878,7 +881,7 @@ function renderStatusBlock({
         </div>
         {providerOverride}
       </div>
-      <CustomMetrics lookup={output.namedScores ?? {}} />
+      <CustomMetrics lookup={namedScores} />
       {failReasons.length > 0 && (
         <span className="fail-reason">
           <FailReasonCarousel failReasons={failReasons} />
@@ -1455,7 +1458,9 @@ function EvalOutputCell({
     maxImageHeight,
   });
 
-  const passFailText = getPassFailText(getPassFailCounts(output));
+  const counts = getPassFailCounts(output);
+  const passFailText = getPassFailText(counts);
+  const statusClass = getStatusClass(output, counts);
 
   const scoreString = scoreToString(output.score);
   const providerOverride = getProviderOverrideBadge(output);
@@ -1469,7 +1474,8 @@ function EvalOutputCell({
     <div id={`eval-output-cell-${outputCellId}`} className="cell" style={cellStyle}>
       {renderStatusBlock({
         showPassFail,
-        output,
+        statusClass,
+        namedScores: output.namedScores ?? {},
         passFailText,
         scoreString,
         providerOverride,
