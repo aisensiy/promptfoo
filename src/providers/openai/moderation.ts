@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID } from 'crypto';
 
 import { fetchWithCache, getCache, isCacheEnabled } from '../../cache';
 import logger from '../../logger';
@@ -71,12 +71,44 @@ export type ImageInput = {
 type ModerationInput = string | (TextInput | ImageInput)[];
 
 const OPENAI_MODERATION_CACHE_HASH_KEY = 'promptfoo:openai:moderation-cache-key:v1';
+const OPENAI_MODERATION_AUTH_CACHE_NAMESPACES = new Map<string, string>();
+const OPENAI_MODERATION_INFLIGHT_REQUESTS = new Map<string, Promise<OpenAIModerationFetchResult>>();
+
+type OpenAIModerationFetchResult = {
+  data: OpenAIModerationResponse;
+  status: number;
+  statusText: string;
+  cached: boolean;
+};
 
 function hashModerationCacheValue(value: unknown): string {
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
   return createHmac('sha256', OPENAI_MODERATION_CACHE_HASH_KEY)
     .update(serialized ?? String(value))
     .digest('hex');
+}
+
+function getOpenAIModerationAuthCacheNamespace(apiKey: string): string {
+  let namespace = OPENAI_MODERATION_AUTH_CACHE_NAMESPACES.get(apiKey);
+  if (!namespace) {
+    namespace = randomUUID();
+    OPENAI_MODERATION_AUTH_CACHE_NAMESPACES.set(apiKey, namespace);
+  }
+  return namespace;
+}
+
+function fetchOpenAIModerationWithDedupe(
+  cacheKey: string,
+  fetcher: () => Promise<OpenAIModerationFetchResult>,
+): Promise<OpenAIModerationFetchResult> {
+  let inflightRequest = OPENAI_MODERATION_INFLIGHT_REQUESTS.get(cacheKey);
+  if (!inflightRequest) {
+    inflightRequest = fetcher().finally(() => {
+      OPENAI_MODERATION_INFLIGHT_REQUESTS.delete(cacheKey);
+    });
+    OPENAI_MODERATION_INFLIGHT_REQUESTS.set(cacheKey, inflightRequest);
+  }
+  return inflightRequest;
 }
 
 export function isTextInput(input: TextInput | ImageInput): input is TextInput {
@@ -150,7 +182,9 @@ function getModerationCacheKey(
     ...config,
     apiKey: undefined,
     apiKeyEnvar: undefined,
-    apiKeyFingerprint: identity.apiKey ? hashModerationCacheValue(identity.apiKey) : undefined,
+    authNamespace: identity.apiKey
+      ? getOpenAIModerationAuthCacheNamespace(identity.apiKey)
+      : undefined,
     apiUrl: identity.apiUrl,
     organization: identity.organization,
     headers:
@@ -218,16 +252,15 @@ export class OpenAiModerationProvider
     }
 
     const useCache = isCacheEnabled();
-    let cacheKey = '';
     const supportsImages = supportsImageInput(this.modelName);
     const input = formatModerationInput(assistantResponse, supportsImages);
+    const cacheKey = getModerationCacheKey(this.modelName, this.config, input, {
+      apiKey,
+      apiUrl: this.getApiUrl(),
+      organization: this.getOrganization(),
+    });
 
     if (useCache) {
-      cacheKey = getModerationCacheKey(this.modelName, this.config, input, {
-        apiKey,
-        apiUrl: this.getApiUrl(),
-        organization: this.getOrganization(),
-      });
       const cache = await getCache();
       const cachedResponse = await cache.get(cacheKey);
 
@@ -246,23 +279,28 @@ export class OpenAiModerationProvider
 
     const headers = {
       'Content-Type': 'application/json',
+      'x-promptfoo-silent': 'true',
       ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       ...(this.getOrganization() ? { 'OpenAI-Organization': this.getOrganization() } : {}),
       ...this.config.headers,
     };
 
     try {
-      const { data, status, statusText } = await fetchWithCache<OpenAIModerationResponse>(
-        `${this.getApiUrl()}/moderations`,
-        {
-          method: 'POST',
-          headers,
-          body: requestBody,
-        },
-        REQUEST_TIMEOUT_MS,
-        'json',
-        false,
-        this.config.maxRetries,
+      const { data, status, statusText } = await fetchOpenAIModerationWithDedupe(
+        cacheKey,
+        async () =>
+          fetchWithCache<OpenAIModerationResponse>(
+            `${this.getApiUrl()}/moderations`,
+            {
+              method: 'POST',
+              headers,
+              body: requestBody,
+            },
+            REQUEST_TIMEOUT_MS,
+            'json',
+            true,
+            this.config.maxRetries,
+          ),
       );
 
       if (status < 200 || status >= 300) {

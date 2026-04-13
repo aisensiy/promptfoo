@@ -85,13 +85,14 @@ describe('OpenAiModerationProvider', () => {
           method: 'POST',
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
+            'x-promptfoo-silent': 'true',
             Authorization: 'Bearer test-key',
           }),
           body: expect.stringContaining('"model":"text-moderation-latest"'),
         }),
         expect.any(Number),
         'json',
-        false,
+        true,
         undefined,
       );
     });
@@ -308,6 +309,14 @@ describe('OpenAiModerationProvider', () => {
         cacheKey,
         expect.stringContaining('{"flags":[{"code":"hate"'),
       );
+      expect(fetchWithCache).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Number),
+        'json',
+        true,
+        undefined,
+      );
     });
 
     it('should build cache keys from normalized moderation inputs', async () => {
@@ -386,6 +395,48 @@ describe('OpenAiModerationProvider', () => {
       expect(cacheKeyA).not.toContain('sk-moderation-tenant-a');
       expect(cacheKeyB).not.toContain('sk-moderation-tenant-b');
     });
+
+    it('should deduplicate in-flight moderation requests without raw fetch cache keys', async () => {
+      vi.mocked(isCacheEnabled).mockImplementation(function () {
+        return true;
+      });
+
+      const provider = createProvider();
+      const mockCache = {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+      };
+      const mockResponse = {
+        id: 'modr-123',
+        model: 'text-moderation-latest',
+        results: [{ flagged: false, categories: {}, category_scores: {} }],
+      };
+      let resolveFetch: (value: any) => void;
+
+      vi.mocked(getCache).mockImplementation(function () {
+        return mockCache as any;
+      });
+      vi.mocked(fetchWithCache).mockReturnValueOnce(
+        new Promise<any>((resolve) => {
+          resolveFetch = resolve;
+        }) as ReturnType<typeof fetchWithCache>,
+      );
+
+      const first = provider.callModerationApi('user', 'same sensitive text');
+      const second = provider.callModerationApi('user', 'same sensitive text');
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(fetchWithCache).toHaveBeenCalledTimes(1);
+
+      resolveFetch!({
+        data: mockResponse,
+        status: 200,
+        statusText: 'OK',
+        cached: false,
+      });
+
+      await expect(Promise.all([first, second])).resolves.toEqual([{ flags: [] }, { flags: [] }]);
+    });
   });
 
   describe('Multi-modal support', () => {
@@ -414,7 +465,7 @@ describe('OpenAiModerationProvider', () => {
         }),
         expect.any(Number),
         'json',
-        false,
+        true,
         undefined,
       );
     });
@@ -468,7 +519,7 @@ describe('OpenAiModerationProvider', () => {
         }),
         expect.any(Number),
         'json',
-        false,
+        true,
         undefined,
       );
     });
@@ -625,11 +676,12 @@ describe('OpenAiModerationProvider', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'Custom-Header': 'custom-value',
+            'x-promptfoo-silent': 'true',
           }),
         }),
         expect.any(Number),
         'json',
-        false,
+        true,
         undefined,
       );
     });
