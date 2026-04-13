@@ -14,7 +14,11 @@ vi.mock('../../../src/util/sharing', () => ({
   shouldShareResults: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('../../../src/models/eval');
+vi.mock('../../../src/models/eval', () => ({
+  default: {
+    create: vi.fn(),
+  },
+}));
 vi.mock('../../../src/globalConfig/accounts');
 
 import promptfoo from '../../../src/index';
@@ -124,6 +128,7 @@ describe('Eval Routes - Sharing behavior', () => {
         }),
       }),
     );
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('sk-test-12345678901234567890');
   });
 
   it('should not log the raw save body on database failure', async () => {
