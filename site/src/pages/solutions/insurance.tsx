@@ -395,9 +395,9 @@ export default function Insurance() {
                 <div className={styles.benefitContent}>
                   <h3>Audit-ready documentation</h3>
                   <p>
-                    Generate structured reports for privacy reviews, model governance, CMS reviews,
-                    and state DOI examinations. Demonstrate due diligence with reproducible test
-                    results.
+                    Generate structured reports for privacy reviews, model governance, and federal
+                    and state insurance examinations. Demonstrate due diligence with reproducible
+                    test results.
                   </p>
                 </div>
               </div>
@@ -423,7 +423,7 @@ export default function Insurance() {
                 </div>
                 <p>
                   Test whether AI correctly identifies in-network vs out-of-network providers,
-                  facility status, tiering, and new-patient availability.
+                  facility status, tiering, and appointment or intake availability.
                 </p>
               </div>
               <div className={styles.solutionCard}>
