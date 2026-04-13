@@ -442,6 +442,33 @@ describe('createShareableUrl', () => {
     expect(mockEval.author).toBe('preset-author@example.com');
   });
 
+  it('still backfills author from stored email when author is null in a TTY', async () => {
+    vi.mocked(cloudConfig.isEnabled).mockReturnValue(false);
+    process.stdout.isTTY = true;
+    vi.mocked(envars.isCI).mockReturnValue(false);
+    vi.mocked(envars.getEnvBool).mockReturnValue(false);
+    vi.mocked(getUserEmail).mockReturnValue('stored@example.com');
+
+    const mockEval = buildMockEval();
+    mockEval.author = null as any;
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ id: mockEval.id }),
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({}),
+    });
+
+    await createShareableUrl(mockEval as Eval);
+
+    // getUserEmail must have been consulted since no author was set.
+    expect(getUserEmail).toHaveBeenCalled();
+    expect(mockEval.author).toBe('stored@example.com');
+    expect(mockEval.save).toHaveBeenCalled();
+  });
+
   describe('chunked sending', () => {
     let mockEval: Partial<Eval>;
 

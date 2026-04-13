@@ -504,7 +504,10 @@ export default class Eval {
   ): Promise<Eval> {
     const createdAt = opts?.createdAt || new Date();
     const evalId = opts?.id || createEvalId(createdAt);
-    const author = getAuthor(opts?.author);
+    // Callers that resolve the author themselves (CLI/programmatic eval, import)
+    // pass it explicitly — honor that value. Only fall back to the global
+    // resolution chain when the caller did not provide one at all.
+    const author = opts && 'author' in opts ? (opts.author ?? null) : getAuthor();
     const db = getDb();
 
     const datasetId = sha256(JSON.stringify(config.tests || []));

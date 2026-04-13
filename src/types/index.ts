@@ -1263,10 +1263,9 @@ export type EvaluateTestSuite = {
   writeLatestResults?: boolean;
   /**
    * Author to attribute the evaluation to.
-   * When cloud auth is enabled, the authenticated email takes precedence and
-   * provided authors/PROMPTFOO_AUTHOR are ignored. If no cloud email is
-   * available, no author is set.
-   * Otherwise falls back to this author, then user email, then PROMPTFOO_AUTHOR.
+   * When the user is logged into cloud with a stored email, that identity
+   * takes precedence and this option is ignored. Otherwise resolution is:
+   * this option > stored user email > PROMPTFOO_AUTHOR env var > null.
    */
   author?: string;
 } & Omit<TestSuiteConfig, 'prompts'>;

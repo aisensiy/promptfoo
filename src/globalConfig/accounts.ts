@@ -82,10 +82,16 @@ export function setUserEmailValidated(validated: boolean) {
 
 export function getAuthor(override?: string | null): string | null {
   const userEmail = getUserEmail();
-  if (isLoggedIntoCloud()) {
+  const envAuthor = getEnvString('PROMPTFOO_AUTHOR');
+  if (isLoggedIntoCloud() && userEmail) {
+    if (override && override !== userEmail) {
+      logger.debug(
+        `[Author] Ignoring override "${override}" because cloud identity "${userEmail}" takes precedence`,
+      );
+    }
     return userEmail;
   }
-  return override || userEmail || getEnvString('PROMPTFOO_AUTHOR') || null;
+  return override || userEmail || envAuthor || null;
 }
 
 export function isLoggedIntoCloud(): boolean {

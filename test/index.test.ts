@@ -54,7 +54,9 @@ vi.mock('../src/globalConfig/accounts', async () => {
   );
   return {
     ...originalModule,
-    getAuthor: vi.fn().mockReturnValue(null),
+    // Pass the override through so tests can verify the full propagation chain.
+    // Individual tests can override this with mockImplementationOnce.
+    getAuthor: vi.fn((override?: string | null) => override ?? null),
   };
 });
 vi.mock('../src/migrate');
@@ -437,6 +439,53 @@ describe('evaluate function', () => {
     await evaluate(testSuite);
 
     expect(createEvalSpy.mock.calls[0][0]).not.toHaveProperty('author');
+
+    createEvalSpy.mockRestore();
+  });
+
+  it('should propagate the testSuite author through getAuthor to Eval.create', async () => {
+    const { getAuthor } = await import('../src/globalConfig/accounts');
+    const createEvalSpy = vi.spyOn(Eval, 'create');
+
+    const testSuite = {
+      prompts: ['test'],
+      providers: [],
+      writeLatestResults: true,
+      author: 'programmatic@example.com',
+    };
+
+    await evaluate(testSuite);
+
+    expect(vi.mocked(getAuthor)).toHaveBeenCalledWith('programmatic@example.com');
+    expect(createEvalSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ author: 'programmatic@example.com' }),
+    );
+
+    createEvalSpy.mockRestore();
+  });
+
+  it('should let cloud identity win over the testSuite author when cloud auth is active', async () => {
+    const { getAuthor } = await import('../src/globalConfig/accounts');
+    vi.mocked(getAuthor).mockReturnValueOnce('cloud@example.com');
+    const createEvalSpy = vi.spyOn(Eval, 'create');
+
+    const testSuite = {
+      prompts: ['test'],
+      providers: [],
+      writeLatestResults: true,
+      author: 'override@example.com',
+    };
+
+    await evaluate(testSuite);
+
+    expect(vi.mocked(getAuthor)).toHaveBeenCalledWith('override@example.com');
+    expect(createEvalSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ author: 'cloud@example.com' }),
+    );
 
     createEvalSpy.mockRestore();
   });

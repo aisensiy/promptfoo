@@ -183,15 +183,46 @@ describe('evaluator', () => {
   describe('create', () => {
     it('should use provided author when available', async () => {
       const providedAuthor = 'provided@example.com';
-      vi.mocked(getAuthor).mockImplementation((override) => override || null);
+      // Spy must not be called — opts.author is explicit, so getAuthor() is bypassed.
+      vi.mocked(getAuthor).mockReturnValue('should-not-be-used@example.com');
       const config = { description: 'Test eval' };
       const renderedPrompts: Prompt[] = [
         { raw: 'Test prompt', display: 'Test prompt', label: 'Test label' } as Prompt,
       ];
       const evaluation = await Eval.create(config, renderedPrompts, { author: providedAuthor });
       expect(evaluation.author).toBe(providedAuthor);
+      expect(vi.mocked(getAuthor)).not.toHaveBeenCalled();
       const persistedEval = await Eval.findById(evaluation.id);
       expect(persistedEval?.author).toBe(providedAuthor);
+    });
+
+    it('should honor an explicit author even when the current user is cloud-authed (import regression)', async () => {
+      // Simulate cloud-authed user with a different identity than the imported eval.
+      vi.mocked(getAuthor).mockReturnValue('current-cloud-user@example.com');
+      const config = { description: 'Imported eval' };
+      const renderedPrompts: Prompt[] = [
+        { raw: 'Test prompt', display: 'Test prompt', label: 'Test label' } as Prompt,
+      ];
+      const evaluation = await Eval.create(config, renderedPrompts, {
+        author: 'original-author@example.com',
+      });
+      expect(evaluation.author).toBe('original-author@example.com');
+      expect(vi.mocked(getAuthor)).not.toHaveBeenCalled();
+      const persistedEval = await Eval.findById(evaluation.id);
+      expect(persistedEval?.author).toBe('original-author@example.com');
+    });
+
+    it('should persist null when author is explicitly null', async () => {
+      vi.mocked(getAuthor).mockReturnValue('should-not-be-used@example.com');
+      const config = { description: 'Test eval' };
+      const renderedPrompts: Prompt[] = [
+        { raw: 'Test prompt', display: 'Test prompt', label: 'Test label' } as Prompt,
+      ];
+      const evaluation = await Eval.create(config, renderedPrompts, { author: null });
+      expect(evaluation.author).toBeNull();
+      expect(vi.mocked(getAuthor)).not.toHaveBeenCalled();
+      const persistedEval = await Eval.findById(evaluation.id);
+      expect(persistedEval?.author).toBeNull();
     });
 
     it('should fall back to getAuthor when author is not provided', async () => {
