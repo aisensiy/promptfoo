@@ -508,6 +508,20 @@ describe('handleGEval', () => {
     },
   };
 
+  it('should throw error for array renderedValue entries that are not strings', async () => {
+    await expect(
+      handleGEval({
+        ...baseParams,
+        assertion: {
+          type: 'g-eval',
+          value: ['valid criteria', 42] as any,
+        },
+        renderedValue: ['valid criteria', 42] as any,
+        inverse: false,
+      }),
+    ).rejects.toThrow('G-Eval assertion type must have a string or array of strings value');
+  });
+
   describe('inverse (not-g-eval)', () => {
     it('fails a passing string criterion when inverse is true', async () => {
       const mockMatchesGEval = vi.mocked(matchesGEval);

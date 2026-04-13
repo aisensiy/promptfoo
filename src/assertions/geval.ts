@@ -16,7 +16,8 @@ export const handleGEval = async ({
   providerCallContext,
 }: AssertionParams): Promise<GradingResult> => {
   invariant(
-    typeof renderedValue === 'string' || Array.isArray(renderedValue),
+    typeof renderedValue === 'string' ||
+      (Array.isArray(renderedValue) && renderedValue.every((value) => typeof value === 'string')),
     'G-Eval assertion type must have a string or array of strings value',
   );
 

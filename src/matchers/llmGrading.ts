@@ -442,8 +442,16 @@ export async function matchesGEval(
     }
     steps = JSON.parse(stepsMatch[0]).steps;
 
-    if (!steps.length) {
+    if (!Array.isArray(steps)) {
+      return graderFail(
+        `G-Eval steps response has invalid or missing steps: ${JSON.stringify(steps)}`,
+      );
+    }
+    if (steps.length === 0) {
       return graderFail('LLM does not propose any evaluation step');
+    }
+    if (!steps.every((step) => typeof step === 'string' && step.trim() !== '')) {
+      return graderFail(`G-Eval steps response contains invalid steps: ${JSON.stringify(steps)}`);
     }
   } catch (err) {
     return graderFail(
@@ -497,10 +505,25 @@ export async function matchesGEval(
     );
   }
 
-  const rawScore = typeof result.score === 'number' ? result.score : Number(result.score);
+  const rawScore =
+    typeof result.score === 'number'
+      ? result.score
+      : typeof result.score === 'string' && result.score.trim() !== ''
+        ? Number(result.score)
+        : Number.NaN;
   if (!Number.isFinite(rawScore)) {
     return graderFail(
       `G-Eval result has invalid or missing score: ${JSON.stringify(result.score)}`,
+    );
+  }
+  if (rawScore < 0 || rawScore > maxScore) {
+    return graderFail(
+      `G-Eval result score ${rawScore} is outside the expected 0-${maxScore} range`,
+    );
+  }
+  if (typeof result.reason !== 'string' || result.reason.trim() === '') {
+    return graderFail(
+      `G-Eval result has invalid or missing reason: ${JSON.stringify(result.reason)}`,
     );
   }
 
