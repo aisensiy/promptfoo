@@ -184,7 +184,12 @@ export class AwsBedrockKnowledgeBaseProvider
       },
     };
 
-    logger.debug('Calling Amazon Bedrock Knowledge Base API', { params });
+    logger.debug('Calling Amazon Bedrock Knowledge Base API', {
+      knowledgeBaseId: this.kbConfig.knowledgeBaseId,
+      modelArn: knowledgeBaseConfiguration.modelArn,
+      promptLength: prompt.length,
+      hasRetrievalConfiguration: Boolean(knowledgeBaseConfiguration.retrievalConfiguration),
+    });
 
     const cache = await getCache();
 
@@ -208,7 +213,7 @@ export class AwsBedrockKnowledgeBaseProvider
     if (isCacheEnabled()) {
       const cachedResponse = await cache.get(cacheKey);
       if (cachedResponse) {
-        logger.debug(`Returning cached response for ${prompt}`);
+        logger.debug('Returning cached Bedrock Knowledge Base response');
         const parsedResponse = JSON.parse(cachedResponse as string);
         return {
           output: parsedResponse.output,
@@ -225,7 +230,11 @@ export class AwsBedrockKnowledgeBaseProvider
 
       const response = await client.send(command);
 
-      logger.debug('Amazon Bedrock Knowledge Base API response', { response });
+      logger.debug('Amazon Bedrock Knowledge Base API response', {
+        hasOutput: typeof response?.output?.text === 'string',
+        outputLength: response?.output?.text?.length ?? 0,
+        citationCount: Array.isArray(response?.citations) ? response.citations.length : 0,
+      });
 
       let output = '';
       if (response && response.output && response.output.text) {

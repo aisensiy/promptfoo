@@ -1,5 +1,6 @@
 import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import logger from '../../../src/logger';
 import { AwsBedrockKnowledgeBaseProvider } from '../../../src/providers/bedrock/knowledgeBase';
 import { sha256 } from '../../../src/util/createHash';
 import { createEmptyTokenUsage } from '../../../src/util/tokenUsageUtils';
@@ -48,6 +49,14 @@ vi.mock('proxy-agent', () => ({
   __esModule: true,
   ProxyAgent: vi.fn(function ProxyAgentMock() {}),
   default: vi.fn(function ProxyAgentMock() {}),
+}));
+
+vi.mock('../../../src/logger', () => ({
+  default: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  },
 }));
 
 const mockGet = vi.hoisted(() => vi.fn());
@@ -514,6 +523,13 @@ describe('AwsBedrockKnowledgeBaseProvider', () => {
       }),
     );
     expect(cacheKey).not.toContain('What is the capital of France?');
+    const cacheHitLog = vi
+      .mocked(logger.debug)
+      .mock.calls.find(
+        ([message]) => message === 'Returning cached Bedrock Knowledge Base response',
+      );
+    expect(cacheHitLog).toBeDefined();
+    expect(JSON.stringify(cacheHitLog)).not.toContain('What is the capital of France?');
 
     expect(result).toEqual({
       output: 'Cached response from knowledge base',
@@ -649,17 +665,21 @@ describe('AwsBedrockKnowledgeBaseProvider', () => {
     mockGet.mockResolvedValueOnce(null);
     mockSend.mockResolvedValueOnce({
       output: {
-        text: 'Response',
+        text: 'SECRET_RESPONSE_VALUE',
       },
-      citations: [],
+      citations: [{ retrievedReferences: [{ content: { text: 'SECRET_CITATION_VALUE' } }] }],
     });
 
     await provider.callApi('SECRET_PROMPT_VALUE');
 
     const cacheKey = mockGet.mock.calls[0][0];
+    const debugLogs = JSON.stringify(vi.mocked(logger.debug).mock.calls);
 
     expect(cacheKey).not.toContain('SECRET_PROMPT_VALUE');
     expect(cacheKey).not.toContain('SECRET_API_KEY');
+    expect(debugLogs).not.toContain('SECRET_PROMPT_VALUE');
+    expect(debugLogs).not.toContain('SECRET_RESPONSE_VALUE');
+    expect(debugLogs).not.toContain('SECRET_CITATION_VALUE');
     expect(cacheKey).toBe(
       buildKnowledgeBaseCacheKey({
         knowledgeBaseId: 'kb-123',
