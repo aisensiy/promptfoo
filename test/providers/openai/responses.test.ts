@@ -1167,7 +1167,7 @@ describe('OpenAiResponsesProvider', () => {
     expect(result.error).toContain('Error metadata');
     expect(result.error).toContain('Response metadata');
     expect(result.error).toContain('"outputCount": 0');
-    expect(result.error).not.toContain('Invalid response format');
+    expect(result.error).toContain('Invalid response format: Missing output array');
   });
 
   it('should handle JSON stringify errors during logging', async () => {
@@ -1307,7 +1307,7 @@ describe('OpenAiResponsesProvider', () => {
     expect(result.error).toContain('Error metadata');
     expect(result.error).toContain('Response metadata');
     expect(result.error).toContain('"outputCount": 0');
-    expect(result.error).not.toContain('Invalid response format');
+    expect(result.error).toContain('Invalid response format: Missing output array');
     expect(result.error).not.toContain('not-an-array');
     expect(result.output).toBeUndefined();
 

@@ -126,8 +126,10 @@ function getResponseLogMetadata(data: any): Record<string, any> {
   const output = Array.isArray(data?.output) ? data.output : [];
 
   return {
-    responseId: data?.id,
-    model: data?.model,
+    hasResponseId: typeof data?.id === 'string',
+    responseIdLength: getStringLength(data?.id),
+    hasModel: typeof data?.model === 'string',
+    modelLength: getStringLength(data?.model),
     status: getSafeResponseStatus(data?.status),
     outputCount: output.length,
     outputTypeCounts: getResponseOutputTypeCounts(output),
@@ -160,10 +162,15 @@ function getResponseItemLogMetadata(item: unknown): Record<string, any> {
   };
 }
 
+const SAFE_ERROR_MESSAGES = new Set(['Invalid response format: Missing output array']);
+
 function getErrorLogMetadata(error: unknown): Record<string, any> {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
   return {
     errorType: error instanceof Error ? error.constructor.name : typeof error,
-    errorMessageLength: error instanceof Error ? error.message.length : String(error).length,
+    errorMessage: SAFE_ERROR_MESSAGES.has(errorMessage) ? errorMessage : undefined,
+    errorMessageLength: errorMessage.length,
   };
 }
 
@@ -181,8 +188,10 @@ export class ResponsesProcessor {
   ): Promise<ProviderResponse> {
     // Log response metadata for debugging
     logger.debug(`Processing ${this.config.providerType} responses output`, {
-      responseId: data.id,
-      model: data.model,
+      hasResponseId: typeof data?.id === 'string',
+      responseIdLength: getStringLength(data?.id),
+      hasModel: typeof data?.model === 'string',
+      modelLength: getStringLength(data?.model),
     });
 
     if (data.error) {

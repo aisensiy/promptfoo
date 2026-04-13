@@ -308,6 +308,7 @@ describe('ResponsesProcessor', () => {
       const result = await processor.processResponseOutput(mockData, {}, false);
 
       expect(result.error).toContain('Error parsing response');
+      expect(result.error).toContain('Invalid response format: Missing output array');
       expect(result.error).toContain('Response metadata');
       expect(result.error).not.toContain('invalid output format');
     });
@@ -389,8 +390,8 @@ describe('ResponsesProcessor', () => {
       });
       const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => logger as any);
       const mockData = {
-        id: 'resp_research_logs',
-        model: 'o3-deep-research',
+        id: 'secret-response-id-sentinel',
+        model: 'secret-model-sentinel',
         status: 'completed',
         output: [
           {
@@ -427,6 +428,8 @@ describe('ResponsesProcessor', () => {
         expect(debugLogs).toContain('Deep research response metadata');
         expect(debugLogs).toContain('outputTypeCounts');
         expect(debugLogs).toContain('inputTokens');
+        expect(debugLogs).not.toContain('secret-response-id-sentinel');
+        expect(debugLogs).not.toContain('secret-model-sentinel');
         expect(debugLogs).not.toContain('secret-deep-response-sentinel');
         expect(debugLogs).not.toContain('secret-tool-sentinel');
         expect(debugLogs).not.toContain('secret.example');
