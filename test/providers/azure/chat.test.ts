@@ -405,6 +405,10 @@ describe('AzureChatCompletionProvider', () => {
     });
 
     it('should handle invalid JSON response', async () => {
+      provider.config.response_format = {
+        type: 'secret-response-format-type-sentinel',
+      } as any;
+
       vi.mocked(fetchWithCache).mockResolvedValueOnce({
         data: 'invalid json with secret-response-body-sentinel',
         cached: false,
@@ -412,7 +416,12 @@ describe('AzureChatCompletionProvider', () => {
         statusText: 'OK',
       });
 
-      const result = await provider.callApi('secret-user-prompt-sentinel');
+      const result = await provider.callApi(
+        JSON.stringify([
+          { role: 'secret-message-role-sentinel', content: 'secret-user-prompt-sentinel' },
+        ]),
+      );
+
       expect(result.error).toContain('API returned invalid JSON response');
       expect(result.error).toContain('Response metadata');
       expect(result.error).toContain('Request metadata');
@@ -420,11 +429,14 @@ describe('AzureChatCompletionProvider', () => {
       expect(result.error).not.toContain('Request body');
       expect(result.error).not.toContain('secret-user-prompt-sentinel');
       expect(result.error).not.toContain('secret-response-body-sentinel');
+      expect(result.error).not.toContain('secret-message-role-sentinel');
+      expect(result.error).not.toContain('secret-response-format-type-sentinel');
     });
 
     it('should redact malformed API response bodies from response errors', async () => {
       vi.mocked(fetchWithCache).mockResolvedValueOnce({
         data: {
+          'secret-malformed-response-key-sentinel': 'secret-malformed-response-body-sentinel',
           result: 'secret-malformed-response-body-sentinel',
           usage: {
             total_tokens: 3,
@@ -440,6 +452,7 @@ describe('AzureChatCompletionProvider', () => {
       expect(result.error).toContain('API response error');
       expect(result.error).toContain('Response metadata');
       expect(result.error).not.toContain('secret-malformed-response-body-sentinel');
+      expect(result.error).not.toContain('secret-malformed-response-key-sentinel');
     });
 
     it('should handle tool calls in response', async () => {

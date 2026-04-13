@@ -29,21 +29,47 @@ import type {
 } from '../../types/index';
 import type { AzureChatResponsesOptions, AzureProviderOptions } from './types';
 
+const SAFE_MESSAGE_ROLES = new Set([
+  'assistant',
+  'developer',
+  'function',
+  'system',
+  'tool',
+  'user',
+]);
+const SAFE_RESPONSE_FORMAT_TYPES = new Set(['json_object', 'json_schema', 'text']);
+
 function getAzureChatRequestMetadata(body: any) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
+  const messageRoleCounts: Record<string, number> = {};
+
+  for (const message of messages) {
+    const role =
+      typeof message?.role === 'string' && SAFE_MESSAGE_ROLES.has(message.role)
+        ? message.role
+        : 'other';
+    messageRoleCounts[role] = (messageRoleCounts[role] ?? 0) + 1;
+  }
+
+  const responseFormatType =
+    typeof body?.response_format?.type === 'string' ? body.response_format.type : undefined;
+  const maxTokens = body?.max_tokens ?? body?.max_completion_tokens;
 
   return {
     messageCount: messages.length,
-    messageRoles: messages
-      .map((message: any) => message?.role)
-      .filter((role: unknown): role is string => typeof role === 'string'),
+    messageRoleCounts,
     messageContentLengths: messages.map((message: any) =>
       typeof message?.content === 'string' ? message.content.length : undefined,
     ),
     toolCount: Array.isArray(body?.tools) ? body.tools.length : undefined,
     hasResponseFormat: Boolean(body?.response_format),
-    responseFormatType: body?.response_format?.type,
-    maxTokens: body?.max_tokens ?? body?.max_completion_tokens,
+    responseFormatType:
+      responseFormatType && SAFE_RESPONSE_FORMAT_TYPES.has(responseFormatType)
+        ? responseFormatType
+        : responseFormatType
+          ? 'custom'
+          : undefined,
+    maxTokens: typeof maxTokens === 'number' ? maxTokens : undefined,
   };
 }
 
@@ -65,9 +91,9 @@ function getAzureChatResponseMetadata(data: unknown) {
 
   return {
     responseType: Array.isArray(data) ? 'array' : 'object',
-    responseKeys: Object.keys(response),
+    responseKeyCount: Object.keys(response).length,
     hasError: Boolean(response.error),
-    errorCode: typeof response.error?.code === 'string' ? response.error.code : undefined,
+    hasErrorCode: typeof response.error?.code === 'string',
     choiceCount: Array.isArray(response.choices) ? response.choices.length : undefined,
     hasUsage: Boolean(response.usage),
   };
