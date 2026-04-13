@@ -211,19 +211,41 @@ describe('RSA signature authentication', () => {
   });
 
   it('should warn when vars already contain signatureTimestamp', async () => {
-    // Direct test of the warning logic
+    const provider = new HttpProvider('http://example.com', {
+      config: {
+        method: 'POST',
+        body: { key: 'value' },
+        signatureAuth: {
+          privateKey: mockPrivateKey,
+          signatureValidityMs: 300000,
+        },
+      },
+    });
+
+    const mockResponse = {
+      data: JSON.stringify({ result: 'success' }),
+      status: 200,
+      statusText: 'OK',
+      cached: false,
+    };
+    vi.mocked(fetchWithCache).mockResolvedValueOnce(mockResponse);
+
     const mockWarn = vi.spyOn(logger, 'warn');
     const timestampWarning =
       '[HTTP Provider Auth]: `signatureTimestamp` is already defined in vars and will be overwritten';
 
-    // Call the warning directly
-    logger.warn(timestampWarning);
+    try {
+      await provider.callApi('test', {
+        prompt: { raw: 'test', label: 'test' },
+        vars: {
+          signatureTimestamp: 'existing-timestamp',
+        },
+      });
 
-    // Verify warning was logged with exact message
-    expect(mockWarn).toHaveBeenCalledWith(timestampWarning);
-
-    // Clean up
-    mockWarn.mockRestore();
+      expect(mockWarn).toHaveBeenCalledWith(timestampWarning);
+    } finally {
+      mockWarn.mockRestore();
+    }
   });
 
   it('should use JKS keystore password from environment variable when config password not provided', async () => {
