@@ -1,7 +1,6 @@
 import { cloudConfig } from '../globalConfig/cloud';
 import logger from '../logger';
 import { fetchWithProxy } from '../util/fetch/index';
-import { sanitizeUrl } from '../util/sanitizer';
 
 import type {
   ApiProvider,
@@ -54,16 +53,49 @@ interface PromptfooModelOptions extends ProviderOptions {
   config?: Record<string, any>;
 }
 
+const SAFE_FINISH_REASONS = new Set([
+  'stop',
+  'length',
+  'tool_calls',
+  'content_filter',
+  'function_call',
+]);
+
 function getErrorLogMetadata(error: unknown) {
   if (error instanceof Error) {
     return {
       errorType: error.constructor.name,
-      errorName: error.name,
       errorMessageLength: error.message.length,
     };
   }
 
   return { errorType: typeof error };
+}
+
+function getUrlLogMetadata(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    return {
+      urlParseable: true,
+      urlProtocol: parsedUrl.protocol,
+      urlHost: parsedUrl.host,
+      urlPathLength: parsedUrl.pathname.length,
+      urlHasQuery: parsedUrl.search.length > 0,
+    };
+  } catch {
+    return { urlParseable: false };
+  }
+}
+
+function getSafeFinishReason(finishReason: unknown) {
+  if (typeof finishReason !== 'string') {
+    return undefined;
+  }
+  return SAFE_FINISH_REASONS.has(finishReason) ? finishReason : 'custom';
+}
+
+function getSafeTokenCount(tokenCount: unknown) {
+  return typeof tokenCount === 'number' && Number.isFinite(tokenCount) ? tokenCount : 0;
 }
 
 /**
@@ -126,7 +158,7 @@ export class PromptfooModelProvider implements ApiProvider {
 
       const body = JSON.stringify(payload);
       logger.debug('[PromptfooModel] Sending request', {
-        url: sanitizeUrl(url),
+        ...getUrlLogMetadata(url),
         model: this.model,
         messageCount: messages.length,
         configKeyCount: Object.keys(this.config).length,
@@ -136,6 +168,7 @@ export class PromptfooModelProvider implements ApiProvider {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'x-promptfoo-silent': 'true',
         },
         body,
       });
@@ -155,28 +188,36 @@ export class PromptfooModelProvider implements ApiProvider {
       }
 
       const modelResponse = data.result as ModelApiResponse;
+      const choices = Array.isArray(modelResponse.choices) ? modelResponse.choices : [];
+      const usage = modelResponse.usage || {};
       logger.debug('[PromptfooModel] Received response', {
-        model: modelResponse.model || this.model,
-        provider: modelResponse.provider,
-        choiceCount: modelResponse.choices?.length || 0,
-        finishReason: modelResponse.choices?.[0]?.finish_reason,
+        configuredModel: this.model,
+        hasResponseModel: typeof modelResponse.model === 'string' && modelResponse.model.length > 0,
+        responseModelLength:
+          typeof modelResponse.model === 'string' ? modelResponse.model.length : undefined,
+        hasProvider:
+          typeof modelResponse.provider === 'string' && modelResponse.provider.length > 0,
+        providerLength:
+          typeof modelResponse.provider === 'string' ? modelResponse.provider.length : undefined,
+        choiceCount: choices.length,
+        finishReason: getSafeFinishReason(choices[0]?.finish_reason),
         tokenUsage: {
-          total: modelResponse.usage?.total_tokens || 0,
-          prompt: modelResponse.usage?.prompt_tokens || 0,
-          completion: modelResponse.usage?.completion_tokens || 0,
+          total: getSafeTokenCount(usage.total_tokens),
+          prompt: getSafeTokenCount(usage.prompt_tokens),
+          completion: getSafeTokenCount(usage.completion_tokens),
         },
       });
 
       // Extract the completion from the choices
-      const completionContent = modelResponse.choices?.[0]?.message?.content || '';
+      const completionContent = choices[0]?.message?.content || '';
 
       // Return in the expected format for a provider
       return {
         output: completionContent,
         tokenUsage: {
-          total: modelResponse.usage?.total_tokens || 0,
-          prompt: modelResponse.usage?.prompt_tokens || 0,
-          completion: modelResponse.usage?.completion_tokens || 0,
+          total: getSafeTokenCount(usage.total_tokens),
+          prompt: getSafeTokenCount(usage.prompt_tokens),
+          completion: getSafeTokenCount(usage.completion_tokens),
           numRequests: 1,
         },
       };

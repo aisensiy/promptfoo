@@ -67,7 +67,7 @@ describe('PromptfooModelProvider', () => {
   it('should not log prompt, config, or response content', async () => {
     const provider = new PromptfooModelProvider('test-model', {
       model: 'test-model',
-      config: { apiKey: 'secret-config-sentinel' },
+      config: { 'secret-config-key-sentinel': 'secret-config-sentinel' },
     });
     const mockResponse = {
       ok: true,
@@ -94,22 +94,20 @@ describe('PromptfooModelProvider', () => {
 
     await provider.callApi('secret-prompt-sentinel');
 
-    const promptfooModelDebugCalls = mockLogger.mock.calls.filter(([message]) =>
-      String(message).startsWith('[PromptfooModel]'),
-    );
-    const debugLogs = JSON.stringify(promptfooModelDebugCalls);
+    const debugLogs = JSON.stringify(mockLogger.mock.calls);
     expect(debugLogs).toContain('[PromptfooModel] Sending request');
     expect(debugLogs).toContain('[PromptfooModel] Received response');
     expect(debugLogs).toContain('messageCount');
     expect(debugLogs).toContain('tokenUsage');
     expect(debugLogs).not.toContain('secret-prompt-sentinel');
+    expect(debugLogs).not.toContain('secret-config-key-sentinel');
     expect(debugLogs).not.toContain('secret-config-sentinel');
     expect(debugLogs).not.toContain('secret-response-sentinel');
   });
 
   it('should sanitize sensitive API host URL details in request logs', async () => {
     vi.spyOn(cloudConfig, 'getApiHost').mockReturnValue(
-      'https://user:secret-url-password@api.promptfoo.example?api_key=secret-url-token',
+      'https://user:secret-url-password@api.promptfoo.example/secret-url-path?tenant=secret-url-tenant',
     );
     const provider = new PromptfooModelProvider('test-model');
     mockFetch.mockResolvedValue({
@@ -132,7 +130,51 @@ describe('PromptfooModelProvider', () => {
     const debugLogs = JSON.stringify(mockLogger.mock.calls);
     expect(debugLogs).toContain('[PromptfooModel] Sending request');
     expect(debugLogs).not.toContain('secret-url-password');
-    expect(debugLogs).not.toContain('secret-url-token');
+    expect(debugLogs).not.toContain('secret-url-path');
+    expect(debugLogs).not.toContain('secret-url-tenant');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-promptfoo-silent': 'true' }),
+      }),
+    );
+  });
+
+  it('should not log remote-controlled response metadata', async () => {
+    const provider = new PromptfooModelProvider('test-model');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          result: {
+            model: 'secret-response-model-sentinel',
+            provider: 'secret-provider-sentinel',
+            choices: [
+              {
+                message: { content: 'test response' },
+                finish_reason: 'secret-finish-sentinel',
+              },
+            ],
+            usage: {
+              total_tokens: 'secret-total-token-sentinel',
+              prompt_tokens: 'secret-prompt-token-sentinel',
+              completion_tokens: 'secret-completion-token-sentinel',
+            },
+          },
+        }),
+    });
+
+    await provider.callApi('test prompt');
+
+    const debugLogs = JSON.stringify(mockLogger.mock.calls);
+    expect(debugLogs).toContain('[PromptfooModel] Received response');
+    expect(debugLogs).toContain('"finishReason":"custom"');
+    expect(debugLogs).not.toContain('secret-response-model-sentinel');
+    expect(debugLogs).not.toContain('secret-provider-sentinel');
+    expect(debugLogs).not.toContain('secret-finish-sentinel');
+    expect(debugLogs).not.toContain('secret-total-token-sentinel');
+    expect(debugLogs).not.toContain('secret-prompt-token-sentinel');
+    expect(debugLogs).not.toContain('secret-completion-token-sentinel');
   });
 
   it('should handle JSON array messages', async () => {
@@ -186,6 +228,20 @@ describe('PromptfooModelProvider', () => {
     const logs = JSON.stringify([...mockLogger.mock.calls, ...mockErrorLogger.mock.calls]);
     expect(logs).toContain('responseBodyLength');
     expect(logs).not.toContain('secret-error-body-sentinel');
+  });
+
+  it('should not log raw fetch error names or messages', async () => {
+    const provider = new PromptfooModelProvider('test-model');
+    const error = new Error('secret-fetch-error-message-sentinel');
+    error.name = 'secret-fetch-error-name-sentinel';
+    mockFetch.mockRejectedValue(error);
+
+    await expect(provider.callApi('test')).rejects.toThrow('secret-fetch-error-message-sentinel');
+
+    const errorLogs = JSON.stringify(mockErrorLogger.mock.calls);
+    expect(errorLogs).toContain('errorMessageLength');
+    expect(errorLogs).not.toContain('secret-fetch-error-message-sentinel');
+    expect(errorLogs).not.toContain('secret-fetch-error-name-sentinel');
   });
 
   it('should handle invalid API responses', async () => {
