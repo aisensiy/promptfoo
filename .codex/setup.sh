@@ -243,8 +243,8 @@ EOF
 }
 
 write_port_lock_metadata() {
-  printf '%s\n' "$$" >"${PORT_LOCK_PID_FILE}"
   date +%s >"${PORT_LOCK_CREATED_AT_FILE}"
+  printf '%s\n' "$$" >"${PORT_LOCK_PID_FILE}"
   ps -p "$$" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' >"${PORT_LOCK_PROCESS_STARTED_AT_FILE}" || true
 }
 
