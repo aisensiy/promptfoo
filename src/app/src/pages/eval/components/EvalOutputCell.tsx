@@ -1256,9 +1256,10 @@ function EvalOutputCell({
   const [commentDialogOpen, setCommentDialogOpen] = React.useState(false);
   const [commentText, setCommentText] = React.useState(output.gradingResult?.comment || '');
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Reset local draft state when switching outputs that share the same stored comment value.
   React.useEffect(() => {
     setCommentText(output.gradingResult?.comment || '');
-  }, [output.gradingResult?.comment]);
+  }, [output.id, output.gradingResult?.comment]);
 
   const handleCommentOpen = () => {
     setCommentDialogOpen(true);

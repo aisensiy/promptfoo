@@ -829,7 +829,7 @@ async function saveManualRating({
 
   const response =
     version && version >= 4
-      ? await callApi(`${EVAL_ROUTES.DETAIL(evalId)}/results/${resultId}/rating`, {
+      ? await callApi(EVAL_ROUTES.RESULT_RATING(evalId, resultId), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

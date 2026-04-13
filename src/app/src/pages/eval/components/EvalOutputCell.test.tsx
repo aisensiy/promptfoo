@@ -6,7 +6,7 @@ import {
   type EvaluateTableOutput,
   ResultFailureReason,
 } from '@promptfoo/types';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShiftKeyProvider } from '../../../contexts/ShiftKeyContext';
@@ -1494,6 +1494,34 @@ describe('EvalOutputCell highlight toggle functionality', () => {
 
     await waitFor(() => {
       expect(mockOnRating).toHaveBeenCalledWith(false, undefined, '!highlight Original comment');
+    });
+  });
+
+  it('resets unsaved local comment text when switching to another output with the same comment value', async () => {
+    const user = userEvent.setup();
+    const firstProps = createPropsWithComment('');
+    const secondProps = {
+      ...firstProps,
+      output: {
+        ...firstProps.output,
+        id: 'second-output',
+      },
+    };
+
+    const { rerender } = renderWithProviders(<EvalOutputCell {...firstProps} />);
+
+    await user.click(screen.getByRole('button', { name: /edit comment/i }));
+    const commentInput = screen.getByRole('textbox');
+    await user.type(commentInput, 'Unsaved local note');
+    expect(commentInput).toHaveValue('Unsaved local note');
+
+    rerender(<EvalOutputCell {...secondProps} />);
+    mockOnRating.mockClear();
+
+    await user.click(screen.getByLabelText('Mark test failed'));
+
+    await waitFor(() => {
+      expect(mockOnRating).toHaveBeenCalledWith(false, undefined, '');
     });
   });
 });
