@@ -192,4 +192,17 @@ describe('doRemoteGrading', () => {
     expect((thrown as Error).message).toBe('Remote grading request failed');
     expect((thrown as Error).message).not.toContain('SECRET_TRANSPORT_ERROR');
   });
+
+  it('does not trust prefixed transport error messages as safe status errors', async () => {
+    vi.mocked(fetchWithCache).mockRejectedValue(
+      new Error('Remote grading failed with status 500 SECRET_STATUS_SUFFIX'),
+    );
+
+    await expect(
+      doRemoteGrading({
+        task: 'llm-rubric',
+        prompt: 'SECRET_PROMPT_TEXT',
+      }),
+    ).rejects.toThrow('Remote grading request failed');
+  });
 });

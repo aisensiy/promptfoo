@@ -35,7 +35,7 @@ function isGradingResult(result: unknown): result is Omit<GradingResult, 'assert
 function formatRemoteGradingError(error: unknown): string {
   if (
     error instanceof Error &&
-    (error.message.startsWith('Remote grading failed with status ') ||
+    (/^Remote grading failed with status \d+$/.test(error.message) ||
       error.message === 'Remote grading failed. Response data is invalid')
   ) {
     return error.message;
