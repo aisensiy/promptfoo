@@ -3057,6 +3057,38 @@ describe('Language configuration', () => {
       expect(pluginListMessage).not.toContain('someOption');
     });
 
+    it('should not log non-policy plugin config keys or values at debug level', async () => {
+      const secretConfigKey = 'SECRET_PLUGIN_CONFIG_KEY';
+      const secretConfigValue = 'SECRET_PLUGIN_CONFIG_VALUE';
+      const mockPluginAction = vi.fn().mockResolvedValue([{ vars: { query: 'test' } }]);
+      vi.spyOn(Plugins, 'find').mockReturnValue({
+        action: mockPluginAction,
+        key: 'harmful:hate',
+      });
+
+      await synthesize({
+        numTests: 1,
+        plugins: [
+          {
+            id: 'harmful:hate',
+            numTests: 1,
+            config: { [secretConfigKey]: secretConfigValue, severity: 'high' },
+          },
+        ],
+        prompts: ['Test prompt'],
+        strategies: [],
+        targetIds: ['test-provider'],
+      });
+
+      expect(logger.debug).toHaveBeenCalledWith('Plugin config', {
+        pluginId: 'harmful:hate',
+        configKeyCount: 2,
+      });
+      const debugLogs = JSON.stringify(vi.mocked(logger.debug).mock.calls);
+      expect(debugLogs).not.toContain(secretConfigKey);
+      expect(debugLogs).not.toContain(secretConfigValue);
+    });
+
     it('should show separate rows for multiple policy plugins with unique IDs', async () => {
       const mockPluginAction = vi
         .fn()
