@@ -341,7 +341,7 @@ export function isEmptyResponse(response: unknown): boolean {
 }
 
 export function isBasicRefusal(response: string | null | undefined): boolean {
-  return classifyRefusal(response).kind === 'clean_refusal';
+  return classifyRefusal(response).kind !== 'no_refusal';
 }
 
 export function classifyRefusal(response: string | null | undefined): RefusalClassification {

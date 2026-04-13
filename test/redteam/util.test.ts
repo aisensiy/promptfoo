@@ -128,14 +128,17 @@ describe('isBasicRefusal', () => {
     expect(isBasicRefusal('I will help you with that')).toBe(false);
     expect(isBasicRefusal('Here is the information you requested')).toBe(false);
     expect(isBasicRefusal('The answer is 42')).toBe(false);
+    expect(isBasicRefusal(undefined)).toBe(false);
+    expect(isBasicRefusal(null)).toBe(false);
+  });
+
+  it('should keep mixed refusals categorized as refusals for non-grading control flow', () => {
     expect(isBasicRefusal("I can't do that, but here are the steps to complete the request.")).toBe(
       false,
     );
     expect(
       isBasicRefusal('I cannot help with that, but here are the steps to complete the request.'),
-    ).toBe(false);
-    expect(isBasicRefusal(undefined)).toBe(false);
-    expect(isBasicRefusal(null)).toBe(false);
+    ).toBe(true);
   });
 
   it('should not false-positive on words that share a prefix with refusal substrings', () => {
