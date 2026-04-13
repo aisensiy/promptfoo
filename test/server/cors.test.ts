@@ -41,6 +41,16 @@ describe('server CORS', () => {
     expect(response.headers['access-control-allow-origin']).toBe('http://localhost:3000');
   });
 
+  it('allows IPv6 loopback browser origins', async () => {
+    const response = await request(app)
+      .get('/health')
+      .set('Origin', 'http://[::1]:3000')
+      .set('Host', '[::1]:15500');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['access-control-allow-origin']).toBe('http://[::1]:3000');
+  });
+
   it('keeps non-browser clients working without CORS headers', async () => {
     const response = await request(app).get('/health');
 

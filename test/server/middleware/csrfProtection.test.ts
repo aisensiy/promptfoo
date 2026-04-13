@@ -268,6 +268,10 @@ describe('isAllowedBrowserOrigin', () => {
     expect(isAllowedBrowserOrigin('http://local.promptfoo.app:5173', '127.0.0.1:15500')).toBe(true);
   });
 
+  it('allows IPv6 loopback origins', () => {
+    expect(isAllowedBrowserOrigin('http://[::1]:5173', '[::1]:15500')).toBe(true);
+  });
+
   it('matches local hostnames case-insensitively', () => {
     expect(isAllowedBrowserOrigin('http://LOCALHOST:3000', 'LOCALHOST:15500')).toBe(true);
   });
@@ -285,5 +289,11 @@ describe('isAllowedBrowserOrigin', () => {
 
   it('rejects hostile browser origins', () => {
     expect(isAllowedBrowserOrigin('https://evil.example', 'localhost:15500')).toBe(false);
+  });
+
+  it('rejects deceptive localhost-like hostnames', () => {
+    expect(isAllowedBrowserOrigin('http://localhost.evil.example:3000', 'localhost:15500')).toBe(
+      false,
+    );
   });
 });
