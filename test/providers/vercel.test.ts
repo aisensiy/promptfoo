@@ -442,14 +442,14 @@ describe('VercelAiProvider', () => {
       const firstProvider = new VercelAiProvider('openai/gpt-4o-mini', {
         config: {
           apiKey: 'PFQA_VERCEL_API_KEY_A',
-          baseUrl: 'https://gateway.example.com/PFQA_VERCEL_BASE_A',
+          baseUrl: 'https://gateway.example.com/shared',
           headers: { 'X-Tenant': 'PFQA_VERCEL_TENANT_A' },
         },
       });
       const secondProvider = new VercelAiProvider('openai/gpt-4o-mini', {
         config: {
           apiKey: 'PFQA_VERCEL_API_KEY_B',
-          baseUrl: 'https://gateway.example.com/PFQA_VERCEL_BASE_B',
+          baseUrl: 'https://gateway.example.com/shared',
           headers: { 'X-Tenant': 'PFQA_VERCEL_TENANT_B' },
         },
       });
@@ -463,11 +463,78 @@ describe('VercelAiProvider', () => {
       expect(firstKey).not.toBe(secondKey);
       expect(firstKey).not.toContain(prompt);
       expect(firstKey).not.toContain('PFQA_VERCEL_API_KEY_A');
-      expect(firstKey).not.toContain('PFQA_VERCEL_BASE_A');
       expect(firstKey).not.toContain('PFQA_VERCEL_TENANT_A');
       expect(secondKey).not.toContain('PFQA_VERCEL_API_KEY_B');
-      expect(secondKey).not.toContain('PFQA_VERCEL_BASE_B');
       expect(secondKey).not.toContain('PFQA_VERCEL_TENANT_B');
+    });
+
+    it('should separate cache keys for different gateway header values with the same header names', async () => {
+      const { generateText } = await import('ai');
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(generateText).mockResolvedValue({
+        text: 'Fresh response',
+        usage: { promptTokens: 10, completionTokens: 20 },
+        finishReason: 'stop',
+      } as any);
+
+      const prompt = 'PFQA_VERCEL_PROMPT_SENTINEL';
+      const firstProvider = new VercelAiProvider('openai/gpt-4o-mini', {
+        config: {
+          apiKey: 'PFQA_VERCEL_SHARED_API_KEY',
+          baseUrl: 'https://gateway.example.com/shared',
+          headers: { 'X-Tenant': 'PFQA_VERCEL_TENANT_A' },
+        },
+      });
+      const secondProvider = new VercelAiProvider('openai/gpt-4o-mini', {
+        config: {
+          apiKey: 'PFQA_VERCEL_SHARED_API_KEY',
+          baseUrl: 'https://gateway.example.com/shared',
+          headers: { 'X-Tenant': 'PFQA_VERCEL_TENANT_B' },
+        },
+      });
+
+      await firstProvider.callApi(prompt);
+      await secondProvider.callApi(prompt);
+
+      const firstKey = mockCache.get.mock.calls[0][0] as string;
+      const secondKey = mockCache.get.mock.calls[1][0] as string;
+
+      expect(firstKey).not.toBe(secondKey);
+      expect(firstKey).not.toContain('PFQA_VERCEL_SHARED_API_KEY');
+      expect(firstKey).not.toContain('PFQA_VERCEL_TENANT_A');
+      expect(secondKey).not.toContain('PFQA_VERCEL_TENANT_B');
+    });
+
+    it('should use the resolved auth source when optional config auth fields are undefined', async () => {
+      const { generateText } = await import('ai');
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(generateText).mockResolvedValue({
+        text: 'Fresh response',
+        usage: { promptTokens: 10, completionTokens: 20 },
+        finishReason: 'stop',
+      } as any);
+
+      const env = { VERCEL_AI_GATEWAY_API_KEY: 'PFQA_VERCEL_ENV_API_KEY' };
+      const firstProvider = new VercelAiProvider('openai/gpt-4o-mini', {
+        config: {
+          apiKey: undefined,
+          apiKeyEnvar: undefined,
+        },
+        env,
+      });
+      const secondProvider = new VercelAiProvider('openai/gpt-4o-mini', {
+        config: {},
+        env,
+      });
+
+      await firstProvider.callApi('PFQA_VERCEL_PROMPT_SENTINEL');
+      await secondProvider.callApi('PFQA_VERCEL_PROMPT_SENTINEL');
+
+      const firstKey = mockCache.get.mock.calls[0][0] as string;
+      const secondKey = mockCache.get.mock.calls[1][0] as string;
+
+      expect(firstKey).toBe(secondKey);
+      expect(firstKey).not.toContain('PFQA_VERCEL_ENV_API_KEY');
     });
 
     it('should not cache error responses', async () => {
@@ -750,14 +817,14 @@ describe('VercelAiEmbeddingProvider', () => {
       const firstProvider = new VercelAiEmbeddingProvider('openai/text-embedding-3-small', {
         config: {
           apiKey: 'PFQA_VERCEL_EMBEDDING_API_KEY_A',
-          baseUrl: 'https://gateway.example.com/PFQA_VERCEL_EMBEDDING_BASE_A',
+          baseUrl: 'https://gateway.example.com/shared',
           headers: { 'X-Tenant': 'PFQA_VERCEL_EMBEDDING_TENANT_A' },
         },
       });
       const secondProvider = new VercelAiEmbeddingProvider('openai/text-embedding-3-small', {
         config: {
           apiKey: 'PFQA_VERCEL_EMBEDDING_API_KEY_B',
-          baseUrl: 'https://gateway.example.com/PFQA_VERCEL_EMBEDDING_BASE_B',
+          baseUrl: 'https://gateway.example.com/shared',
           headers: { 'X-Tenant': 'PFQA_VERCEL_EMBEDDING_TENANT_B' },
         },
       });
@@ -771,10 +838,8 @@ describe('VercelAiEmbeddingProvider', () => {
       expect(firstKey).not.toBe(secondKey);
       expect(firstKey).not.toContain(input);
       expect(firstKey).not.toContain('PFQA_VERCEL_EMBEDDING_API_KEY_A');
-      expect(firstKey).not.toContain('PFQA_VERCEL_EMBEDDING_BASE_A');
       expect(firstKey).not.toContain('PFQA_VERCEL_EMBEDDING_TENANT_A');
       expect(secondKey).not.toContain('PFQA_VERCEL_EMBEDDING_API_KEY_B');
-      expect(secondKey).not.toContain('PFQA_VERCEL_EMBEDDING_BASE_B');
       expect(secondKey).not.toContain('PFQA_VERCEL_EMBEDDING_TENANT_B');
     });
 

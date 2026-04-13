@@ -158,19 +158,34 @@ function pickGenerateOptions(config: VercelAiConfig) {
   );
 }
 
+function getAuthSource(config: VercelAiConfig, env?: EnvOverrides) {
+  if (config.apiKey) {
+    return 'config';
+  }
+  if (config.apiKeyEnvar) {
+    return 'custom-env';
+  }
+  if (env?.VERCEL_AI_GATEWAY_API_KEY !== undefined) {
+    return 'env-override';
+  }
+  return 'env';
+}
+
 function getGatewayCacheConfig(config: VercelAiConfig, env?: EnvOverrides) {
-  const authSource = Object.prototype.hasOwnProperty.call(config, 'apiKey')
-    ? 'config'
-    : Object.prototype.hasOwnProperty.call(config, 'apiKeyEnvar')
-      ? 'custom-env'
-      : Object.prototype.hasOwnProperty.call(env ?? {}, 'VERCEL_AI_GATEWAY_API_KEY')
-        ? 'env-override'
-        : 'env';
+  const headers = config.headers
+    ? Object.fromEntries(
+        Object.entries(config.headers)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, value]) => [key, sha256(value)]),
+      )
+    : undefined;
+  const apiKey = resolveApiKey(config, env);
 
   return {
-    authSource,
+    authSource: getAuthSource(config, env),
+    apiKeyHash: apiKey ? sha256(apiKey) : undefined,
     baseUrl: resolveBaseUrl(config, env),
-    headerNames: config.headers ? Object.keys(config.headers).sort() : undefined,
+    headers,
   };
 }
 
