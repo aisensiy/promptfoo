@@ -101,7 +101,8 @@ function getAzureResponsesRequestLogMetadata(body: Record<string, any>): Record<
   const input = body.input;
   const tools = body.tools;
   return {
-    model: body.model,
+    hasModel: typeof body.model === 'string',
+    modelLength: getStringLength(body.model),
     inputType: Array.isArray(input) ? 'array' : typeof input,
     inputItemCount: Array.isArray(input) ? input.length : undefined,
     hasInstructions: body.instructions != null,
@@ -121,8 +122,10 @@ function getAzureResponsesResponseLogMetadata(data: any): Record<string, any> {
   return {
     responseType: Array.isArray(data) ? 'array' : typeof data,
     responseLength: typeof data === 'string' ? data.length : undefined,
-    id: data?.id,
-    model: data?.model,
+    hasResponseId: typeof data?.id === 'string',
+    responseIdLength: getStringLength(data?.id),
+    hasModel: typeof data?.model === 'string',
+    modelLength: getStringLength(data?.model),
     status: getSafeStringValue(data?.status, SAFE_AZURE_RESPONSE_STATUSES),
     hasError: Boolean(data?.error),
     outputCount: output?.length ?? 0,
@@ -383,7 +386,10 @@ export class AzureResponsesProvider extends AzureGenericProvider {
     if (isDeepResearchModel) {
       const evalTimeout = getEnvInt('PROMPTFOO_EVAL_TIMEOUT_MS', 0);
       timeout = evalTimeout > 0 ? evalTimeout : LONG_RUNNING_MODEL_TIMEOUT_MS;
-      logger.debug(`Using timeout of ${timeout}ms for deep research model ${this.deploymentName}`);
+      logger.debug('Using Azure Responses deep research timeout', {
+        timeout,
+        deploymentNameLength: this.deploymentName.length,
+      });
     }
 
     logger.debug('Calling Azure Responses API', getAzureResponsesRequestLogMetadata(body));

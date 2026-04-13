@@ -525,8 +525,8 @@ describe('AzureResponsesProvider', () => {
     it('should not log request or response content', async () => {
       const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => logger as any);
       const mockResponse = {
-        id: 'resp_123',
-        model: 'gpt-4.1-test',
+        id: 'secret-response-id-sentinel',
+        model: 'secret-response-model-sentinel',
         status: 'secret-response-status-sentinel',
         output: [
           {
@@ -557,7 +557,7 @@ describe('AzureResponsesProvider', () => {
         statusText: 'OK',
       });
 
-      const provider = new AzureResponsesProvider('gpt-4.1-test', {
+      const provider = new AzureResponsesProvider('secret-deployment-model-sentinel', {
         config: {
           instructions: 'secret-instructions-sentinel',
           metadata: { trace: 'secret-metadata-sentinel' },
@@ -592,6 +592,9 @@ describe('AzureResponsesProvider', () => {
         expect(azureDebugLogs).toContain('outputCount');
         expect(azureDebugLogs).toContain('inputTokens');
         expect(azureDebugLogs).toContain('outputTypeCounts');
+        expect(azureDebugLogs).not.toContain('secret-deployment-model-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-response-id-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-response-model-sentinel');
         expect(azureDebugLogs).not.toContain('secret-prompt-sentinel');
         expect(azureDebugLogs).not.toContain('secret-instructions-sentinel');
         expect(azureDebugLogs).not.toContain('secret-metadata-sentinel');
@@ -651,7 +654,8 @@ describe('AzureResponsesProvider', () => {
     });
 
     it('should handle deep research model timeout', async () => {
-      const provider = new AzureResponsesProvider('o3-deep-research-test');
+      const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => logger as any);
+      const provider = new AzureResponsesProvider('secret-o3-deep-research-deployment-sentinel');
 
       mockFetchWithCache.mockResolvedValue({
         data: {
@@ -668,15 +672,23 @@ describe('AzureResponsesProvider', () => {
         statusText: 'OK',
       });
 
-      await provider.callApi('Research question');
+      try {
+        await provider.callApi('Research question');
 
-      expect(mockFetchWithCache).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Object),
-        600000, // 10 minutes timeout for deep research
-        'json',
-        undefined,
-      );
+        expect(mockFetchWithCache).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.any(Object),
+          600000, // 10 minutes timeout for deep research
+          'json',
+          undefined,
+        );
+        expect(JSON.stringify(debugSpy.mock.calls)).toContain('deploymentNameLength');
+        expect(JSON.stringify(debugSpy.mock.calls)).not.toContain(
+          'secret-o3-deep-research-deployment-sentinel',
+        );
+      } finally {
+        debugSpy.mockRestore();
+      }
     });
 
     it('should construct correct Azure URL format', async () => {
