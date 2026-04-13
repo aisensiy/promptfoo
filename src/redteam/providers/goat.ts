@@ -111,18 +111,54 @@ function getStringLength(value: unknown): number | undefined {
   return typeof value === 'string' ? value.length : undefined;
 }
 
-function getObjectKeys(value: unknown): string[] | undefined {
+function getObjectKeyCount(value: unknown): number | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? Object.keys(value)
+    ? Object.keys(value).length
     : undefined;
 }
 
+const SAFE_MESSAGE_ROLES = new Set([
+  'assistant',
+  'developer',
+  'function',
+  'system',
+  'tool',
+  'user',
+]);
+
+function getSafeMessageRole(role: unknown): string {
+  return typeof role === 'string' && SAFE_MESSAGE_ROLES.has(role) ? role : 'other';
+}
+
 function getMessageSummary(messages: Message[]) {
+  const roleCounts: Record<string, number> = {};
+  for (const message of messages) {
+    const role = getSafeMessageRole(message.role);
+    roleCounts[role] = (roleCounts[role] ?? 0) + 1;
+  }
+
   return {
     messageCount: messages.length,
-    roles: messages.map((message) => message.role),
+    roleCounts,
     contentLengths: messages.map((message) => getStringLength(message.content)),
   };
+}
+
+function getRemoteGenerationUrlLogMetadata(remoteGenerationUrl: string) {
+  try {
+    const url = new URL(remoteGenerationUrl);
+    return {
+      remoteGenerationProtocol: url.protocol.replace(':', ''),
+      remoteGenerationHost: url.host,
+      remoteGenerationPathLength: url.pathname.length,
+      hasRemoteGenerationQuery: Boolean(url.search),
+    };
+  } catch {
+    return {
+      remoteGenerationUrlConfigured: Boolean(remoteGenerationUrl),
+      remoteGenerationUrlParseError: true,
+    };
+  }
 }
 
 function getContextLogMetadata(context?: CallApiContextParams) {
@@ -131,12 +167,13 @@ function getContextLogMetadata(context?: CallApiContextParams) {
   return {
     hasContext: Boolean(context),
     hasOriginalProvider: Boolean(context?.originalProvider),
-    varsKeys: getObjectKeys(context?.vars) ?? [],
-    promptLabel: context?.prompt?.label,
+    varsKeyCount: getObjectKeyCount(context?.vars) ?? 0,
+    hasPromptLabel: Boolean(context?.prompt?.label),
+    promptLabelLength: getStringLength(context?.prompt?.label),
     promptLength: getStringLength(context?.prompt?.raw),
     hasTest: Boolean(context?.test),
     assertCount: Array.isArray(assertions) ? assertions.length : undefined,
-    metadataKeys: getObjectKeys(context?.test?.metadata) ?? [],
+    metadataKeyCount: getObjectKeyCount(context?.test?.metadata) ?? 0,
   };
 }
 
@@ -159,7 +196,7 @@ function getRemoteRequestLogMetadata(
   turn: number,
 ) {
   return {
-    url: getRemoteGenerationUrl(),
+    ...getRemoteGenerationUrlLogMetadata(getRemoteGenerationUrl()),
     turn,
     task: request.task,
     goalLength: getStringLength(request.goal),
@@ -171,7 +208,7 @@ function getRemoteRequestLogMetadata(
     hasPurpose: Boolean(request.purpose),
     hasModifiers: Boolean(request.modifiers),
     hasTraceSummary: Boolean(request.traceSummary),
-    inputKeys: getObjectKeys(request.inputs) ?? [],
+    inputKeyCount: getObjectKeyCount(request.inputs) ?? 0,
     excludeTargetOutputFromAgenticAttackGeneration:
       request.excludeTargetOutputFromAgenticAttackGeneration,
     ...(request.messages ? getMessageSummary(request.messages) : {}),
@@ -180,10 +217,10 @@ function getRemoteRequestLogMetadata(
 
 function getRemoteResponseLogMetadata(data: any) {
   return {
-    keys: getObjectKeys(data) ?? [],
+    responseKeyCount: getObjectKeyCount(data) ?? 0,
     hasMessage: Boolean(data?.message),
     messageType: typeof data?.message,
-    messageRole: data?.message?.role,
+    messageRole: getSafeMessageRole(data?.message?.role),
     messageContentLength: getStringLength(data?.message?.content),
   };
 }
@@ -210,7 +247,7 @@ function getProviderResponseLogMetadata(response?: ProviderResponse) {
     hasAudio: Boolean(response?.audio?.data),
     hasTraceContext: Boolean((response as GoatProviderResponse | undefined)?.traceContext),
     hasSessionId: Boolean(response?.sessionId),
-    metadataKeys: getObjectKeys(response?.metadata) ?? [],
+    metadataKeyCount: getObjectKeyCount(response?.metadata) ?? 0,
   };
 }
 
@@ -272,7 +309,7 @@ export default class GoatProvider implements ApiProvider {
       stateful: options.stateful,
       continueAfterSuccess: options.continueAfterSuccess,
       perTurnLayers: this.perTurnLayers.map((l) => (typeof l === 'string' ? l : l.id)),
-      inputKeys: getObjectKeys(options.inputs) ?? [],
+      inputKeyCount: getObjectKeyCount(options.inputs) ?? 0,
     });
   }
 
@@ -915,7 +952,7 @@ export default class GoatProvider implements ApiProvider {
         logger.error(
           `[GOAT] An error occurred in GOAT turn ${turn}.  The test will continue to the next turn in the conversation.`,
           {
-            errorName: error instanceof Error ? error.name : typeof error,
+            errorType: error instanceof Error ? error.constructor.name : typeof error,
             errorMessageLength:
               error instanceof Error ? error.message.length : getStringLength(String(error)),
           },

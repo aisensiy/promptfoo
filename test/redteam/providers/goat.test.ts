@@ -249,6 +249,9 @@ describe('RedteamGoatProvider', () => {
       injectVar: 'goal',
       maxTurns: 2,
       excludeTargetOutputFromAgenticAttackGeneration: true,
+      inputs: {
+        'secret-input-key-sentinel': 'secret input description sentinel',
+      },
     });
     const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => ({}) as any);
     const targetProvider = createMockTargetProvider(
@@ -256,22 +259,33 @@ describe('RedteamGoatProvider', () => {
       {},
       {
         metadata: {
-          sensitiveMetadata: 'secret-target-metadata-sentinel',
+          'secret-target-metadata-key-sentinel': 'secret-target-metadata-sentinel',
         },
       },
     );
-    const context = createMockContext(targetProvider, { goal: 'secret-goal-sentinel' }, {
-      vars: {},
-      metadata: {
-        goal: 'secret-metadata-goal-sentinel',
-        modifiers: 'secret-modifier-sentinel',
+    const context = createMockContext(
+      targetProvider,
+      {
+        goal: 'secret-goal-sentinel',
+        'secret-vars-key-sentinel': 'secret-vars-value-sentinel',
       },
-    } as AtomicTestCase);
-    context.prompt = { raw: 'secret-raw-prompt-sentinel', label: 'test' };
+      {
+        metadata: {
+          goal: 'secret-metadata-goal-sentinel',
+          modifiers: 'secret-modifier-sentinel',
+          'secret-test-metadata-key-sentinel': 'secret-test-metadata-value-sentinel',
+        },
+      } as AtomicTestCase,
+    );
+    context.prompt = { raw: 'secret-raw-prompt-sentinel', label: 'secret-prompt-label-sentinel' };
     mockFetch
       .mockResolvedValueOnce({
         json: async () => ({
-          message: { role: 'assistant', content: 'secret-attacker-message-one-sentinel' },
+          'secret-remote-response-key-sentinel': true,
+          message: {
+            role: 'secret-remote-role-sentinel',
+            content: 'secret-attacker-message-one-sentinel',
+          },
         }),
         ok: true,
       })
@@ -281,7 +295,11 @@ describe('RedteamGoatProvider', () => {
       })
       .mockResolvedValueOnce({
         json: async () => ({
-          message: { role: 'assistant', content: 'secret-attacker-message-two-sentinel' },
+          'secret-remote-response-key-sentinel': true,
+          message: {
+            role: 'secret-remote-role-sentinel',
+            content: 'secret-attacker-message-two-sentinel',
+          },
         }),
         ok: true,
       });
@@ -295,13 +313,23 @@ describe('RedteamGoatProvider', () => {
       expect(goatLogs).toContain('messageCount');
       expect(goatLogs).toContain('outputLength');
       expect(goatLogs).not.toContain('secret-goal-sentinel');
+      expect(goatLogs).not.toContain('secret-vars-key-sentinel');
+      expect(goatLogs).not.toContain('secret-vars-value-sentinel');
       expect(goatLogs).not.toContain('secret-metadata-goal-sentinel');
       expect(goatLogs).not.toContain('secret-modifier-sentinel');
+      expect(goatLogs).not.toContain('secret-test-metadata-key-sentinel');
+      expect(goatLogs).not.toContain('secret-test-metadata-value-sentinel');
       expect(goatLogs).not.toContain('secret-raw-prompt-sentinel');
+      expect(goatLogs).not.toContain('secret-prompt-label-sentinel');
+      expect(goatLogs).not.toContain('secret-input-key-sentinel');
+      expect(goatLogs).not.toContain('secret input description sentinel');
+      expect(goatLogs).not.toContain('secret-remote-response-key-sentinel');
+      expect(goatLogs).not.toContain('secret-remote-role-sentinel');
       expect(goatLogs).not.toContain('secret-attacker-message-one-sentinel');
       expect(goatLogs).not.toContain('secret-attacker-message-two-sentinel');
       expect(goatLogs).not.toContain('secret-failure-reason-sentinel');
       expect(goatLogs).not.toContain('secret-target-output-sentinel');
+      expect(goatLogs).not.toContain('secret-target-metadata-key-sentinel');
       expect(goatLogs).not.toContain('secret-target-metadata-sentinel');
     } finally {
       debugSpy.mockRestore();
@@ -1320,6 +1348,7 @@ describe('RedteamGoatProvider', () => {
 
       const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
       const regularError = new Error('Network error secret-goat-network-error-sentinel');
+      regularError.name = 'secret-goat-error-name-sentinel';
       // First turn fails with non-AbortError, second turn succeeds
       mockFetch.mockRejectedValueOnce(regularError).mockImplementationOnce(async () => ({
         json: async () => ({
@@ -1339,6 +1368,9 @@ describe('RedteamGoatProvider', () => {
         expect(result.metadata?.stopReason).toBe('Max turns reached');
         expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
           'secret-goat-network-error-sentinel',
+        );
+        expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+          'secret-goat-error-name-sentinel',
         );
       } finally {
         errorSpy.mockRestore();
