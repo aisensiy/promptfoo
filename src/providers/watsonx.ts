@@ -165,10 +165,6 @@ function hashWatsonXCacheValue(value: unknown): string {
     .digest('hex');
 }
 
-function fingerprintWatsonXCredential(type: 'iam' | 'bearertoken', credential: string): string {
-  return hashWatsonXCacheValue(['credential', type, credential]);
-}
-
 function omitWatsonXSecretConfigFields(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(omitWatsonXSecretConfigFields);
@@ -210,6 +206,19 @@ type WatsonXAuthSelection =
   | { type: 'iam'; apiKey: string; forcedByAuthType: boolean }
   | { type: 'bearertoken'; bearerToken: string; forcedByAuthType: boolean }
   | { type: 'none' };
+
+function createWatsonXAuthCacheHash(authMetadata: {
+  type: WatsonXAuthSelection['type'];
+  forcedByAuthType?: boolean;
+  hasCredential: boolean;
+}): string {
+  return hashWatsonXCacheValue({
+    ...authMetadata,
+    credentialNamespace: authMetadata.hasCredential
+      ? crypto.randomBytes(32).toString('hex')
+      : undefined,
+  });
+}
 
 async function fetchModelSpecs(): Promise<ModelSpec[]> {
   try {
@@ -283,6 +292,7 @@ export class WatsonXProvider implements ApiProvider {
   env?: EnvOverrides;
   client?: WatsonXAIClient;
   config: z.infer<typeof ConfigSchema>;
+  private authCacheHash?: string;
 
   constructor(modelName: string, options: ProviderOptions) {
     const validationResult = ConfigSchema.safeParse(options.config);
@@ -356,20 +366,11 @@ export class WatsonXProvider implements ApiProvider {
   }
 
   protected getAuthCacheHash(): string {
-    const authSelection = this.getAuthSelection();
-    const credentialFingerprint =
-      authSelection.type === 'iam'
-        ? fingerprintWatsonXCredential(authSelection.type, authSelection.apiKey)
-        : authSelection.type === 'bearertoken'
-          ? fingerprintWatsonXCredential(authSelection.type, authSelection.bearerToken)
-          : undefined;
-
-    return hashWatsonXCacheValue({
-      type: authSelection.type,
-      forcedByAuthType: authSelection.type === 'none' ? undefined : authSelection.forcedByAuthType,
-      hasCredential: authSelection.type !== 'none',
-      credentialFingerprint,
-    });
+    invariant(
+      this.authCacheHash,
+      'WatsonX auth cache hash is unavailable before authentication is initialized.',
+    );
+    return this.authCacheHash;
   }
 
   async getAuth(): Promise<IamAuthenticator | BearerTokenAuthenticator> {
@@ -386,6 +387,14 @@ export class WatsonXProvider implements ApiProvider {
     }
 
     const authSelection = this.getAuthSelection();
+    if (!this.client) {
+      this.authCacheHash = createWatsonXAuthCacheHash({
+        type: authSelection.type,
+        forcedByAuthType:
+          authSelection.type === 'none' ? undefined : authSelection.forcedByAuthType,
+        hasCredential: authSelection.type !== 'none',
+      });
+    }
 
     if (authSelection.type === 'iam' && authSelection.forcedByAuthType) {
       logger.info('Using IAM Authentication based on WATSONX_AI_AUTH_TYPE.');

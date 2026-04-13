@@ -563,6 +563,62 @@ describe('WatsonXProvider', () => {
       expect(bearerKeyB).not.toContain(bearerTokenB);
     });
 
+    it('should keep the cache auth hash tied to the memoized client credentials', async () => {
+      const mockedWatsonXAIClient: Partial<any> = {
+        generateText: vi.fn().mockResolvedValue({
+          result: {
+            model_id: 'ibm/test-model',
+            model_version: '1.0.0',
+            created_at: '2023-10-10T00:00:00Z',
+            results: [
+              {
+                generated_text: 'Memoized credential response',
+                generated_token_count: 1,
+                input_token_count: 1,
+                stop_reason: 'max_tokens',
+              },
+            ],
+          },
+        }),
+      };
+      vi.mocked(WatsonXAI.newInstance).mockImplementation(function () {
+        return mockedWatsonXAIClient as any;
+      });
+
+      const cache: Partial<any> = {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn(),
+      };
+
+      vi.mocked(getCache).mockImplementation(function () {
+        return cache as any;
+      });
+      vi.mocked(isCacheEnabled).mockImplementation(function () {
+        return true;
+      });
+
+      const originalApiKey = 'watsonx-original-env-api-key';
+      const rotatedApiKey = 'watsonx-rotated-env-api-key';
+      const provider = new WatsonXProvider(modelName, {
+        config: { ...config, apiKey: undefined },
+        env: { WATSONX_AI_APIKEY: originalApiKey },
+      });
+
+      await provider.callApi(prompt);
+      provider.env = { WATSONX_AI_APIKEY: rotatedApiKey };
+      await provider.callApi(prompt);
+
+      const firstCacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
+      const secondCacheKey = vi.mocked(cache.set).mock.calls[1][0] as string;
+
+      expect(firstCacheKey).toEqual(secondCacheKey);
+      expect(firstCacheKey).not.toContain(originalApiKey);
+      expect(secondCacheKey).not.toContain(rotatedApiKey);
+      expect(WatsonXAI.newInstance).toHaveBeenCalledTimes(1);
+      expect(IamAuthenticator).toHaveBeenCalledWith({ apikey: originalApiKey });
+      expect(IamAuthenticator).not.toHaveBeenCalledWith({ apikey: rotatedApiKey });
+    });
+
     it('should preserve an explicit maxNewTokens value of 0', async () => {
       const zeroConfig = {
         ...config,
@@ -1308,6 +1364,66 @@ describe('WatsonXChatProvider', () => {
     );
     expect(cacheKey).not.toContain(chatPrompt);
     expect(cacheKey).not.toContain(config.apiKey);
+  });
+
+  it('should keep chat cache auth hash tied to the memoized client credentials', async () => {
+    const mockedWatsonXAIClient: Partial<any> = {
+      generateText: vi.fn(),
+      textChat: vi.fn().mockResolvedValue({
+        result: {
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: 'Memoized chat credential response',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 5,
+            completion_tokens: 4,
+            total_tokens: 9,
+          },
+        },
+      }),
+    };
+    vi.mocked(WatsonXAI.newInstance).mockImplementation(function () {
+      return mockedWatsonXAIClient as any;
+    });
+
+    const cache: Partial<any> = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn(),
+    };
+
+    vi.mocked(getCache).mockImplementation(function () {
+      return cache as any;
+    });
+    vi.mocked(isCacheEnabled).mockImplementation(function () {
+      return true;
+    });
+
+    const originalApiKey = 'watsonx-original-chat-env-api-key';
+    const rotatedApiKey = 'watsonx-rotated-chat-env-api-key';
+    const provider = new WatsonXChatProvider(modelName, {
+      config: { ...config, apiKey: undefined },
+      env: { WATSONX_AI_APIKEY: originalApiKey },
+    });
+
+    await provider.callApi(prompt);
+    provider.env = { WATSONX_AI_APIKEY: rotatedApiKey };
+    await provider.callApi(prompt);
+
+    const firstCacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
+    const secondCacheKey = vi.mocked(cache.set).mock.calls[1][0] as string;
+
+    expect(firstCacheKey).toEqual(secondCacheKey);
+    expect(firstCacheKey).not.toContain(originalApiKey);
+    expect(secondCacheKey).not.toContain(rotatedApiKey);
+    expect(WatsonXAI.newInstance).toHaveBeenCalledTimes(1);
+    expect(IamAuthenticator).toHaveBeenCalledWith({ apikey: originalApiKey });
+    expect(IamAuthenticator).not.toHaveBeenCalledWith({ apikey: rotatedApiKey });
   });
 
   it('should handle API errors gracefully', async () => {
