@@ -272,9 +272,11 @@ describe('EvalOutputCell', () => {
       output: {
         ...defaultProps.output,
         gradingResult: {
-          ...defaultProps.output.gradingResult,
+          comment: 'Initial comment',
           componentResults: [],
           pass: true,
+          reason: 'Test reason',
+          score: 0.8,
         },
       },
     };
