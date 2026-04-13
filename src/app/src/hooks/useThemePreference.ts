@@ -11,7 +11,11 @@ function getSystemTheme(): ResolvedTheme {
     return 'light';
   }
 
-  return window.matchMedia(SYSTEM_DARK_MODE_QUERY).matches ? 'dark' : 'light';
+  try {
+    return window.matchMedia(SYSTEM_DARK_MODE_QUERY).matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
 }
 
 function getStoredThemePreference(): ThemePreference {
@@ -61,6 +65,33 @@ function applyResolvedTheme(theme: ResolvedTheme) {
   document.documentElement.style.colorScheme = theme;
 }
 
+function subscribeToSystemThemePreference(
+  systemPreference: MediaQueryList,
+  listener: (event: MediaQueryListEvent) => void,
+) {
+  if (
+    typeof systemPreference.addEventListener === 'function' &&
+    typeof systemPreference.removeEventListener === 'function'
+  ) {
+    systemPreference.addEventListener('change', listener);
+    return () => {
+      systemPreference.removeEventListener('change', listener);
+    };
+  }
+
+  if (
+    typeof systemPreference.addListener === 'function' &&
+    typeof systemPreference.removeListener === 'function'
+  ) {
+    systemPreference.addListener(listener);
+    return () => {
+      systemPreference.removeListener(listener);
+    };
+  }
+
+  return () => {};
+}
+
 export function useThemePreference() {
   const [themePreference, setThemePreferenceState] =
     useState<ThemePreference>(getStoredThemePreference);
@@ -76,17 +107,19 @@ export function useThemePreference() {
       return;
     }
 
-    const systemPreference = window.matchMedia(SYSTEM_DARK_MODE_QUERY);
+    let systemPreference: MediaQueryList;
 
-    const handleSystemPreferenceChange = ({ matches }: { matches: boolean }) => {
+    try {
+      systemPreference = window.matchMedia(SYSTEM_DARK_MODE_QUERY);
+    } catch {
+      return;
+    }
+
+    const handleSystemPreferenceChange = ({ matches }: MediaQueryListEvent) => {
       setSystemTheme(matches ? 'dark' : 'light');
     };
 
-    systemPreference.addEventListener('change', handleSystemPreferenceChange);
-
-    return () => {
-      systemPreference.removeEventListener('change', handleSystemPreferenceChange);
-    };
+    return subscribeToSystemThemePreference(systemPreference, handleSystemPreferenceChange);
   }, []);
 
   useEffect(() => {

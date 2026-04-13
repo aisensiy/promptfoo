@@ -28,9 +28,14 @@ const installSystemTheme = (isDark = false) => {
 };
 
 const emitSystemThemeChange = (matches: boolean) => {
-  const darkModeQueryCallIndex = matchMedia.mock.calls.findLastIndex(
-    ([query]) => query === SYSTEM_DARK_MODE_QUERY,
-  );
+  let darkModeQueryCallIndex = -1;
+  for (let index = matchMedia.mock.calls.length - 1; index >= 0; index -= 1) {
+    const [query] = matchMedia.mock.calls[index];
+    if (query === SYSTEM_DARK_MODE_QUERY) {
+      darkModeQueryCallIndex = index;
+      break;
+    }
+  }
 
   if (darkModeQueryCallIndex === -1) {
     throw new Error(
@@ -144,6 +149,71 @@ describe('ThemeSelector', () => {
     ).toBeInTheDocument();
   });
 
+  it('falls back to light when matchMedia throws', () => {
+    restoreBrowserMocks();
+    mockBrowserProperty(
+      window,
+      'matchMedia',
+      vi.fn(() => {
+        throw new Error('matchMedia blocked');
+      }),
+    );
+
+    renderThemeSelector();
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Theme preference: System theme (light). Switch to Dark theme.',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('uses legacy media query listeners when change event listeners are unavailable', async () => {
+    restoreBrowserMocks();
+
+    const listeners = new Set<(event: MediaQueryListEvent) => void>();
+    const addListener = vi.fn((listener: (event: MediaQueryListEvent) => void) => {
+      listeners.add(listener);
+    });
+    const removeListener = vi.fn((listener: (event: MediaQueryListEvent) => void) => {
+      listeners.delete(listener);
+    });
+
+    mockBrowserProperty(
+      window,
+      'matchMedia',
+      vi.fn(
+        () =>
+          ({
+            addEventListener: undefined,
+            addListener,
+            dispatchEvent: vi.fn(),
+            matches: false,
+            media: SYSTEM_DARK_MODE_QUERY,
+            onchange: null,
+            removeEventListener: undefined,
+            removeListener,
+          }) as unknown as MediaQueryList,
+      ),
+    );
+
+    const { unmount } = renderThemeSelector();
+
+    expect(addListener).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      listeners.forEach((listener) => listener({ matches: true } as MediaQueryListEvent));
+    });
+
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    });
+
+    unmount();
+
+    expect(removeListener).toHaveBeenCalledTimes(1);
+  });
+
   it('persists explicit dark and light preferences', async () => {
     const user = userEvent.setup();
     renderThemeSelector();
@@ -192,7 +262,7 @@ describe('ThemeSelector', () => {
 
     localStorage.clear();
     act(() => {
-      window.dispatchEvent(new StorageEvent('storage', { key: null }));
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: null }));
     });
 
     await waitFor(() => {
