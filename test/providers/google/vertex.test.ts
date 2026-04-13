@@ -3,6 +3,7 @@ import path from 'path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import cliState from '../../../src/cliState';
+import logger from '../../../src/logger';
 import * as vertexUtil from '../../../src/providers/google/util';
 import { VertexChatProvider } from '../../../src/providers/google/vertex';
 import type { JSONClient } from 'google-auth-library/build/src/auth/googleauth';
@@ -1917,6 +1918,46 @@ describe('VertexChatProvider.callLlamaApi', () => {
       prompt,
       'llama-secret-safety-setting',
     ]);
+  });
+
+  it('does not log raw Llama prompts, safety settings, or outputs', async () => {
+    const prompt = 'llama-secret-prompt-value';
+    const output = 'llama-secret-output-value';
+    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    provider = new VertexChatProvider('llama-3.3-70b-instruct-maas', {
+      config: {
+        region: 'us-central1',
+        llamaConfig: {
+          safetySettings: {
+            llama_guard_settings: { marker: 'llama-secret-safety-setting' },
+          },
+        },
+      },
+    });
+
+    mockVertexRequest({
+      choices: [
+        {
+          message: {
+            content: output,
+          },
+        },
+      ],
+      usage: {
+        total_tokens: 35,
+        prompt_tokens: 15,
+        completion_tokens: 20,
+      },
+    });
+
+    await provider.callLlamaApi(prompt);
+
+    const debugLogs = JSON.stringify(debugSpy.mock.calls);
+    expect(debugLogs).not.toContain(prompt);
+    expect(debugLogs).not.toContain(output);
+    expect(debugLogs).not.toContain('llama-secret-safety-setting');
+    expect(debugLogs).toContain('Preparing to call Llama API');
+    debugSpy.mockRestore();
   });
 
   it('should default safety settings to enabled when not specified', async () => {

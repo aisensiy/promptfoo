@@ -447,6 +447,27 @@ describe('AzureFoundryAgentProvider', () => {
       expect(cacheKey).not.toContain('weather in Paris');
       expect(mockCache.set).toHaveBeenCalledWith(cacheKey, expect.any(Object));
     });
+
+    it('should not log raw prompts on cache hits', async () => {
+      const secret = 'cached-foundry-secret-prompt';
+      const mockCache = {
+        get: vi.fn().mockResolvedValue({ output: 'cached response' }),
+        set: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(getCache).mockResolvedValue(mockCache as any);
+
+      const provider = new AzureFoundryAgentProvider('weather-agent', {
+        config: { projectUrl },
+      });
+
+      await provider.callApi(`weather in Paris ${secret}`);
+
+      const debugLogs = JSON.stringify(vi.mocked(logger.debug).mock.calls);
+      expect(debugLogs).not.toContain(secret);
+      expect(debugLogs).not.toContain('weather in Paris');
+      expect(debugLogs).toContain('Cache hit for Foundry agent response');
+    });
   });
 
   describe('error formatting', () => {

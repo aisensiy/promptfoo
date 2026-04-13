@@ -1,10 +1,10 @@
+import { createHmac } from 'crypto';
 import path from 'path';
 
 import { getCache, isCacheEnabled } from '../../cache';
 import cliState from '../../cliState';
 import { importModule } from '../../esm';
 import logger from '../../logger';
-import { sha256 } from '../../util/createHash';
 import { isJavascriptFile } from '../../util/fileExtensions';
 import {
   maybeLoadResponseFormatFromExternalFile,
@@ -36,6 +36,13 @@ type FoundryResponse = OpenAIResponse;
 type ResponseFunctionCallItem = ResponseFunctionToolCall;
 type EffectiveFoundryConfig = AzureAssistantOptions & Record<string, any>;
 type FunctionToolCallbacks = AzureAssistantOptions['functionToolCallbacks'];
+
+function hashFoundryAgentCacheValue(value: unknown): string {
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  return createHmac('sha256', 'promptfoo:azure-foundry-agent:cache-key:v1')
+    .update(serialized ?? String(value))
+    .digest('hex');
+}
 
 interface AgentReferenceOption {
   name: string;
@@ -473,15 +480,19 @@ export class AzureFoundryAgentProvider extends AzureGenericProvider {
     _callApiOptions?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
     const { body, effectiveConfig } = await this.buildResponsesBody(prompt, context);
-    // codeql[js/insufficient-password-hash] This digest is only an opaque provider response cache key, not stored password verification material.
-    const cacheKey = `azure_foundry_agent:${this.deploymentName}:${sha256(JSON.stringify(body))}`;
+    const cacheKey = `azure_foundry_agent:${this.deploymentName}:${hashFoundryAgentCacheValue(
+      body,
+    )}`;
 
     if (isCacheEnabled()) {
       try {
         const cache = await getCache();
         const cachedResult = await cache.get<ProviderResponse>(cacheKey);
         if (cachedResult) {
-          logger.debug(`Cache hit for Foundry agent prompt: ${prompt.substring(0, 50)}...`);
+          logger.debug('Cache hit for Foundry agent response', {
+            deploymentName: this.deploymentName,
+            cacheKey,
+          });
           return { ...cachedResult, cached: true };
         }
       } catch (error) {
