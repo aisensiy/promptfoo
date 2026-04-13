@@ -12,7 +12,7 @@ import {
 } from '@app/components/ui/select';
 import { Spinner } from '@app/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@app/components/ui/tooltip';
-import { ROUTES } from '@app/constants/routes';
+import { EVAL_ROUTES, ROUTES } from '@app/constants/routes';
 import { useToast } from '@app/hooks/useToast';
 import { cn } from '@app/lib/utils';
 import { callApi } from '@app/utils/api';
@@ -120,7 +120,11 @@ const VARIABLE_COLUMN_SIZE_PX = 200;
 const PROMPT_COLUMN_SIZE_PX = 400;
 const DESCRIPTION_COLUMN_SIZE_PX = 100;
 
-function formatRowOutput(output: EvaluateTableOutput | string) {
+function formatRowOutput(output: EvaluateTableOutput | string | null | undefined) {
+  if (output == null) {
+    return output;
+  }
+
   if (typeof output === 'string') {
     // Backwards compatibility for 0.15.0 breaking change. Remove eventually.
     const pass = output.startsWith('[PASS]');
@@ -825,14 +829,14 @@ async function saveManualRating({
 
   const response =
     version && version >= 4
-      ? await callApi(`/eval/${evalId}/results/${resultId}/rating`, {
+      ? await callApi(`${EVAL_ROUTES.DETAIL(evalId)}/results/${resultId}/rating`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ ...gradingResult }),
         })
-      : await callApi(`/eval/${evalId}`, {
+      : await callApi(EVAL_ROUTES.DETAIL(evalId), {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -983,11 +987,15 @@ function PromptColumnHeader({
           </div>
         </div>
         {metrics?.testErrorCount && metrics.testErrorCount > 0 ? (
-          <div className="summary error-pill" onClick={() => setFilterMode('errors')}>
+          <button
+            type="button"
+            className="summary error-pill border-0 bg-transparent p-0 text-left"
+            onClick={() => setFilterMode('errors')}
+          >
             <div className="highlight fail">
               <strong>Errors:</strong> {metrics?.testErrorCount || 0}
             </div>
-          </div>
+          </button>
         ) : null}
         {!isRedteam && metrics?.namedScores && Object.keys(metrics.namedScores).length > 0 ? (
           <div className="collapse-hidden">
@@ -1067,6 +1075,39 @@ function getOriginalImageText({
   return fromVars || fromMeta;
 }
 
+function getVariableNameForColumn(columnId: string, headVars: string[]): string | undefined {
+  const variableMatch = columnId.match(/^Variable (\d+)$/);
+  if (variableMatch) {
+    return headVars[Number(variableMatch[1]) - 1];
+  }
+
+  if (columnId.startsWith('TransformVar_')) {
+    return columnId.slice('TransformVar_'.length);
+  }
+
+  return undefined;
+}
+
+function hasFileMetadataForColumn({
+  columnId,
+  row,
+  headVars,
+}: {
+  columnId: string;
+  row: Row<EvaluateTableRow>;
+  headVars: string[];
+}): boolean {
+  const varName = getVariableNameForColumn(columnId, headVars);
+  if (!varName) {
+    return false;
+  }
+
+  const fileMetadata = row.original.outputs?.[0]?.metadata?.[FILE_METADATA_KEY] as
+    | Record<string, unknown>
+    | undefined;
+  return Boolean(fileMetadata?.[varName]);
+}
+
 function renderImageCellContent({
   imgSrc,
   originalImageText,
@@ -1142,8 +1183,15 @@ function renderResultsTableCell({
 }): React.ReactNode {
   const columnId = String(cell.column.id);
   const isMetadataCol = isMetadataColumn(columnId);
+  const renderedCellContent = flexRender(cell.column.columnDef.cell, cell.getContext());
   const value = cell.getValue();
-  const imgSrc = typeof value === 'string' ? resolveImageSource(value) : undefined;
+  const renderedImgSrc =
+    typeof renderedCellContent === 'string' ? resolveImageSource(renderedCellContent) : undefined;
+  const rawImgSrc =
+    typeof value === 'string' && !hasFileMetadataForColumn({ columnId, row, headVars })
+      ? resolveImageSource(value)
+      : undefined;
+  const imgSrc = renderedImgSrc || rawImgSrc;
   const cellContent = imgSrc
     ? renderImageCellContent({
         imgSrc,
@@ -1158,7 +1206,7 @@ function renderResultsTableCell({
         maxTextLength,
         toggleLightbox,
       })
-    : flexRender(cell.column.columnDef.cell, cell.getContext());
+    : renderedCellContent;
 
   return (
     <td
@@ -1167,7 +1215,10 @@ function renderResultsTableCell({
       style={{
         width: cell.column.getSize(),
       }}
-      className={`${isMetadataCol ? 'variable' : ''}${shouldDrawColBorder ? 'first-prompt-col' : 'second-prompt-column'}`}
+      className={cn(
+        isMetadataCol && 'variable',
+        shouldDrawColBorder ? 'first-prompt-col' : 'second-prompt-column',
+      )}
     >
       {cellContent}
     </td>
@@ -1261,7 +1312,6 @@ function ResultsTableHeader({
   hasMinimalScrollRoom: boolean;
   zoom: number;
 }) {
-  'use no memo';
   return (
     <div
       data-testid="results-table-header"
@@ -1335,7 +1385,6 @@ function ResultsTable({
   onFailureFilterToggle,
   zoom,
 }: ResultsTableProps) {
-  'use no memo';
   const {
     evalId,
     table,
@@ -1447,11 +1496,15 @@ function ResultsTable({
   const tableBody = React.useMemo(() => {
     return body.map((row, rowIndex) => ({
       ...row,
-      outputs: row.outputs.map((output, promptIndex) => ({
-        ...output,
-        originalRowIndex: rowIndex,
-        originalPromptIndex: promptIndex,
-      })),
+      outputs: row.outputs.map((output, promptIndex) =>
+        output == null
+          ? null
+          : {
+              ...output,
+              originalRowIndex: rowIndex,
+              originalPromptIndex: promptIndex,
+            },
+      ),
     })) as ExtendedEvaluateTableRow[];
   }, [body]);
 
@@ -1804,7 +1857,7 @@ function ResultsTable({
                   />
                 </ErrorBoundary>
               ) : (
-                <div style={{ padding: '20px' }}>'Test still in progress...'</div>
+                <div className="cell" aria-label="No output for this prompt" />
               );
             },
             size: PROMPT_COLUMN_SIZE_PX,
