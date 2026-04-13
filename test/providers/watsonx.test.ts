@@ -498,6 +498,71 @@ describe('WatsonXProvider', () => {
       expect(secondCacheKey).not.toContain(bearerToken);
     });
 
+    it('should separate cache keys for different same-mode credentials without exposing secrets', async () => {
+      const mockedWatsonXAIClient: Partial<any> = {
+        generateText: vi.fn().mockResolvedValue({
+          result: {
+            model_id: 'ibm/test-model',
+            model_version: '1.0.0',
+            created_at: '2023-10-10T00:00:00Z',
+            results: [
+              {
+                generated_text: 'Same-mode credential-separated response',
+                generated_token_count: 1,
+                input_token_count: 1,
+                stop_reason: 'max_tokens',
+              },
+            ],
+          },
+        }),
+      };
+      vi.mocked(WatsonXAI.newInstance).mockImplementation(function () {
+        return mockedWatsonXAIClient as any;
+      });
+
+      const cache: Partial<any> = {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn(),
+      };
+
+      vi.mocked(getCache).mockImplementation(function () {
+        return cache as any;
+      });
+      vi.mocked(isCacheEnabled).mockImplementation(function () {
+        return true;
+      });
+
+      const apiKeyA = 'watsonx-config-secret-api-key-a';
+      const apiKeyB = 'watsonx-config-secret-api-key-b';
+      const bearerTokenA = 'watsonx-config-secret-bearer-token-a';
+      const bearerTokenB = 'watsonx-config-secret-bearer-token-b';
+
+      await new WatsonXProvider(modelName, {
+        config: { ...config, apiKey: apiKeyA },
+      }).callApi(prompt);
+      await new WatsonXProvider(modelName, {
+        config: { ...config, apiKey: apiKeyB },
+      }).callApi(prompt);
+      await new WatsonXProvider(modelName, {
+        config: { ...config, apiKey: undefined, apiBearerToken: bearerTokenA },
+      }).callApi(prompt);
+      await new WatsonXProvider(modelName, {
+        config: { ...config, apiKey: undefined, apiBearerToken: bearerTokenB },
+      }).callApi(prompt);
+
+      const iamKeyA = vi.mocked(cache.set).mock.calls[0][0] as string;
+      const iamKeyB = vi.mocked(cache.set).mock.calls[1][0] as string;
+      const bearerKeyA = vi.mocked(cache.set).mock.calls[2][0] as string;
+      const bearerKeyB = vi.mocked(cache.set).mock.calls[3][0] as string;
+
+      expect(iamKeyA).not.toEqual(iamKeyB);
+      expect(bearerKeyA).not.toEqual(bearerKeyB);
+      expect(iamKeyA).not.toContain(apiKeyA);
+      expect(iamKeyB).not.toContain(apiKeyB);
+      expect(bearerKeyA).not.toContain(bearerTokenA);
+      expect(bearerKeyB).not.toContain(bearerTokenB);
+    });
+
     it('should preserve an explicit maxNewTokens value of 0', async () => {
       const zeroConfig = {
         ...config,
@@ -588,6 +653,7 @@ describe('WatsonXProvider', () => {
       const generateTextSpy = vi.spyOn(await provider.getClient(), 'generateText');
       const response = await provider.callApi(prompt);
       const cacheKey = vi.mocked(cache.get).mock.calls[0][0] as string;
+      const debugLogs = JSON.stringify(vi.mocked(logger.debug).mock.calls);
       expect(cacheKey).toMatch(
         new RegExp(
           `^watsonx:${modelName}:${generateConfigHash(config)}:[a-f0-9]{64}:[a-f0-9]{64}$`,
@@ -595,6 +661,8 @@ describe('WatsonXProvider', () => {
       );
       expect(cacheKey).not.toContain(prompt);
       expect(cacheKey).not.toContain(config.apiKey);
+      expect(debugLogs).not.toContain(prompt);
+      expect(debugLogs).not.toContain(storedCachedData.output);
       expect(cache.get).toHaveBeenCalledWith(cacheKey);
       expect(response).toEqual(expectedResponse);
       expect(generateTextSpy).not.toHaveBeenCalled();

@@ -156,12 +156,17 @@ function sortObject(obj: any): any {
 }
 
 const WATSONX_SECRET_FIELD_NAMES = new Set(['apiKey', 'apiBearerToken']);
+const WATSONX_CACHE_HASH_KEY = 'promptfoo:watsonx:cache-key:v1';
 
 function hashWatsonXCacheValue(value: unknown): string {
   return crypto
-    .createHash('sha256')
+    .createHmac('sha256', WATSONX_CACHE_HASH_KEY)
     .update(JSON.stringify(value) ?? '')
     .digest('hex');
+}
+
+function fingerprintWatsonXCredential(type: 'iam' | 'bearertoken', credential: string): string {
+  return hashWatsonXCacheValue(['credential', type, credential]);
 }
 
 function omitWatsonXSecretConfigFields(value: unknown): unknown {
@@ -352,10 +357,18 @@ export class WatsonXProvider implements ApiProvider {
 
   protected getAuthCacheHash(): string {
     const authSelection = this.getAuthSelection();
+    const credentialFingerprint =
+      authSelection.type === 'iam'
+        ? fingerprintWatsonXCredential(authSelection.type, authSelection.apiKey)
+        : authSelection.type === 'bearertoken'
+          ? fingerprintWatsonXCredential(authSelection.type, authSelection.bearerToken)
+          : undefined;
+
     return hashWatsonXCacheValue({
       type: authSelection.type,
       forcedByAuthType: authSelection.type === 'none' ? undefined : authSelection.forcedByAuthType,
       hasCredential: authSelection.type !== 'none',
+      credentialFingerprint,
     });
   }
 
@@ -503,9 +516,10 @@ export class WatsonXProvider implements ApiProvider {
     if (cacheEnabled) {
       const cachedResponse = await cache.get(cacheKey);
       if (cachedResponse) {
-        logger.debug(
-          `Watsonx: Returning cached response for prompt "${prompt}" with config "${configHash}": ${cachedResponse}`,
-        );
+        logger.debug('Watsonx: Returning cached response', {
+          model: this.modelName,
+          configHash,
+        });
         const resp = JSON.parse(cachedResponse as string) as ProviderResponse;
         return { ...resp, cached: true };
       }
