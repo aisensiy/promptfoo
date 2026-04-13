@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from 'crypto';
+import { createHmac } from 'crypto';
 
 import { fetchWithCache, getCache, isCacheEnabled } from '../../cache';
 import logger from '../../logger';
@@ -100,7 +100,6 @@ interface RunStepsResponse {
 }
 
 const AZURE_ASSISTANT_CACHE_KEY_HMAC_KEY = 'promptfoo-azure-assistant-cache-key-v1';
-const AZURE_ASSISTANT_AUTH_CACHE_NAMESPACES = new Map<string, string>();
 
 function hmacAzureAssistantCacheValue(value: unknown) {
   return createHmac('sha256', AZURE_ASSISTANT_CACHE_KEY_HMAC_KEY)
@@ -116,14 +115,10 @@ function getAuthHeadersCacheIdentity(authHeaders: Record<string, string>) {
     return { headerNames: [], namespace: 'no-auth' };
   }
 
-  const serializedAuthHeaders = JSON.stringify(entries);
-  let namespace = AZURE_ASSISTANT_AUTH_CACHE_NAMESPACES.get(serializedAuthHeaders);
-  if (!namespace) {
-    namespace = randomUUID();
-    AZURE_ASSISTANT_AUTH_CACHE_NAMESPACES.set(serializedAuthHeaders, namespace);
-  }
-
-  return { headerNames: entries.map(([name]) => name), namespace };
+  return {
+    headerNames: entries.map(([name]) => name),
+    namespace: hmacAzureAssistantCacheValue(['auth', entries]),
+  };
 }
 
 export class AzureAssistantProvider extends AzureGenericProvider {

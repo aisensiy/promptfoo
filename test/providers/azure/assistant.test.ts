@@ -202,6 +202,47 @@ describe('Azure Assistant Provider', () => {
         expect(cacheKey).not.toContain('tenant-b.azure.com');
       }
     });
+
+    it('should use a deterministic auth cache identity across module reloads', async () => {
+      async function getCacheKeyFromFreshModule() {
+        vi.resetModules();
+        const [{ AzureAssistantProvider: FreshAzureAssistantProvider }, freshCache] =
+          await Promise.all([
+            import('../../../src/providers/azure/assistant'),
+            import('../../../src/cache'),
+          ]);
+        const cacheGet = vi.fn().mockResolvedValue({ output: 'Cached assistant output' });
+        vi.mocked(freshCache.isCacheEnabled).mockReturnValue(true);
+        vi.mocked(freshCache.getCache).mockResolvedValue({
+          get: cacheGet,
+          set: vi.fn(),
+        } as any);
+
+        const freshProvider = new FreshAzureAssistantProvider('test-deployment', {
+          config: {
+            apiKey: 'azure-deterministic-secret',
+            apiHost: 'tenant.azure.com',
+          },
+        });
+        (freshProvider as any).authHeaders = {
+          'api-key': 'azure-deterministic-secret',
+        };
+        vi.spyOn(freshProvider as any, 'ensureInitialized').mockResolvedValue(undefined);
+        vi.spyOn(freshProvider as any, 'getApiBaseUrl').mockReturnValue('https://tenant.azure.com');
+
+        await freshProvider.callApi('Shared assistant prompt');
+        return cacheGet.mock.calls[0][0] as string;
+      }
+
+      const firstCacheKey = await getCacheKeyFromFreshModule();
+      const secondCacheKey = await getCacheKeyFromFreshModule();
+
+      expect(firstCacheKey).toBe(secondCacheKey);
+      expect(firstCacheKey).toMatch(/^azure_assistant:test-deployment:[a-f0-9]{64}$/);
+      expect(firstCacheKey).not.toContain('azure-deterministic-secret');
+      expect(firstCacheKey).not.toContain('Shared assistant prompt');
+      expect(firstCacheKey).not.toContain('tenant.azure.com');
+    });
   });
 
   describe('error handling', () => {
