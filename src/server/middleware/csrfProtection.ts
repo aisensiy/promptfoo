@@ -15,7 +15,7 @@ const KNOWN_LOCAL_HOSTS = new Set([
 ]);
 
 function isLocalHost(hostname: string): boolean {
-  return KNOWN_LOCAL_HOSTS.has(hostname);
+  return KNOWN_LOCAL_HOSTS.has(hostname.toLowerCase());
 }
 
 function getAllowedOrigins(): Set<string> {

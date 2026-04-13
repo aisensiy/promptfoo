@@ -268,6 +268,10 @@ describe('isAllowedBrowserOrigin', () => {
     expect(isAllowedBrowserOrigin('http://local.promptfoo.app:5173', '127.0.0.1:15500')).toBe(true);
   });
 
+  it('matches local hostnames case-insensitively', () => {
+    expect(isAllowedBrowserOrigin('http://LOCALHOST:3000', 'LOCALHOST:15500')).toBe(true);
+  });
+
   it('allows explicitly configured origins', () => {
     vi.mocked(getEnvString).mockImplementation((_key: string, defaultValue?: string) => {
       if (_key === 'PROMPTFOO_CSRF_ALLOWED_ORIGINS') {
