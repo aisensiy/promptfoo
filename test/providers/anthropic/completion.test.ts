@@ -91,7 +91,9 @@ describe('AnthropicCompletionProvider', () => {
       await provider.callApi('Sensitive prompt sk-ant-secret');
 
       const cacheKey = getSpy.mock.calls[0]?.[0] as string;
-      expect(cacheKey).toMatch(/^anthropic:completion:claude-1:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKey).toMatch(
+        /^anthropic:completion:claude-1:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
       expect(cacheKey).not.toContain('Sensitive prompt');
       expect(cacheKey).not.toContain('sk-ant-secret');
       expect(setSpy).toHaveBeenCalledWith(cacheKey, JSON.stringify('Test output'));
@@ -126,14 +128,35 @@ describe('AnthropicCompletionProvider', () => {
       await providerB.callApi('Shared sensitive prompt');
 
       const [cacheKeyA, cacheKeyB] = getSpy.mock.calls.map(([key]) => key as string);
-      expect(cacheKeyA).toMatch(/^anthropic:completion:claude-1:[a-f0-9]{64}:[a-f0-9]{64}$/);
-      expect(cacheKeyB).toMatch(/^anthropic:completion:claude-1:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKeyA).toMatch(
+        /^anthropic:completion:claude-1:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
+      expect(cacheKeyB).toMatch(
+        /^anthropic:completion:claude-1:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
       expect(cacheKeyA).not.toBe(cacheKeyB);
       for (const cacheKey of [cacheKeyA, cacheKeyB]) {
         expect(cacheKey).not.toContain('Shared sensitive prompt');
         expect(cacheKey).not.toContain('sk-ant-tenant-a');
         expect(cacheKey).not.toContain('sk-ant-tenant-b');
       }
+    });
+
+    it('should keep auth cache namespace stable across module reloads', async () => {
+      async function getNamespaceFromFreshModule() {
+        vi.resetModules();
+        const { getAnthropicAuthCacheNamespace } = await import(
+          '../../../src/providers/anthropic/generic'
+        );
+        return getAnthropicAuthCacheNamespace('sk-ant-reload-secret');
+      }
+
+      const firstNamespace = await getNamespaceFromFreshModule();
+      const secondNamespace = await getNamespaceFromFreshModule();
+
+      expect(firstNamespace).toBe(secondNamespace);
+      expect(firstNamespace).toMatch(/^[a-f0-9]{64}$/);
+      expect(firstNamespace).not.toContain('sk-ant-reload-secret');
     });
 
     it('should avoid logging prompts and generated outputs in debug metadata', async () => {

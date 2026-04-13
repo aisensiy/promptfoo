@@ -81,11 +81,10 @@ const createProvider = (
 const anthropicCacheIdentityHash = () =>
   hashAnthropicCacheValue({
     apiBaseUrl: undefined,
-    authNamespace: getAnthropicAuthCacheNamespace(TEST_API_KEY),
   });
 
 const anthropicMessagesCacheKey = (modelName: string, params: unknown) =>
-  `anthropic:messages:${modelName}:${anthropicCacheIdentityHash()}:${hashAnthropicCacheValue(params)}`;
+  `anthropic:messages:${modelName}:${anthropicCacheIdentityHash()}:${getAnthropicAuthCacheNamespace(TEST_API_KEY)}:${hashAnthropicCacheValue(params)}`;
 
 describe('AnthropicMessagesProvider', () => {
   let provider: AnthropicMessagesProvider;
@@ -477,7 +476,7 @@ describe('AnthropicMessagesProvider', () => {
 
       const cacheKey = getSpy.mock.calls[0]?.[0] as string;
       expect(cacheKey).toMatch(
-        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKey).not.toContain('Sensitive prompt');
       expect(cacheKey).not.toContain('sk-ant-secret');
@@ -506,10 +505,10 @@ describe('AnthropicMessagesProvider', () => {
 
       const [cacheKeyA, cacheKeyB] = getSpy.mock.calls.map(([key]) => key as string);
       expect(cacheKeyA).toMatch(
-        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKeyB).toMatch(
-        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKeyA).not.toBe(cacheKeyB);
       for (const cacheKey of [cacheKeyA, cacheKeyB]) {
@@ -544,10 +543,10 @@ describe('AnthropicMessagesProvider', () => {
 
       const [cacheKeyA, cacheKeyB] = getSpy.mock.calls.map(([key]) => key as string);
       expect(cacheKeyA).toMatch(
-        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKeyB).toMatch(
-        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^anthropic:messages:claude-3-5-sonnet-20241022:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKeyA).not.toBe(cacheKeyB);
       expect(providerA.anthropic.messages.create).toHaveBeenCalledTimes(1);
