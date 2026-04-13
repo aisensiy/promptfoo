@@ -511,6 +511,7 @@ describe('Fal Provider', () => {
         expect(cacheKeyB).toMatch(
           /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
         );
+        expect(cacheKeyA).not.toBe(cacheKeyB);
         expect(mockSubscribe).toHaveBeenCalledTimes(2);
         for (const cacheKey of [cacheKeyA, cacheKeyB]) {
           expect(cacheKey).not.toContain('Shared fal prompt');
