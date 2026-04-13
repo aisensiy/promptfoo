@@ -148,6 +148,28 @@ describe('Eval Routes - Sharing behavior', () => {
     expect(mockedEvaluate).not.toHaveBeenCalled();
   });
 
+  it('rejects local prompt file sources with single-character path prefixes', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['a/prompt.py:run'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects glob prompt sources that contain spaces', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['prompts/my *.txt'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
   it('rejects local prompt file names that contain spaces', async () => {
     const response = await postJob({
       ...minimalTestSuite,

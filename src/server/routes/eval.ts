@@ -51,7 +51,7 @@ const SERVER_PROMPT_SOURCE_EXECUTABLE_EXTENSIONS = [
 ];
 
 function isPathLikeSegment(value: string): boolean {
-  return value.length > 1 && /^[\w.-]+$/.test(value) && /[a-z0-9]/i.test(value);
+  return /^[\w.-]+$/.test(value) && /[a-z0-9]/i.test(value);
 }
 
 function hasTrailingFileLikeExtension(value: string): boolean {
@@ -92,6 +92,14 @@ function hasFileLikeExtension(value: string): boolean {
 }
 
 function hasGlobLikeWildcard(value: string): boolean {
+  if (!/[*?[\]]/.test(value)) {
+    return false;
+  }
+
+  if (hasPathLikeSeparator(value) || hasTrailingFileLikeExtension(value)) {
+    return true;
+  }
+
   return value.includes('*') && !/\s/.test(value);
 }
 
