@@ -72,6 +72,17 @@ function getErrorLogMetadata(error: unknown) {
   return { errorType: typeof error };
 }
 
+function getStringLength(value: unknown): number | undefined {
+  return typeof value === 'string' ? value.length : undefined;
+}
+
+function getConfiguredModelLogMetadata(model: unknown) {
+  return {
+    hasConfiguredModel: typeof model === 'string' && model.length > 0,
+    configuredModelLength: getStringLength(model),
+  };
+}
+
 function getUrlLogMetadata(url: string) {
   try {
     const parsedUrl = new URL(url);
@@ -111,7 +122,7 @@ export class PromptfooModelProvider implements ApiProvider {
       throw new Error('Model name is required for PromptfooModelProvider');
     }
     this.config = options.config || {};
-    logger.debug(`[PromptfooModel] Initialized with model: ${this.model}`);
+    logger.debug('[PromptfooModel] Initialized', getConfiguredModelLogMetadata(this.model));
   }
 
   id() {
@@ -123,7 +134,7 @@ export class PromptfooModelProvider implements ApiProvider {
     _context?: CallApiContextParams,
     _options?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
-    logger.debug(`[PromptfooModel] Calling API with model: ${this.model}`);
+    logger.debug('[PromptfooModel] Calling API', getConfiguredModelLogMetadata(this.model));
 
     try {
       // Parse the prompt as chat messages if it's a JSON string
@@ -159,7 +170,7 @@ export class PromptfooModelProvider implements ApiProvider {
       const body = JSON.stringify(payload);
       logger.debug('[PromptfooModel] Sending request', {
         ...getUrlLogMetadata(url),
-        model: this.model,
+        ...getConfiguredModelLogMetadata(this.model),
         messageCount: messages.length,
         configKeyCount: Object.keys(this.config).length,
       });
@@ -191,14 +202,12 @@ export class PromptfooModelProvider implements ApiProvider {
       const choices = Array.isArray(modelResponse.choices) ? modelResponse.choices : [];
       const usage = modelResponse.usage || {};
       logger.debug('[PromptfooModel] Received response', {
-        configuredModel: this.model,
+        ...getConfiguredModelLogMetadata(this.model),
         hasResponseModel: typeof modelResponse.model === 'string' && modelResponse.model.length > 0,
-        responseModelLength:
-          typeof modelResponse.model === 'string' ? modelResponse.model.length : undefined,
+        responseModelLength: getStringLength(modelResponse.model),
         hasProvider:
           typeof modelResponse.provider === 'string' && modelResponse.provider.length > 0,
-        providerLength:
-          typeof modelResponse.provider === 'string' ? modelResponse.provider.length : undefined,
+        providerLength: getStringLength(modelResponse.provider),
         choiceCount: choices.length,
         finishReason: getSafeFinishReason(choices[0]?.finish_reason),
         tokenUsage: {

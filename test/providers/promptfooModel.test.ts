@@ -65,8 +65,8 @@ describe('PromptfooModelProvider', () => {
   });
 
   it('should not log prompt, config, or response content', async () => {
-    const provider = new PromptfooModelProvider('test-model', {
-      model: 'test-model',
+    const provider = new PromptfooModelProvider('secret-configured-model-sentinel', {
+      model: 'secret-configured-model-sentinel',
       config: { 'secret-config-key-sentinel': 'secret-config-sentinel' },
     });
     const mockResponse = {
@@ -97,8 +97,10 @@ describe('PromptfooModelProvider', () => {
     const debugLogs = JSON.stringify(mockLogger.mock.calls);
     expect(debugLogs).toContain('[PromptfooModel] Sending request');
     expect(debugLogs).toContain('[PromptfooModel] Received response');
+    expect(debugLogs).toContain('configuredModelLength');
     expect(debugLogs).toContain('messageCount');
     expect(debugLogs).toContain('tokenUsage');
+    expect(debugLogs).not.toContain('secret-configured-model-sentinel');
     expect(debugLogs).not.toContain('secret-prompt-sentinel');
     expect(debugLogs).not.toContain('secret-config-key-sentinel');
     expect(debugLogs).not.toContain('secret-config-sentinel');
