@@ -1497,6 +1497,44 @@ describe('EvalOutputCell highlight toggle functionality', () => {
     });
   });
 
+  it('does not persist a canceled comment draft when rating changes afterward', async () => {
+    const user = userEvent.setup();
+    const props = createPropsWithComment('Original comment');
+    renderWithProviders(<EvalOutputCell {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /edit comment/i }));
+    const commentInput = screen.getByRole('textbox');
+    await user.clear(commentInput);
+    await user.type(commentInput, 'Canceled draft');
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    mockOnRating.mockClear();
+
+    await user.click(screen.getByLabelText('Mark test failed'));
+
+    await waitFor(() => {
+      expect(mockOnRating).toHaveBeenCalledWith(false, undefined, 'Original comment');
+    });
+  });
+
+  it('uses a saved comment edit when rating changes before the parent refreshes', async () => {
+    const user = userEvent.setup();
+    const props = createPropsWithComment('Original comment');
+    renderWithProviders(<EvalOutputCell {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /edit comment/i }));
+    const commentInput = screen.getByRole('textbox');
+    await user.clear(commentInput);
+    await user.type(commentInput, 'Saved edit');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    mockOnRating.mockClear();
+
+    await user.click(screen.getByLabelText('Mark test failed'));
+
+    await waitFor(() => {
+      expect(mockOnRating).toHaveBeenCalledWith(false, undefined, 'Saved edit');
+    });
+  });
+
   it('resets unsaved local comment text when switching to another output with the same comment value', async () => {
     const user = userEvent.setup();
     const firstProps = createPropsWithComment('');

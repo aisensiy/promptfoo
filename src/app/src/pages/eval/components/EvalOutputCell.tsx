@@ -1255,22 +1255,30 @@ function EvalOutputCell({
 
   const [commentDialogOpen, setCommentDialogOpen] = React.useState(false);
   const [commentText, setCommentText] = React.useState(output.gradingResult?.comment || '');
+  const [commentDraftText, setCommentDraftText] = React.useState(
+    output.gradingResult?.comment || '',
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reset local draft state when switching outputs that share the same stored comment value.
   React.useEffect(() => {
-    setCommentText(output.gradingResult?.comment || '');
+    const persistedComment = output.gradingResult?.comment || '';
+    setCommentText(persistedComment);
+    setCommentDraftText(persistedComment);
   }, [output.id, output.gradingResult?.comment]);
 
   const handleCommentOpen = () => {
+    setCommentDraftText(commentText);
     setCommentDialogOpen(true);
   };
 
   const handleCommentClose = () => {
+    setCommentDraftText(commentText);
     setCommentDialogOpen(false);
   };
 
   const handleCommentSave = () => {
-    onRating(undefined, undefined, commentText);
+    setCommentText(commentDraftText);
+    onRating(undefined, undefined, commentDraftText);
     setCommentDialogOpen(false);
   };
 
@@ -1284,6 +1292,7 @@ function EvalOutputCell({
       onRating(undefined, undefined, newCommentText);
     }
     setCommentText(newCommentText);
+    setCommentDraftText(newCommentText);
   };
 
   const text = stringifyOutputText(output.text);
@@ -1528,10 +1537,10 @@ function EvalOutputCell({
         <CommentDialog
           open={commentDialogOpen}
           contextText={getCombinedContextText(output)}
-          commentText={commentText}
+          commentText={commentDraftText}
           onClose={handleCommentClose}
           onSave={handleCommentSave}
-          onChange={setCommentText}
+          onChange={setCommentDraftText}
         />
       )}
       {scoreDialogOpen && (
