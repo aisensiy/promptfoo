@@ -266,6 +266,39 @@ describe('ResponsesProcessor', () => {
       expect(result.output).toEqual({ result: 'success' });
     });
 
+    it('should redact JSON schema parse failure logs', async () => {
+      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+      const mockData = {
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'secret-invalid-json-output-sentinel' }],
+          },
+        ],
+        usage: { input_tokens: 12, output_tokens: 8 },
+      };
+
+      const requestConfig = {
+        response_format: { type: 'json_schema' },
+      };
+
+      const result = await processor.processResponseOutput(mockData, requestConfig, false);
+
+      expect(result.output).toBe('secret-invalid-json-output-sentinel');
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Failed to parse JSON output',
+        expect.objectContaining({
+          errorType: 'SyntaxError',
+          outputType: 'string',
+          outputLength: 'secret-invalid-json-output-sentinel'.length,
+        }),
+      );
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+        'secret-invalid-json-output-sentinel',
+      );
+    });
+
     it('should handle errors gracefully', async () => {
       const mockData = {
         output: 'invalid output format',
@@ -376,6 +409,11 @@ describe('ResponsesProcessor', () => {
             arguments: '{"query":"secret-tool-sentinel"}',
             status: 'completed',
           },
+          {
+            type: 'secret-output-type-sentinel',
+            status: 'secret-status-sentinel',
+            'secret-output-key-sentinel': true,
+          },
         ],
         usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 },
       };
@@ -386,11 +424,14 @@ describe('ResponsesProcessor', () => {
 
         const debugLogs = JSON.stringify(debugSpy.mock.calls);
         expect(debugLogs).toContain('Deep research response metadata');
-        expect(debugLogs).toContain('outputTypes');
+        expect(debugLogs).toContain('outputTypeCounts');
         expect(debugLogs).toContain('inputTokens');
         expect(debugLogs).not.toContain('secret-deep-response-sentinel');
         expect(debugLogs).not.toContain('secret-tool-sentinel');
         expect(debugLogs).not.toContain('secret.example');
+        expect(debugLogs).not.toContain('secret-output-type-sentinel');
+        expect(debugLogs).not.toContain('secret-status-sentinel');
+        expect(debugLogs).not.toContain('secret-output-key-sentinel');
       } finally {
         debugSpy.mockRestore();
       }

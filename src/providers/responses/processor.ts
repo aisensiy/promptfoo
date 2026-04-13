@@ -70,17 +70,67 @@ function getTokenUsage(data: any, cached: boolean): Partial<TokenUsage> {
   return {};
 }
 
+function getStringLength(value: unknown): number | undefined {
+  return typeof value === 'string' ? value.length : undefined;
+}
+
+const SAFE_RESPONSE_ITEM_TYPES = new Set([
+  'code_interpreter_call',
+  'function_call',
+  'mcp_approval_request',
+  'mcp_call',
+  'mcp_list_tools',
+  'message',
+  'output_text',
+  'reasoning',
+  'refusal',
+  'tool_result',
+  'tool_use',
+  'web_search_call',
+]);
+const SAFE_RESPONSE_STATUSES = new Set([
+  'cancelled',
+  'completed',
+  'failed',
+  'in_progress',
+  'incomplete',
+  'queued',
+]);
+
+function getSafeResponseItemType(type: unknown): string | undefined {
+  if (typeof type !== 'string') {
+    return undefined;
+  }
+  return SAFE_RESPONSE_ITEM_TYPES.has(type) ? type : 'custom';
+}
+
+function getSafeResponseStatus(status: unknown): string | undefined {
+  if (typeof status !== 'string') {
+    return undefined;
+  }
+  return SAFE_RESPONSE_STATUSES.has(status) ? status : 'custom';
+}
+
+function getResponseOutputTypeCounts(output: any[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of output) {
+    const type = getSafeResponseItemType(item?.type);
+    if (type) {
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
+
 function getResponseLogMetadata(data: any): Record<string, any> {
   const output = Array.isArray(data?.output) ? data.output : [];
 
   return {
     responseId: data?.id,
     model: data?.model,
-    status: data?.status,
+    status: getSafeResponseStatus(data?.status),
     outputCount: output.length,
-    outputTypes: output
-      .map((item: any) => item?.type)
-      .filter((type: unknown): type is string => typeof type === 'string'),
+    outputTypeCounts: getResponseOutputTypeCounts(output),
     usage: data?.usage
       ? {
           inputTokens: data.usage.input_tokens ?? data.usage.prompt_tokens,
@@ -95,25 +145,24 @@ function getResponseItemLogMetadata(item: unknown): Record<string, any> {
   if (!item || typeof item !== 'object') {
     return {
       itemType: typeof item,
-      itemLength: typeof item === 'string' ? item.length : undefined,
+      itemLength: getStringLength(item),
     };
   }
 
   const itemObject = item as Record<string, any>;
 
   return {
-    itemType: itemObject.type,
-    itemKeys: Object.keys(itemObject),
-    status: itemObject.status,
+    itemType: getSafeResponseItemType(itemObject.type),
+    itemKeyCount: Object.keys(itemObject).length,
+    status: getSafeResponseStatus(itemObject.status),
     hasError: Boolean(itemObject.error),
-    errorLength: typeof itemObject.error === 'string' ? itemObject.error.length : undefined,
+    errorLength: getStringLength(itemObject.error),
   };
 }
 
 function getErrorLogMetadata(error: unknown): Record<string, any> {
   return {
     errorType: error instanceof Error ? error.constructor.name : typeof error,
-    errorName: error instanceof Error ? error.name : undefined,
     errorMessageLength: error instanceof Error ? error.message.length : String(error).length,
   };
 }
@@ -173,7 +222,11 @@ export class ResponsesProcessor {
         try {
           finalOutput = JSON.parse(finalOutput);
         } catch (error) {
-          logger.error(`Failed to parse JSON output: ${error}`);
+          logger.error('Failed to parse JSON output', {
+            ...getErrorLogMetadata(error),
+            outputType: typeof finalOutput,
+            outputLength: getStringLength(finalOutput),
+          });
         }
       }
 
@@ -286,7 +339,7 @@ export class ResponsesProcessor {
         return this.processMcpApprovalRequest(item);
 
       default:
-        logger.debug(`Unknown output item type: ${item.type}`);
+        logger.debug('Unknown output item type', getResponseItemLogMetadata(item));
         return {};
     }
   }
