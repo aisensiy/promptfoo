@@ -73,6 +73,7 @@ docker run -d \
   --name promptfoo_container \
   -p 3000:3000 \
   -v /path/to/local_promptfoo:/home/promptfoo/.promptfoo \
+  -e PROMPTFOO_SERVER_HOST=0.0.0.0 \
   -e OPENAI_API_KEY=sk-abc123 \
   ghcr.io/promptfoo/promptfoo:latest
 ```
@@ -87,6 +88,7 @@ docker run -d \
 - **`--name promptfoo_container`**: Assign a name to the container.
 - **`-p 3000:3000`**: Map host port 3000 to container port 3000.
 - **`-v /path/to/local_promptfoo:/home/promptfoo/.promptfoo`**: **Crucial for persistence.** Maps the container's data directory (`/home/promptfoo/.promptfoo`, containing `promptfoo.db`) to your local filesystem. Replace `/path/to/local_promptfoo` with your preferred host path (e.g., `./promptfoo_data`). **Data will be lost if this volume mapping is omitted.**
+- **`-e PROMPTFOO_SERVER_HOST=0.0.0.0`**: Bind the server to all container interfaces so Docker port publishing can reach it.
 - **`-e OPENAI_API_KEY=sk-abc123`**: Example of setting an environment variable. Add necessary API keys here so users can run evals directly from the web UI. Replace `sk-abc123` with your actual key.
 
 Access the UI at `http://localhost:3000`.
@@ -112,6 +114,7 @@ services:
       # Create ./promptfoo_data on your host first!
       - ./promptfoo_data:/home/promptfoo/.promptfoo
     environment:
+      - PROMPTFOO_SERVER_HOST=0.0.0.0
       # Optional: Adjust chunk size for large evals (See Troubleshooting)
       - PROMPTFOO_SHARE_CHUNK_SIZE=10
       # Add other necessary environment variables (e.g., API keys)
