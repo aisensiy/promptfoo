@@ -81,6 +81,11 @@ describe('PromptfooHarmfulCompletionProvider', () => {
   });
 
   it('should not log harmful generation request content', async () => {
+    vi.mocked(getEnvString).mockImplementation(function (key: string) {
+      return key === 'PROMPTFOO_UNALIGNED_INFERENCE_ENDPOINT'
+        ? 'https://user:secret-endpoint-password@example.com/secret-path-sentinel?token=secret-query-sentinel'
+        : '';
+    });
     provider = new PromptfooHarmfulCompletionProvider({
       ...options,
       purpose: 'secret-purpose-sentinel',
@@ -105,6 +110,9 @@ describe('PromptfooHarmfulCompletionProvider', () => {
         expect.objectContaining({
           purposeLength: 'secret-purpose-sentinel'.length,
           configKeyCount: 1,
+          remoteGenerationProtocol: 'https',
+          remoteGenerationHost: 'example.com',
+          hasRemoteGenerationQuery: true,
         }),
       );
 
@@ -112,6 +120,9 @@ describe('PromptfooHarmfulCompletionProvider', () => {
       expect(loggedContext).not.toContain('secret-purpose-sentinel');
       expect(loggedContext).not.toContain('secret-config-key-sentinel');
       expect(loggedContext).not.toContain('secret-config-sentinel');
+      expect(loggedContext).not.toContain('secret-endpoint-password');
+      expect(loggedContext).not.toContain('secret-path-sentinel');
+      expect(loggedContext).not.toContain('secret-query-sentinel');
       expect(loggedContext).not.toContain('test@example.com');
     } finally {
       debugSpy.mockRestore();
@@ -197,6 +208,31 @@ describe('PromptfooHarmfulCompletionProvider', () => {
       expect(JSON.stringify([result, infoSpy.mock.calls])).not.toContain(
         'secret-harmful-fetch-error-name',
       );
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
+  it('should redact malformed harmful generation responses', async () => {
+    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    const responseBody = 'secret-malformed-json-response';
+    const mockResponse = new Response(responseBody, {
+      status: 200,
+      statusText: 'OK',
+    });
+    vi.mocked(fetchWithRetries).mockResolvedValue(mockResponse);
+
+    try {
+      const result = await provider.callApi('test prompt');
+
+      expect(result.error).toBe('[HarmfulCompletionProvider] Error generating harmful content');
+      expect(infoSpy).toHaveBeenCalledWith(
+        '[HarmfulCompletionProvider] Error generating harmful content',
+        expect.objectContaining({
+          errorType: 'SyntaxError',
+        }),
+      );
+      expect(JSON.stringify([result, infoSpy.mock.calls])).not.toContain(responseBody);
     } finally {
       infoSpy.mockRestore();
     }
