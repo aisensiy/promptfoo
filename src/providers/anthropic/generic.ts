@@ -1,6 +1,7 @@
+import { createHmac } from 'crypto';
+
 import Anthropic from '@anthropic-ai/sdk';
 import { getEnvString } from '../../envars';
-import { sha256 } from '../../util/createHash';
 
 import type { EnvOverrides } from '../../types/env';
 import type { ApiProvider, CallApiContextParams, ProviderResponse } from '../../types/index';
@@ -13,6 +14,15 @@ interface AnthropicBaseOptions {
   apiBaseUrl?: string;
   headers?: Record<string, string>;
   cost?: number;
+}
+
+const ANTHROPIC_CACHE_HASH_KEY = 'promptfoo:anthropic:cache-key:v1';
+
+export function hashAnthropicCacheValue(value: unknown): string {
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  return createHmac('sha256', ANTHROPIC_CACHE_HASH_KEY)
+    .update(serialized ?? String(value))
+    .digest('hex');
 }
 
 /**
@@ -69,13 +79,11 @@ export class AnthropicGenericProvider implements ApiProvider {
   }
 
   protected getCacheIdentityHash(): string {
-    const authSource = Object.prototype.hasOwnProperty.call(this.config, 'apiKey')
-      ? 'config'
-      : Object.prototype.hasOwnProperty.call(this.env ?? {}, 'ANTHROPIC_API_KEY')
-        ? 'env-override:ANTHROPIC_API_KEY'
-        : 'env:ANTHROPIC_API_KEY';
-
-    return sha256(JSON.stringify({ apiBaseUrl: this.getApiBaseUrl(), authSource }));
+    const apiKey = this.apiKey ?? this.getApiKey();
+    return hashAnthropicCacheValue({
+      apiBaseUrl: this.getApiBaseUrl(),
+      apiKeyFingerprint: apiKey ? hashAnthropicCacheValue(apiKey) : undefined,
+    });
   }
 
   /**

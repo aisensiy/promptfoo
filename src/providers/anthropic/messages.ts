@@ -7,7 +7,6 @@ import {
   type GenAISpanResult,
   withGenAISpan,
 } from '../../tracing/genaiTracer';
-import { sha256 } from '../../util/createHash';
 import { maybeLoadResponseFormatFromExternalFile } from '../../util/file';
 import { normalizeFinishReason } from '../../util/finishReason';
 import { maybeLoadToolsFromExternalFile } from '../../util/index';
@@ -15,7 +14,7 @@ import { createEmptyTokenUsage } from '../../util/tokenUsageUtils';
 import { MCPClient } from '../mcp/client';
 import { transformMCPToolsToAnthropic } from '../mcp/transform';
 import { transformToolChoice, transformTools } from '../shared';
-import { AnthropicGenericProvider } from './generic';
+import { AnthropicGenericProvider, hashAnthropicCacheValue } from './generic';
 import {
   ANTHROPIC_MODELS,
   calculateAnthropicCost,
@@ -50,18 +49,13 @@ function isThinkingEnabled(thinking: Anthropic.Messages.ThinkingConfigParam | un
   return thinking?.type === 'enabled' || thinking?.type === 'adaptive';
 }
 
-const CACHE_KEY_HEADER_VALUE_ALLOWLIST = new Set(['anthropic-beta']);
-
 function normalizeHeadersForCacheKey(headers: Record<string, string>) {
   return Object.keys(headers).length > 0
     ? Object.fromEntries(
         Object.entries(headers)
-          .map(([name, value]): [string, string | boolean] => {
+          .map(([name, value]): [string, string] => {
             const normalizedName = name.toLowerCase();
-            return [
-              normalizedName,
-              CACHE_KEY_HEADER_VALUE_ALLOWLIST.has(normalizedName) ? value : Boolean(value),
-            ];
+            return [normalizedName, hashAnthropicCacheValue(value)];
           })
           .sort(([nameA, valueA], [nameB, valueB]) => {
             const nameComparison = nameA.localeCompare(nameB);
@@ -71,6 +65,40 @@ function normalizeHeadersForCacheKey(headers: Record<string, string>) {
           }),
       )
     : undefined;
+}
+
+function getMessagesRequestMetadata(params: Anthropic.Messages.MessageCreateParams) {
+  const mcpServers = (params as { mcp_servers?: unknown }).mcp_servers;
+  return {
+    model: params.model,
+    max_tokens: params.max_tokens,
+    messageCount: params.messages.length,
+    stream: params.stream,
+    temperature: params.temperature,
+    hasSystem: params.system !== undefined,
+    stopSequenceCount: Array.isArray(params.stop_sequences)
+      ? params.stop_sequences.length
+      : undefined,
+    thinkingEnabled: isThinkingEnabled(params.thinking),
+    toolCount: Array.isArray(params.tools) ? params.tools.length : undefined,
+    hasToolChoice: params.tool_choice !== undefined,
+    hasMetadata: params.metadata !== undefined,
+    hasMcpServers: Array.isArray(mcpServers) && mcpServers.length > 0,
+    hasOutputConfig: params.output_config !== undefined,
+  };
+}
+
+function getMessagesResponseMetadata(response: Anthropic.Messages.Message) {
+  return {
+    model: response.model,
+    type: response.type,
+    contentBlockCount: Array.isArray(response.content) ? response.content.length : undefined,
+    stopReason: response.stop_reason,
+    inputTokens: response.usage?.input_tokens,
+    outputTokens: response.usage?.output_tokens,
+    cacheReadInputTokens: response.usage?.cache_read_input_tokens,
+    cacheCreationInputTokens: response.usage?.cache_creation_input_tokens,
+  };
 }
 
 export class AnthropicMessagesProvider extends AnthropicGenericProvider {
@@ -327,7 +355,9 @@ export class AnthropicMessagesProvider extends AnthropicGenericProvider {
       ...(typeof config?.extra_body === 'object' && config.extra_body ? config.extra_body : {}),
     };
 
-    logger.debug('Calling Anthropic Messages API', { params });
+    logger.debug('Calling Anthropic Messages API', {
+      params: getMessagesRequestMetadata(params),
+    });
 
     const headers: Record<string, string> = {
       ...(config.headers || {}),
@@ -351,11 +381,11 @@ export class AnthropicMessagesProvider extends AnthropicGenericProvider {
     const cache = await getCache();
     const { metadata: _metadata, ...cacheKeyParams } = params;
     const cacheKeyHeaders = normalizeHeadersForCacheKey(headers);
-    const cacheKey = `anthropic:messages:${this.modelName}:${this.getCacheIdentityHash()}:${sha256(
-      JSON.stringify({
+    const cacheKey = `anthropic:messages:${this.modelName}:${this.getCacheIdentityHash()}:${hashAnthropicCacheValue(
+      {
         ...cacheKeyParams,
         ...(cacheKeyHeaders ? { headers: cacheKeyHeaders } : {}),
-      }),
+      },
     )}`;
 
     if (isCacheEnabled()) {
@@ -415,7 +445,9 @@ export class AnthropicMessagesProvider extends AnthropicGenericProvider {
 
         // Wait for the stream to complete and get the final message
         const finalMessage = await stream.finalMessage();
-        logger.debug(`Anthropic Messages API streaming complete`, { finalMessage });
+        logger.debug(`Anthropic Messages API streaming complete`, {
+          finalMessage: getMessagesResponseMetadata(finalMessage),
+        });
 
         if (isCacheEnabled()) {
           try {
@@ -461,7 +493,9 @@ export class AnthropicMessagesProvider extends AnthropicGenericProvider {
         const response = (await this.anthropic.messages.create(params, {
           ...(typeof headers === 'object' && Object.keys(headers).length > 0 ? { headers } : {}),
         })) as Anthropic.Messages.Message;
-        logger.debug(`Anthropic Messages API response`, { response });
+        logger.debug(`Anthropic Messages API response`, {
+          response: getMessagesResponseMetadata(response),
+        });
 
         if (isCacheEnabled()) {
           try {

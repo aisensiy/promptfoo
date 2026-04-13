@@ -2,13 +2,33 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getCache, isCacheEnabled } from '../../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../../envars';
 import logger from '../../logger';
-import { sha256 } from '../../util/createHash';
 import { createEmptyTokenUsage } from '../../util/tokenUsageUtils';
-import { AnthropicGenericProvider } from './generic';
+import { AnthropicGenericProvider, hashAnthropicCacheValue } from './generic';
 
 import type { EnvOverrides } from '../../types/env';
 import type { ProviderResponse } from '../../types/index';
 import type { AnthropicCompletionOptions } from './types';
+
+function getCompletionRequestMetadata(params: Anthropic.CompletionCreateParams) {
+  return {
+    model: params.model,
+    promptLength: params.prompt.length,
+    max_tokens_to_sample: params.max_tokens_to_sample,
+    temperature: params.temperature,
+    stopSequenceCount: Array.isArray(params.stop_sequences)
+      ? params.stop_sequences.length
+      : undefined,
+  };
+}
+
+function getCompletionResponseMetadata(response: Anthropic.Completion) {
+  return {
+    model: response.model,
+    stopReason: response.stop_reason,
+    type: response.type,
+    completionLength: response.completion.length,
+  };
+}
 
 export class AnthropicCompletionProvider extends AnthropicGenericProvider {
   // NOTE: As of March 15, 2025, all legacy completion models are retired
@@ -57,12 +77,10 @@ export class AnthropicCompletionProvider extends AnthropicGenericProvider {
       stop_sequences: stop,
     };
 
-    logger.debug('Calling Anthropic API', { params });
+    logger.debug('Calling Anthropic API', { params: getCompletionRequestMetadata(params) });
 
     const cache = await getCache();
-    const cacheKey = `anthropic:completion:${this.modelName}:${this.getCacheIdentityHash()}:${sha256(
-      JSON.stringify(params),
-    )}`;
+    const cacheKey = `anthropic:completion:${this.modelName}:${this.getCacheIdentityHash()}:${hashAnthropicCacheValue(params)}`;
 
     if (isCacheEnabled()) {
       // Try to get the cached response
@@ -85,7 +103,7 @@ export class AnthropicCompletionProvider extends AnthropicGenericProvider {
         error: `API call error: ${String(err)}`,
       };
     }
-    logger.debug('\tAnthropic API response', { response });
+    logger.debug('\tAnthropic API response', { response: getCompletionResponseMetadata(response) });
     if (isCacheEnabled()) {
       try {
         await cache.set(cacheKey, JSON.stringify(response.completion));
