@@ -125,13 +125,18 @@ export default class BestOfNProvider implements ApiProvider {
             return;
           }
 
-          if (/^\s*file:\/\//i.test(candidatePrompt)) {
+          const unsafeCandidateScheme = /^\s*(file:\/\/|package:)/i
+            .exec(candidatePrompt)?.[1]
+            .toLowerCase();
+          if (unsafeCandidateScheme) {
+            const schemeLabel = unsafeCandidateScheme.startsWith('file') ? 'file://' : 'package:';
             logger.warn(
-              '[Best-of-N] Skipping unsafe file:// candidate prompt from remote generation',
+              `[Best-of-N] Skipping unsafe ${schemeLabel} candidate prompt from remote generation`,
               {
                 component: 'Best-of-N',
                 event: 'SkippingCandidatePrompt',
-                reason: 'unsafe-file-protocol',
+                reason:
+                  schemeLabel === 'file://' ? 'unsafe-file-protocol' : 'unsafe-package-protocol',
               },
             );
             return;

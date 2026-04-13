@@ -24,7 +24,7 @@ vi.mock('../../../src/redteam/remoteGeneration', () => ({
   neverGenerateRemote: vi.fn().mockReturnValue(false),
 }));
 
-describe('BestOfNProvider - Abort Signal Handling', () => {
+describe('BestOfNProvider - Runtime Behavior', () => {
   let BestOfNProvider: typeof import('../../../src/redteam/providers/bestOfN').default;
   let mockTargetProvider: ApiProvider;
   let mockCallApi: ReturnType<typeof vi.fn>;
@@ -138,7 +138,10 @@ describe('BestOfNProvider - Abort Signal Handling', () => {
     'file://etc/passwd',
     ' FILE://etc/passwd',
     '\tFiLe://etc/passwd',
-  ])('should skip unsafe file:// candidate prompt from remote generation: %s', async (unsafePrompt) => {
+    'package:@promptfoo/fake:getSecret',
+    ' PACKAGE:@promptfoo/fake:getSecret',
+    '\tPaCkAgE:@promptfoo/fake:getSecret',
+  ])('should skip unsafe candidate prompt from remote generation: %s', async (unsafePrompt) => {
     const provider = new BestOfNProvider({
       injectVar: 'input',
     });
