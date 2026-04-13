@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../envars';
@@ -61,30 +61,50 @@ interface ReplicatePrediction {
   };
 }
 
+const REPLICATE_CACHE_KEY_HMAC_KEY = 'promptfoo:replicate:cache-key:v1';
 const REPLICATE_SECRET_FIELD_NAMES = new Set(['apiKey']);
 
 function hashReplicateCacheValue(value: unknown) {
-  return createHash('sha256')
+  return createHmac('sha256', REPLICATE_CACHE_KEY_HMAC_KEY)
     .update(safeJsonStringify(value) ?? '')
     .digest('hex');
 }
 
-function omitReplicateSecretFields(value: unknown): unknown {
+function omitReplicateSecretFields(value: unknown, seen = new WeakSet<object>()): unknown {
   if (Array.isArray(value)) {
-    return value.map(omitReplicateSecretFields);
+    if (seen.has(value)) {
+      return '[Circular]';
+    }
+    seen.add(value);
+    return value.map((item) => omitReplicateSecretFields(item, seen));
   }
   if (!value || typeof value !== 'object') {
     return value;
   }
+  if (seen.has(value)) {
+    return '[Circular]';
+  }
+  seen.add(value);
   return Object.fromEntries(
     Object.entries(value)
       .filter(([key]) => !REPLICATE_SECRET_FIELD_NAMES.has(key))
-      .map(([key, fieldValue]) => [key, omitReplicateSecretFields(fieldValue)]),
+      .map(([key, fieldValue]) => [key, omitReplicateSecretFields(fieldValue, seen)]),
   );
 }
 
 function getReplicateAuthCacheHash(apiKey: string | undefined) {
-  return hashReplicateCacheValue({ hasApiKey: Boolean(apiKey) });
+  return apiKey
+    ? createHmac('sha256', REPLICATE_CACHE_KEY_HMAC_KEY).update(apiKey).digest('hex')
+    : hashReplicateCacheValue({ hasApiKey: false });
+}
+
+function getReplicateValueSummary(prefix: string, value: unknown): Record<string, unknown> {
+  const valueType = Array.isArray(value) ? 'array' : typeof value;
+  return {
+    [`${prefix}Type`]: valueType,
+    [`${prefix}Length`]:
+      typeof value === 'string' || Array.isArray(value) ? value.length : undefined,
+  };
 }
 
 export class ReplicateProvider implements ApiProvider {
@@ -186,7 +206,7 @@ export class ReplicateProvider implements ApiProvider {
       const cachedResponse = await cache.get(cacheKey);
 
       if (cachedResponse) {
-        logger.debug(`Returning cached response for ${prompt}: ${cachedResponse}`);
+        logger.debug('Returning cached Replicate response', { modelName: this.modelName });
         return { ...JSON.parse(cachedResponse as string), cached: true };
       }
     }
@@ -198,7 +218,7 @@ export class ReplicateProvider implements ApiProvider {
       getEnvString('REPLICATE_SYSTEM_PROMPT');
     const userPrompt = messages.find((message) => message.role === 'user')?.content || prompt;
 
-    logger.debug(`Calling Replicate: ${prompt}`);
+    logger.debug('Calling Replicate', { modelName: this.modelName, promptLength: prompt.length });
     let response;
     try {
       const inputOptions = {
@@ -258,7 +278,10 @@ export class ReplicateProvider implements ApiProvider {
         error: `API call error: ${String(err)}`,
       };
     }
-    logger.debug(`\tReplicate API response: ${JSON.stringify(response)}`);
+    logger.debug('Replicate API response received', {
+      modelName: this.modelName,
+      ...getReplicateValueSummary('response', response),
+    });
 
     if (typeof response === 'string') {
       // It's text
@@ -444,7 +467,7 @@ export class ReplicateImageProvider extends ReplicateProvider {
     if (isCacheEnabled()) {
       const cachedResponse = await cache.get(cacheKey);
       if (cachedResponse) {
-        logger.debug(`Retrieved cached response for ${prompt}: ${cachedResponse}`);
+        logger.debug('Retrieved cached Replicate image response', { modelName: this.modelName });
         response = JSON.parse(cachedResponse as string);
         cached = true;
       }
@@ -498,9 +521,11 @@ export class ReplicateImageProvider extends ReplicateProvider {
         prediction = await this.pollForCompletion(prediction.id);
       }
 
-      logger.debug(
-        `Final prediction status: ${prediction.status}, output: ${JSON.stringify(prediction.output)}`,
-      );
+      logger.debug('Final Replicate prediction status', {
+        modelName: this.modelName,
+        status: prediction.status,
+        ...getReplicateValueSummary('output', prediction.output),
+      });
 
       if (prediction.status === 'failed') {
         return {

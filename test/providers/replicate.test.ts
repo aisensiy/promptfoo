@@ -6,6 +6,7 @@ import {
   getCache,
   isCacheEnabled,
 } from '../../src/cache';
+import logger from '../../src/logger';
 import {
   DefaultModerationProvider,
   ReplicateImageProvider,
@@ -15,6 +16,14 @@ import {
 import { createEmptyTokenUsage } from '../../src/util/tokenUsageUtils';
 
 vi.mock('../../src/cache');
+vi.mock('../../src/logger', () => ({
+  default: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
 
 const mockedFetchWithCache = vi.mocked(fetchWithCache);
 
@@ -263,7 +272,7 @@ describe('ReplicateProvider', () => {
 
   it('should set cached flag when returning cached response', async () => {
     const mockCachedResponse = {
-      output: 'cached test response',
+      output: 'cached PFQA_REPLICATE_CACHED_OUTPUT_SECRET response',
       tokenUsage: { total: 100 },
     };
 
@@ -282,8 +291,11 @@ describe('ReplicateProvider', () => {
     const result = await provider.callApi('test prompt');
 
     expect(result.cached).toBe(true);
-    expect(result.output).toBe('cached test response');
+    expect(result.output).toBe('cached PFQA_REPLICATE_CACHED_OUTPUT_SECRET response');
     expect(mockCache.get).toHaveBeenCalled();
+    const debugLogs = vi.mocked(logger.debug).mock.calls.map((call) => JSON.stringify(call));
+    expect(debugLogs.join('\n')).not.toContain('PFQA_REPLICATE_CACHED_OUTPUT_SECRET');
+    expect(debugLogs.join('\n')).not.toContain('test prompt');
     // Verify fetchWithCache was not called because cache was used
     expect(mockedFetchWithCache).not.toHaveBeenCalled();
   });
@@ -372,6 +384,7 @@ describe('ReplicateProvider', () => {
     const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
     expect(cacheKeyA).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKeyB).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKeyA).not.toBe(cacheKeyB);
     expect(mockedFetchWithCache).toHaveBeenCalledTimes(2);
     for (const cacheKey of [cacheKeyA, cacheKeyB]) {
       expect(cacheKey).not.toContain('Shared replicate prompt');
@@ -697,5 +710,44 @@ describe('ReplicateImageProvider', () => {
     expect(cacheKey).not.toContain('PFQA_REPLICATE_IMAGE_CONFIG_SENTINEL');
     expect(cacheKey).not.toContain(mockApiKey);
     expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
+  });
+
+  it('should handle circular image context when hashing cache keys', async () => {
+    mockedFetchWithCache.mockResolvedValue({
+      data: {
+        id: 'test-id',
+        status: 'succeeded',
+        output: ['https://example.com/image.png'],
+      },
+      cached: false,
+      status: 200,
+      statusText: 'OK',
+    });
+
+    const mockCache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn(),
+    } as any;
+
+    vi.mocked(isCacheEnabled).mockReturnValue(true);
+    vi.mocked(getCache).mockReturnValue(mockCache);
+
+    const provider = new ReplicateImageProvider('test-model', {
+      config: { apiKey: mockApiKey },
+    });
+    const context: any = {
+      vars: { apiKey: 'PFQA_REPLICATE_CONTEXT_API_KEY_SECRET' },
+    };
+    context.self = context;
+    context.originalProvider = provider;
+
+    await expect(
+      provider.callApi('PFQA_REPLICATE_CIRCULAR_CONTEXT_PROMPT', context),
+    ).resolves.toEqual(expect.objectContaining({ cached: false }));
+
+    const cacheKey = mockCache.set.mock.calls[0][0] as string;
+    expect(cacheKey).toMatch(/^replicate:image:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKey).not.toContain('PFQA_REPLICATE_CONTEXT_API_KEY_SECRET');
+    expect(cacheKey).not.toContain('PFQA_REPLICATE_CIRCULAR_CONTEXT_PROMPT');
   });
 });
