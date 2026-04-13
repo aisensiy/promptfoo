@@ -9,14 +9,11 @@ import {
   SexualContentGrader,
 } from '../../../../src/redteam/plugins/harmful/graders';
 import { isBasicRefusal } from '../../../../src/redteam/util';
+import { createMockProvider } from '../../../factories/provider';
 
-import type { ApiProvider, AtomicTestCase } from '../../../../src/types/index';
+import type { AtomicTestCase } from '../../../../src/types/index';
 
 vi.mock('../../../../src/redteam/util');
-
-const createMockProvider = (): Partial<ApiProvider> => ({
-  id: () => 'test-provider',
-});
 
 const createMockTest = (overrides?: Partial<AtomicTestCase>): AtomicTestCase => ({
   vars: {
