@@ -216,12 +216,16 @@ type PreparedFetchResponse = {
 };
 
 const inflightFetchResponses = new Map<string, Promise<SerializedFetchResponse>>();
-const IGNORED_FETCH_CACHE_OPTION_KEYS = new Set(['signal']);
+const IGNORED_FETCH_CACHE_OPTION_KEYS = new Set(['method', 'signal']);
 
 function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
-  const headers = new Headers(
-    options.headers ?? (url instanceof Request ? url.headers : undefined),
-  );
+  const headers = new Headers(url instanceof Request ? url.headers : undefined);
+  if (options.headers) {
+    for (const [name, value] of new Headers(options.headers).entries()) {
+      headers.set(name, value);
+    }
+  }
+
   return Array.from(headers.entries()).sort(([nameA, valueA], [nameB, valueB]) => {
     const nameComparison = nameA.localeCompare(nameB);
     return nameComparison === 0 ? valueA.localeCompare(valueB) : nameComparison;
@@ -272,7 +276,9 @@ function getBodyForFetchCacheKey(body: RequestInit['body'] | ReadableStream | nu
 function getOptionsForFetchCacheKey(options: RequestInit, bodyIdentity: unknown) {
   const identity: Record<string, unknown> = {};
 
-  for (const [key, value] of Object.entries(options)) {
+  for (const [key, value] of Object.entries(options).sort(([keyA], [keyB]) =>
+    keyA.localeCompare(keyB),
+  )) {
     if (key === 'headers' || IGNORED_FETCH_CACHE_OPTION_KEYS.has(key)) {
       continue;
     }
