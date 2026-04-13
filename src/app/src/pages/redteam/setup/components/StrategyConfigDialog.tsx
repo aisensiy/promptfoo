@@ -1299,36 +1299,38 @@ export default function StrategyConfigDialog({
   );
 
   const renderStrategyConfig = () => {
-    if (strategy === 'basic') {
-      return renderBasicStrategyConfig();
-    } else if (strategy === 'jailbreak') {
-      return renderJailbreakStrategyConfig();
-    } else if (strategy === 'retry') {
-      return renderRetryStrategyConfig();
-    } else if (strategy === 'best-of-n') {
-      return renderBestOfNStrategyConfig();
-    } else if (strategy === 'custom') {
-      return renderCustomStrategyConfig();
-    } else if (strategy === 'jailbreak:hydra') {
-      return renderHydraStrategyConfig();
-    } else if (strategy && MULTI_TURN_STRATEGIES.includes(strategy as MultiTurnStrategy)) {
-      return renderMultiTurnStrategyConfig();
-    } else if (strategy === 'jailbreak:meta') {
-      return renderMetaStrategyConfig();
-    } else if (strategy === 'jailbreak:tree') {
-      return renderTreeStrategyConfig();
-    } else if (strategy === 'gcg') {
-      return renderGcgStrategyConfig();
-    } else if (strategy === 'citation') {
-      return renderCitationStrategyConfig();
-    } else if (strategy === 'layer') {
-      return renderLayerStrategyConfig();
-    } else {
-      return (
-        <p className="text-muted-foreground">
-          No configuration options available for this strategy.
-        </p>
-      );
+    switch (strategy) {
+      case 'basic':
+        return renderBasicStrategyConfig();
+      case 'jailbreak':
+        return renderJailbreakStrategyConfig();
+      case 'retry':
+        return renderRetryStrategyConfig();
+      case 'best-of-n':
+        return renderBestOfNStrategyConfig();
+      case 'custom':
+        return renderCustomStrategyConfig();
+      case 'jailbreak:hydra':
+        return renderHydraStrategyConfig();
+      case 'jailbreak:meta':
+        return renderMetaStrategyConfig();
+      case 'jailbreak:tree':
+        return renderTreeStrategyConfig();
+      case 'gcg':
+        return renderGcgStrategyConfig();
+      case 'citation':
+        return renderCitationStrategyConfig();
+      case 'layer':
+        return renderLayerStrategyConfig();
+      default:
+        if (strategy && MULTI_TURN_STRATEGIES.includes(strategy as MultiTurnStrategy)) {
+          return renderMultiTurnStrategyConfig();
+        }
+        return (
+          <p className="text-muted-foreground">
+            No configuration options available for this strategy.
+          </p>
+        );
     }
   };
 
