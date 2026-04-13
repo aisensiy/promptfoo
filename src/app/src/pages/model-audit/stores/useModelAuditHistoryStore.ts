@@ -41,6 +41,11 @@ interface ModelAuditHistoryState {
 }
 
 const DEFAULT_PAGE_SIZE = 25;
+const MAX_LIST_SCANS_LIMIT = 100;
+
+function clampListScansLimit(limit: number) {
+  return Math.min(MAX_LIST_SCANS_LIMIT, Math.max(1, limit));
+}
 
 export const useModelAuditHistoryStore = create<ModelAuditHistoryState>()((set, get) => ({
   // Initial state
@@ -60,11 +65,12 @@ export const useModelAuditHistoryStore = create<ModelAuditHistoryState>()((set, 
     try {
       const { pageSize, currentPage, sortModel, searchQuery } = get();
       const offset = currentPage * pageSize;
+      const limit = clampListScansLimit(pageSize);
       const sort = sortModel[0]?.field || 'createdAt';
       const order = sortModel[0]?.sort || 'desc';
 
       const params = new URLSearchParams({
-        limit: pageSize.toString(),
+        limit: limit.toString(),
         offset: offset.toString(),
         sort,
         order,
@@ -82,7 +88,7 @@ export const useModelAuditHistoryStore = create<ModelAuditHistoryState>()((set, 
       const data = await response.json();
       set({
         historicalScans: data.scans || [],
-        totalCount: data.total || data.scans?.length || 0,
+        totalCount: data.total ?? data.scans?.length ?? 0,
         isLoadingHistory: false,
       });
     } catch (error) {
@@ -104,7 +110,7 @@ export const useModelAuditHistoryStore = create<ModelAuditHistoryState>()((set, 
       const sort = sortModel[0]?.field || 'createdAt';
       const order = sortModel[0]?.sort || 'desc';
       const offset = Math.max(0, startIndex);
-      const limit = Math.max(1, endIndex - offset + 1);
+      const limit = clampListScansLimit(endIndex - offset + 1);
 
       const params = new URLSearchParams({
         limit: limit.toString(),
@@ -124,7 +130,7 @@ export const useModelAuditHistoryStore = create<ModelAuditHistoryState>()((set, 
 
       const data = await response.json();
       const scans = data.scans || [];
-      const total = data.total || scans.length || 0;
+      const total = data.total ?? scans.length ?? 0;
       set({
         totalCount: total,
         historyError: null,

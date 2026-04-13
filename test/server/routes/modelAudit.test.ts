@@ -1,10 +1,11 @@
+import http from 'node:http';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 import request from 'supertest';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../../src/server/server';
 import { asMockChildProcess, createMockChildProcess } from '../../util/mockChildProcess';
 
@@ -31,7 +32,18 @@ const mockedCheckModelAuditInstalled = vi.mocked(checkModelAuditInstalled);
 const mockedSpawn = vi.mocked(spawn);
 
 describe('Model Audit Routes', () => {
-  let app: ReturnType<typeof createApp>;
+  let app: http.Server;
+
+  beforeAll(() => {
+    app = createApp().listen(0, '127.0.0.1');
+  });
+
+  afterAll(
+    () =>
+      new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      }),
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,7 +51,6 @@ describe('Model Audit Routes', () => {
     // vi.clearAllMocks() only clears call history, not mockResolvedValue/mockReturnValue.
     mockedCheckModelAuditInstalled.mockReset();
     mockedSpawn.mockReset();
-    app = createApp();
   });
 
   describe('POST /api/model-audit/scan', () => {
@@ -222,17 +233,24 @@ describe('Model Audit Routes', () => {
 });
 
 describe('Model Audit Routes - DB-backed', () => {
-  let app: ReturnType<typeof createApp>;
+  let app: http.Server;
 
   beforeAll(async () => {
     await runDbMigrations();
+    app = createApp().listen(0, '127.0.0.1');
   });
+
+  afterAll(
+    () =>
+      new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      }),
+  );
 
   beforeEach(async () => {
     vi.clearAllMocks();
     mockedCheckModelAuditInstalled.mockReset();
     mockedSpawn.mockReset();
-    app = createApp();
     // Clean up model_audits table
     const db = getDb();
     db.run('DELETE FROM model_audits');

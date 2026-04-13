@@ -48,15 +48,26 @@ export function useServerVirtualizedRows<TData>({
   rowsByIndexRef.current = rowsByIndex;
   const loadingIndexesRef = React.useRef(loadingIndexes);
   loadingIndexesRef.current = loadingIndexes;
+  const hasMountedRef = React.useRef(false);
   const resetKeyRef = React.useRef(resetKey);
 
   React.useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      resetKeyRef.current = resetKey;
+      return;
+    }
+
+    if (Object.is(resetKeyRef.current, resetKey)) {
+      return;
+    }
+
     resetKeyRef.current = resetKey;
     setRowsByIndex(new Map());
     setLoadingIndexes(new Set());
   }, [resetKey]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     setRowsByIndex(indexRows(initialRows));
   }, [initialRows]);
 

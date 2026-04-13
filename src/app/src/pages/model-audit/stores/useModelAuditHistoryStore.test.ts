@@ -62,6 +62,23 @@ describe('useModelAuditHistoryStore', () => {
       });
     });
 
+    it('should preserve an explicit zero total from the API', async () => {
+      const mockScans = [createMockScan('1', 'Scan 1')];
+
+      mockCallApi.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ scans: mockScans, total: 0 }),
+      } as Response);
+
+      const { result } = renderHook(() => useModelAuditHistoryStore());
+
+      await act(async () => {
+        await result.current.fetchHistoricalScans();
+      });
+
+      expect(result.current.totalCount).toBe(0);
+    });
+
     it('should handle fetch error', async () => {
       mockCallApi.mockResolvedValueOnce({
         ok: false,
@@ -141,6 +158,58 @@ describe('useModelAuditHistoryStore', () => {
         expect.stringContaining('offset=100'),
         expect.any(Object),
       );
+    });
+
+    it('should cap list request limits to the API maximum', async () => {
+      mockCallApi.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ scans: [], total: 0 }),
+      } as Response);
+
+      const { result } = renderHook(() => useModelAuditHistoryStore());
+
+      act(() => {
+        result.current.setPageSize(250);
+      });
+
+      await act(async () => {
+        await result.current.fetchHistoricalScans();
+      });
+
+      expect(mockCallApi).toHaveBeenCalledWith(
+        expect.stringContaining('limit=100'),
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('fetchHistoricalScanRange', () => {
+    it('should cap requested ranges to the API maximum and preserve zero totals', async () => {
+      const mockScans = [createMockScan('1', 'Scan 1')];
+
+      mockCallApi.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ scans: mockScans, total: 0 }),
+      } as Response);
+
+      const { result } = renderHook(() => useModelAuditHistoryStore());
+
+      let rangeResult:
+        | Awaited<ReturnType<typeof result.current.fetchHistoricalScanRange>>
+        | undefined;
+      await act(async () => {
+        rangeResult = await result.current.fetchHistoricalScanRange({
+          startIndex: 0,
+          endIndex: 250,
+        });
+      });
+
+      expect(mockCallApi).toHaveBeenCalledWith(
+        expect.stringContaining('limit=100'),
+        expect.any(Object),
+      );
+      expect(rangeResult?.total).toBe(0);
+      expect(result.current.totalCount).toBe(0);
     });
   });
 

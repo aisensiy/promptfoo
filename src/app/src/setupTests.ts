@@ -4,6 +4,14 @@ import { webcrypto } from 'node:crypto';
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { afterEach, expect, vi } from 'vitest';
+import { restoreBrowserMocks } from './tests/browserMocks';
+import { restoreTestTimers } from './tests/timers';
+
+(
+  globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT?: boolean;
+  }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 class MemoryStorage implements Storage {
   private store = new Map<string, string>();
@@ -48,6 +56,14 @@ if (!globalThis.crypto?.subtle) {
 
 if (typeof globalThis.localStorage?.clear !== 'function') {
   Object.defineProperty(globalThis, 'localStorage', {
+    value: new MemoryStorage(),
+    writable: true,
+    configurable: true,
+  });
+}
+
+if (typeof globalThis.sessionStorage?.clear !== 'function') {
+  Object.defineProperty(globalThis, 'sessionStorage', {
     value: new MemoryStorage(),
     writable: true,
     configurable: true,
@@ -103,6 +119,23 @@ if (typeof global.ResizeObserver === 'undefined') {
       // noop
     }
   };
+}
+
+// JSDOM does not implement media playback, but app code legitimately calls it.
+// Provide explicit test doubles so unsupported browser gaps do not leak noisy
+// "Not implemented" messages into otherwise clean test runs.
+if (typeof HTMLMediaElement !== 'undefined') {
+  Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+    configurable: true,
+    writable: true,
+    value: vi.fn(() => Promise.resolve()),
+  });
+
+  Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
+    configurable: true,
+    writable: true,
+    value: vi.fn(),
+  });
 }
 
 // We can mock the environment variables. For example:
@@ -180,22 +213,27 @@ afterEach(() => {
   // Clean up React Testing Library - unmount all rendered components
   cleanup();
 
-  // Only run pending timers and clear timers if fake timers are active
-  // This prevents errors when tests switch between real and fake timers
+  let timerCleanupError: unknown;
   try {
-    // Check if fake timers are being used by trying to get pending timers
-    // vi.isFakeTimers() doesn't exist, so we use a try-catch approach
-    vi.runOnlyPendingTimers();
-    vi.clearAllTimers();
-  } catch {
-    // If timers are not mocked (real timers), these calls will throw
-    // This is expected - just skip timer cleanup in this case
+    restoreTestTimers({ runPending: true });
+  } catch (error) {
+    timerCleanupError = error;
   }
 
-  // Reset to real timers if any test used fake timers but didn't restore
-  // This is safe to call regardless of timer state
-  vi.useRealTimers();
+  // Restore spies before browser property descriptors. If a spy wraps a
+  // mockBrowserProperty value, restoring spies first prevents them from
+  // re-applying the mocked value after descriptors are restored.
+  vi.restoreAllMocks();
+  restoreBrowserMocks();
 
-  // Clear all mocks to prevent state leakage between tests
+  // Reset browser storage after restoring any per-test storage replacements.
+  globalThis.localStorage?.clear();
+  globalThis.sessionStorage?.clear();
+
+  // Clear all mocks to prevent call state leakage between tests.
   vi.clearAllMocks();
+
+  if (timerCleanupError !== undefined) {
+    throw timerCleanupError;
+  }
 });

@@ -176,7 +176,8 @@ describe('DataTable', () => {
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
   });
 
-  it('should show toolbar when filter returns no results so users can clear filters', () => {
+  it('should show toolbar when filter returns no results so users can clear filters', async () => {
+    const user = userEvent.setup();
     const toolbarActions = <button data-testid="custom-action">Add Item</button>;
 
     const data: TestRow[] = [
@@ -192,7 +193,9 @@ describe('DataTable', () => {
 
     // Type a search term that matches nothing
     const searchInput = screen.getByPlaceholderText('Search...');
-    fireEvent.change(searchInput, { target: { value: 'xyz-no-match' } });
+    await user.click(searchInput);
+    await user.keyboard('{Control>}a{/Control}');
+    await user.paste('xyz-no-match');
 
     // Data should be filtered out
     expect(screen.queryByText('Apple')).not.toBeInTheDocument();
@@ -260,7 +263,9 @@ describe('DataTable', () => {
 
     await user.click(screen.getByRole('button', { name: 'Filter Name' }));
     const headerFilterInput = await screen.findByPlaceholderText('Value...');
-    fireEvent.change(headerFilterInput, { target: { value: 'Item 2' } });
+    await user.click(headerFilterInput);
+    await user.keyboard('{Control>}a{/Control}');
+    await user.paste('Item 2');
     await user.click(screen.getByRole('button', { name: 'Filter Name' }));
 
     await user.click(screen.getByRole('button', { name: /^Filters/ }));
@@ -343,6 +348,52 @@ describe('DataTable', () => {
       expect(screen.getByText('Loaded row')).toBeInTheDocument();
       expect(container.querySelectorAll('tbody tr[data-rowindex]').length).toBeLessThan(100);
       expect(container.querySelector('tbody tr[aria-busy="true"]')).toBeInTheDocument();
+    });
+
+    it('should fall back to client virtualization when server configuration is missing', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      try {
+        render(
+          <DataTable
+            columns={columns}
+            data={[{ id: 'id-1', name: 'Client fallback row' }]}
+            rowDisplayMode={'server-virtualized' as any}
+          />,
+        );
+
+        expect(screen.getByText('Client fallback row')).toBeInTheDocument();
+        await waitFor(() =>
+          expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('serverVirtualization')),
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it('should reload the visible server range when sorting changes', async () => {
+      const loadRows = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={[]}
+          rowDisplayMode="server-virtualized"
+          maxHeight="400px"
+          serverVirtualization={{
+            rowCount: 100,
+            pageSize: 25,
+            getRow: () => undefined,
+            loadRows,
+          }}
+        />,
+      );
+
+      await waitFor(() => expect(loadRows).toHaveBeenCalled());
+      const loadCountBeforeSort = loadRows.mock.calls.length;
+
+      fireEvent.click(screen.getByRole('columnheader', { name: 'Name' }));
+
+      await waitFor(() => expect(loadRows.mock.calls.length).toBeGreaterThan(loadCountBeforeSort));
     });
 
     it('should abort server-side virtual row loads on cleanup', async () => {

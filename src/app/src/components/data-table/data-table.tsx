@@ -34,6 +34,8 @@ import type { DataTableProps } from './types';
 
 const UTILITY_COLUMN_IDS = new Set(['select', 'expand']);
 
+type RowDisplayMode = 'client-virtualized' | 'server-virtualized';
+
 type DataTableHeaderActionsProps<TData, TValue> = {
   canFilter: boolean;
   canSort: boolean;
@@ -192,6 +194,23 @@ function shouldShowEmptyDataState(
   return !hasData && !(globalFilter || columnFilters.length > 0);
 }
 
+function resolveRowDisplayMode(
+  rowDisplayMode: RowDisplayMode | undefined,
+  hasServerVirtualization: boolean,
+) {
+  const requestedRowDisplayMode = rowDisplayMode ?? 'client-virtualized';
+  const isInvalidServerVirtualizationConfig =
+    requestedRowDisplayMode === 'server-virtualized' && !hasServerVirtualization;
+  const resolvedRowDisplayMode = isInvalidServerVirtualizationConfig
+    ? 'client-virtualized'
+    : requestedRowDisplayMode;
+
+  return {
+    isInvalidServerVirtualizationConfig,
+    isServerVirtualized: resolvedRowDisplayMode === 'server-virtualized',
+  };
+}
+
 export function DataTable<TData, TValue = unknown>({
   columns,
   data,
@@ -235,8 +254,19 @@ export function DataTable<TData, TValue = unknown>({
   const sorting = controlledSorting ?? internalSorting;
   const sortingRef = React.useRef(sorting);
   sortingRef.current = sorting;
-  const resolvedRowDisplayMode = rowDisplayMode ?? 'client-virtualized';
-  const isServerVirtualized = resolvedRowDisplayMode === 'server-virtualized';
+  const { isInvalidServerVirtualizationConfig, isServerVirtualized } = resolveRowDisplayMode(
+    rowDisplayMode,
+    serverVirtualization != null,
+  );
+
+  React.useEffect(() => {
+    if (isInvalidServerVirtualizationConfig) {
+      console.warn(
+        'DataTable: rowDisplayMode="server-virtualized" requires serverVirtualization. Falling back to client virtualization.',
+      );
+    }
+  }, [isInvalidServerVirtualizationConfig]);
+
   const handleSortingChange = React.useCallback(
     (updater: SortingState | ((old: SortingState) => SortingState)) => {
       const nextValue = typeof updater === 'function' ? updater(sortingRef.current) : updater;
@@ -471,6 +501,17 @@ export function DataTable<TData, TValue = unknown>({
   const activeVirtualItems = fallbackVirtualItems;
   const firstVirtualIndex = activeVirtualItems[0]?.index;
   const lastVirtualIndex = activeVirtualItems[activeVirtualItems.length - 1]?.index;
+  const virtualScrollResetKey = React.useMemo(
+    () => JSON.stringify({ columnFilters, globalFilter, sorting }),
+    [columnFilters, globalFilter, sorting],
+  );
+  const loadServerRows = React.useCallback(
+    (range: { startIndex: number; endIndex: number; signal: AbortSignal }, stateKey: string) => {
+      void stateKey;
+      return serverLoadRows?.(range);
+    },
+    [serverLoadRows],
+  );
 
   React.useEffect(() => {
     if (!isServerVirtualized || firstVirtualIndex === undefined || lastVirtualIndex === undefined) {
@@ -479,11 +520,14 @@ export function DataTable<TData, TValue = unknown>({
 
     const abortController = new AbortController();
     Promise.resolve(
-      serverLoadRows?.({
-        startIndex: firstVirtualIndex,
-        endIndex: lastVirtualIndex,
-        signal: abortController.signal,
-      }),
+      loadServerRows(
+        {
+          startIndex: firstVirtualIndex,
+          endIndex: lastVirtualIndex,
+          signal: abortController.signal,
+        },
+        virtualScrollResetKey,
+      ),
     ).catch((error) => {
       if (!(error instanceof Error && error.name === 'AbortError')) {
         // Surface unexpected load errors through the caller-owned error state when possible.
@@ -492,12 +536,13 @@ export function DataTable<TData, TValue = unknown>({
     });
 
     return () => abortController.abort();
-  }, [firstVirtualIndex, isServerVirtualized, lastVirtualIndex, serverLoadRows]);
-
-  const virtualScrollResetKey = React.useMemo(
-    () => JSON.stringify({ columnFilters, globalFilter, sorting }),
-    [columnFilters, globalFilter, sorting],
-  );
+  }, [
+    firstVirtualIndex,
+    isServerVirtualized,
+    lastVirtualIndex,
+    loadServerRows,
+    virtualScrollResetKey,
+  ]);
   const previousVirtualScrollResetKeyRef = React.useRef(virtualScrollResetKey);
 
   // Reset virtual scroll when row order or filters change.

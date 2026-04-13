@@ -44,10 +44,8 @@ interface DataTablePropsBase<TData, TValue = unknown> {
    * @deprecated Use virtualRowEstimate / virtualOverscan for virtualized tables.
    */
   initialPageSize?: number;
-  rowDisplayMode?: 'client-virtualized' | 'server-virtualized';
   virtualRowEstimate?: number;
   virtualOverscan?: number;
-  serverVirtualization?: DataTableServerVirtualization<TData>;
   /**
    * @deprecated Use rowDisplayMode="server-virtualized" with serverVirtualization.
    */
@@ -97,6 +95,20 @@ interface DataTablePropsBase<TData, TValue = unknown> {
   getRowCanExpand?: (row: Row<TData>) => boolean;
 }
 
+type DataTableClientVirtualizationProps = {
+  rowDisplayMode?: 'client-virtualized';
+  serverVirtualization?: never;
+};
+
+type DataTableServerVirtualizationProps<TData> = {
+  rowDisplayMode: 'server-virtualized';
+  serverVirtualization: DataTableServerVirtualization<TData>;
+};
+
+type DataTableVirtualizationProps<TData> =
+  | DataTableClientVirtualizationProps
+  | DataTableServerVirtualizationProps<TData>;
+
 export interface DataTableServerVirtualization<TData> {
   rowCount: number;
   pageSize: number;
@@ -126,6 +138,7 @@ type DataTableAutoFilteringProps = {
 type DataTableFilteringProps = DataTableManualFilteringProps | DataTableAutoFilteringProps;
 
 export type DataTableProps<TData, TValue = unknown> = DataTablePropsBase<TData, TValue> &
+  DataTableVirtualizationProps<TData> &
   DataTableFilteringProps;
 
 export interface DataTableToolbarProps<TData> {
