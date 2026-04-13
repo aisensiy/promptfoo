@@ -85,9 +85,8 @@ export function getAuthor(override?: string | null): string | null {
   const envAuthor = getEnvString('PROMPTFOO_AUTHOR');
   if (isLoggedIntoCloud() && userEmail) {
     if (override && override !== userEmail) {
-      logger.debug(
-        `[Author] Ignoring override "${override}" because cloud identity "${userEmail}" takes precedence`,
-      );
+      // Don't log the full emails — the rest of the codebase treats them as PII.
+      logger.debug('[Author] Ignoring author override because cloud identity takes precedence');
     }
     return userEmail;
   }
