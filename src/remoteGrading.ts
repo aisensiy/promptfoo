@@ -19,8 +19,17 @@ function getRemoteGradingResponseMetadata(data: unknown) {
   };
 }
 
-function isRemoteGradingResponse(data: unknown): data is { result?: GradingResult } {
+function isRemoteGradingResponse(data: unknown): data is { result?: unknown } {
   return typeof data === 'object' && data !== null && !Array.isArray(data);
+}
+
+function isGradingResult(result: unknown): result is Omit<GradingResult, 'assertion'> {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    !Array.isArray(result) &&
+    typeof (result as { pass?: unknown }).pass === 'boolean'
+  );
 }
 
 function formatRemoteGradingError(error: unknown): string {
@@ -29,10 +38,10 @@ function formatRemoteGradingError(error: unknown): string {
     (error.message.startsWith('Remote grading failed with status ') ||
       error.message === 'Remote grading failed. Response data is invalid')
   ) {
-    return `Could not perform remote grading: ${error.message}`;
+    return error.message;
   }
 
-  return 'Could not perform remote grading';
+  return 'Remote grading request failed';
 }
 
 export async function doRemoteGrading(
@@ -41,7 +50,7 @@ export async function doRemoteGrading(
   try {
     payload.email = getUserEmail();
     const body = JSON.stringify(payload);
-    logger.debug(`Performing remote grading: task=${payload.task}`);
+    logger.debug('Performing remote grading', { task: payload.task });
     const { data, status } = await fetchWithCache(
       getRemoteGenerationUrl(),
       {
@@ -71,12 +80,7 @@ export async function doRemoteGrading(
 
     const { result } = data;
 
-    if (
-      !result ||
-      typeof result !== 'object' ||
-      Array.isArray(result) ||
-      result.pass === undefined
-    ) {
+    if (!isGradingResult(result)) {
       throw new Error('Remote grading failed. Response data is invalid');
     }
 

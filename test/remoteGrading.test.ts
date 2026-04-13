@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithCache } from '../src/cache';
 import logger from '../src/logger';
 import { doRemoteGrading } from '../src/remoteGrading';
@@ -22,8 +22,11 @@ vi.mock('../src/redteam/remoteGeneration', () => ({
 }));
 
 describe('doRemoteGrading', () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.mocked(fetchWithCache).mockResolvedValue({
       data: {
         result: {
@@ -51,7 +54,7 @@ describe('doRemoteGrading', () => {
       .join('\n');
     const serializedDebugLogs = JSON.stringify(vi.mocked(logger.debug).mock.calls);
 
-    expect(debugLogs).toContain('task=llm-rubric');
+    expect(serializedDebugLogs).toContain('"task":"llm-rubric"');
     expect(serializedDebugLogs).toContain('"hasResult":true');
     expect(debugLogs).not.toContain('SECRET_PROMPT_TEXT');
     expect(debugLogs).not.toContain('SECRET_INPUT_TEXT');
@@ -70,6 +73,9 @@ describe('doRemoteGrading', () => {
       'json',
       true,
     );
+    expect(logger.debug).toHaveBeenCalledWith('Performing remote grading', {
+      task: 'llm-rubric',
+    });
   });
 
   it('does not expose response content in non-200 errors or logs', async () => {
@@ -87,7 +93,7 @@ describe('doRemoteGrading', () => {
         task: 'llm-rubric',
         prompt: 'SECRET_PROMPT_TEXT',
       }),
-    ).rejects.toThrow('Could not perform remote grading: Remote grading failed with status 500');
+    ).rejects.toThrow('Remote grading failed with status 500');
 
     const allOutput = JSON.stringify(vi.mocked(logger.debug).mock.calls);
     expect(allOutput).not.toContain('SECRET_REMOTE_ERROR');
@@ -111,12 +117,38 @@ describe('doRemoteGrading', () => {
         task: 'llm-rubric',
         prompt: 'SECRET_PROMPT_TEXT',
       }),
-    ).rejects.toThrow(
-      'Could not perform remote grading: Remote grading failed. Response data is invalid',
-    );
+    ).rejects.toThrow('Remote grading failed. Response data is invalid');
 
     const allOutput = JSON.stringify(vi.mocked(logger.debug).mock.calls);
     expect(allOutput).not.toContain('SECRET_INVALID_RESPONSE_REASON');
+  });
+
+  it.each([
+    'true',
+    1,
+    null,
+  ])('rejects invalid pass values without exposing response data (%s)', async (pass) => {
+    vi.mocked(fetchWithCache).mockResolvedValue({
+      data: {
+        result: {
+          pass,
+          reason: 'SECRET_NON_BOOLEAN_PASS_REASON',
+        },
+      },
+      status: 200,
+      statusText: 'OK',
+      cached: false,
+    });
+
+    await expect(
+      doRemoteGrading({
+        task: 'llm-rubric',
+        prompt: 'SECRET_PROMPT_TEXT',
+      }),
+    ).rejects.toThrow('Remote grading failed. Response data is invalid');
+
+    const allOutput = JSON.stringify(vi.mocked(logger.debug).mock.calls);
+    expect(allOutput).not.toContain('SECRET_NON_BOOLEAN_PASS_REASON');
   });
 
   it.each([
@@ -136,9 +168,7 @@ describe('doRemoteGrading', () => {
         task: 'llm-rubric',
         prompt: 'SECRET_PROMPT_TEXT',
       }),
-    ).rejects.toThrow(
-      'Could not perform remote grading: Remote grading failed. Response data is invalid',
-    );
+    ).rejects.toThrow('Remote grading failed. Response data is invalid');
 
     const allOutput = JSON.stringify(vi.mocked(logger.debug).mock.calls);
     expect(allOutput).not.toContain('SECRET_STRING_RESPONSE');
@@ -159,7 +189,7 @@ describe('doRemoteGrading', () => {
     }
 
     expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as Error).message).toBe('Could not perform remote grading');
+    expect((thrown as Error).message).toBe('Remote grading request failed');
     expect((thrown as Error).message).not.toContain('SECRET_TRANSPORT_ERROR');
   });
 });
