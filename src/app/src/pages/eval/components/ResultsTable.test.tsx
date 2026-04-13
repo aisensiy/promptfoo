@@ -765,6 +765,105 @@ describe('ResultsTable Metrics Display', () => {
       expect(screen.getByText('Original (image text):')).toBeInTheDocument();
       expect(screen.getByText('decoded OCR prompt')).toBeInTheDocument();
     });
+
+    it('does not replace a provider-reported text prompt with the raw injected image variable', () => {
+      vi.mocked(useTableStore).mockImplementation(() => ({
+        config: {
+          redteam: {
+            injectVar: 'prompt',
+          },
+        },
+        evalId: '123',
+        setTable: vi.fn(),
+        table: {
+          body: [
+            {
+              outputs: [
+                {
+                  pass: true,
+                  score: 1,
+                  text: 'test output',
+                  response: {
+                    prompt: 'provider rewritten prompt',
+                  },
+                },
+              ],
+              test: {},
+              vars: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'],
+            },
+          ],
+          head: {
+            prompts: [{}],
+            vars: ['prompt'],
+          },
+        },
+        version: 4,
+        fetchEvalData: vi.fn(),
+        filters: {
+          values: {},
+          appliedCount: 0,
+          options: {
+            metric: [],
+          },
+        },
+      }));
+
+      renderWithProviders(<ResultsTable {...defaultProps} />);
+
+      expect(screen.getByText('provider rewritten prompt')).toBeInTheDocument();
+      expect(screen.queryByRole('img', { name: 'Base64 encoded image' })).not.toBeInTheDocument();
+    });
+
+    it('renders a provider-reported image prompt when the raw injected variable is not an image', () => {
+      const providerImagePrompt = 'data:image/png;base64,providerImagePrompt';
+      vi.mocked(useTableStore).mockImplementation(() => ({
+        config: {
+          redteam: {
+            injectVar: 'prompt',
+          },
+        },
+        evalId: '123',
+        setTable: vi.fn(),
+        table: {
+          body: [
+            {
+              outputs: [
+                {
+                  pass: true,
+                  score: 1,
+                  text: 'test output',
+                  response: {
+                    prompt: providerImagePrompt,
+                  },
+                },
+              ],
+              test: {},
+              vars: ['{{prompt}}'],
+            },
+          ],
+          head: {
+            prompts: [{}],
+            vars: ['prompt'],
+          },
+        },
+        version: 4,
+        fetchEvalData: vi.fn(),
+        filters: {
+          values: {},
+          appliedCount: 0,
+          options: {
+            metric: [],
+          },
+        },
+      }));
+
+      renderWithProviders(<ResultsTable {...defaultProps} />);
+
+      expect(screen.getByRole('img', { name: 'Base64 encoded image' })).toHaveAttribute(
+        'src',
+        providerImagePrompt,
+      );
+    });
   });
 });
 

@@ -1108,6 +1108,36 @@ function hasFileMetadataForColumn({
   return Boolean(fileMetadata?.[varName]);
 }
 
+function getImageSourceForCell({
+  columnId,
+  value,
+  row,
+  headVars,
+  injectVarName,
+}: {
+  columnId: string;
+  value: unknown;
+  row: Row<EvaluateTableRow>;
+  headVars: string[];
+  injectVarName: string;
+}): string | undefined {
+  if (typeof value !== 'string' || hasFileMetadataForColumn({ columnId, row, headVars })) {
+    return undefined;
+  }
+
+  const varName = getVariableNameForColumn(columnId, headVars);
+  const imageValue = varName
+    ? getVariableCellValue({
+        row: row.original,
+        varName,
+        injectVarName,
+        fallbackValue: value,
+      })
+    : value;
+
+  return typeof imageValue === 'string' ? resolveImageSource(imageValue) : undefined;
+}
+
 function renderImageCellContent({
   imgSrc,
   originalImageText,
@@ -1187,10 +1217,13 @@ function renderResultsTableCell({
   const value = cell.getValue();
   const renderedImgSrc =
     typeof renderedCellContent === 'string' ? resolveImageSource(renderedCellContent) : undefined;
-  const rawImgSrc =
-    typeof value === 'string' && !hasFileMetadataForColumn({ columnId, row, headVars })
-      ? resolveImageSource(value)
-      : undefined;
+  const rawImgSrc = getImageSourceForCell({
+    columnId,
+    value,
+    row,
+    headVars,
+    injectVarName,
+  });
   const imgSrc = renderedImgSrc || rawImgSrc;
   const cellContent = imgSrc
     ? renderImageCellContent({

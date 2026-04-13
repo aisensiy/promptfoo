@@ -231,6 +231,10 @@ function renderHighlightedTextNode(text: string, searchText: string): React.Reac
     const matches: { start: number; end: number }[] = [];
     let match;
     while ((match = regex.exec(text)) !== null) {
+      if (regex.lastIndex === match.index) {
+        regex.lastIndex += 1;
+        continue;
+      }
       matches.push({
         start: match.index,
         end: regex.lastIndex,
@@ -1455,7 +1459,7 @@ function EvalOutputCell({
 
   const scoreString = scoreToString(output.score);
   const providerOverride = getProviderOverrideBadge(output);
-  const commentTextToDisplay = getCommentTextToDisplay(output.gradingResult?.comment);
+  const commentTextToDisplay = getCommentTextToDisplay(commentText);
 
   const shiftKeyPressed = useShiftKey();
   const [actionsHovered, setActionsHovered] = React.useState(false);

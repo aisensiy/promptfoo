@@ -926,6 +926,17 @@ describe('EvalOutputCell', () => {
     expect(screen.getByText('Test output text')).toBeInTheDocument();
   });
 
+  it('ignores zero-length regex matches without hanging', () => {
+    mockTableStoreState.shouldHighlightSearchText = true;
+
+    const { container } = renderWithProviders(
+      <EvalOutputCell {...defaultProps} searchText="(?=Test)" />,
+    );
+
+    expect(screen.getByText('Test output text')).toBeInTheDocument();
+    expect(container.querySelector('.search-highlight')).toBeNull();
+  });
+
   it('preserves diff output when searchText is an invalid regex', () => {
     mockTableStoreState.shouldHighlightSearchText = true;
 
