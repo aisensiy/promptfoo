@@ -27,13 +27,16 @@ export interface ParsedTrace {
   span: SpanData;
 }
 
-export interface TraceSpanQueryOptions {
+export interface TraceAttributeSanitizationOptions {
+  sanitizeAttributes?: boolean;
+}
+
+export interface TraceSpanQueryOptions extends TraceAttributeSanitizationOptions {
   earliestStartTime?: number;
   maxSpans?: number;
   maxDepth?: number;
   includeInternalSpans?: boolean;
   spanFilter?: string[];
-  sanitizeAttributes?: boolean;
 }
 
 const SENSITIVE_ATTRIBUTE_KEYS = [
@@ -48,13 +51,36 @@ const SENSITIVE_ATTRIBUTE_KEYS = [
   'passphrase',
 ];
 
+const NORMALIZED_SENSITIVE_ATTRIBUTE_KEYS = SENSITIVE_ATTRIBUTE_KEYS.map((key) =>
+  key.replace(/[^a-z0-9]/g, ''),
+);
+
+const SAFE_TOKEN_ATTRIBUTE_KEYS = new Set([
+  'gen_ai.request.max_tokens',
+  'gen_ai.usage.input_tokens',
+  'gen_ai.usage.output_tokens',
+  'gen_ai.usage.total_tokens',
+  'gen_ai.usage.cached_tokens',
+  'gen_ai.usage.reasoning_tokens',
+  'gen_ai.usage.accepted_prediction_tokens',
+  'gen_ai.usage.rejected_prediction_tokens',
+  'gen_ai.usage.cache_read_input_tokens',
+  'gen_ai.usage.cache_creation_input_tokens',
+]);
+
 function isSensitiveAttributeKey(key: string): boolean {
   const lowerKey = key.toLowerCase();
+  if (SAFE_TOKEN_ATTRIBUTE_KEYS.has(lowerKey)) {
+    return false;
+  }
+
   const normalizedKey = lowerKey.replace(/[^a-z0-9]/g, '');
 
-  return SENSITIVE_ATTRIBUTE_KEYS.some((sensitiveKey) => {
-    const normalizedSensitiveKey = sensitiveKey.replace(/[^a-z0-9]/g, '');
-    return lowerKey.includes(sensitiveKey) || normalizedKey.includes(normalizedSensitiveKey);
+  return SENSITIVE_ATTRIBUTE_KEYS.some((sensitiveKey, index) => {
+    return (
+      lowerKey.includes(sensitiveKey) ||
+      normalizedKey.includes(NORMALIZED_SENSITIVE_ATTRIBUTE_KEYS[index])
+    );
   });
 }
 
@@ -235,7 +261,12 @@ export class TraceStore {
     }
   }
 
-  async getTracesByEvaluation(evaluationId: string): Promise<TraceData[]> {
+  async getTracesByEvaluation(
+    evaluationId: string,
+    options: TraceAttributeSanitizationOptions = {},
+  ): Promise<TraceData[]> {
+    const { sanitizeAttributes: shouldSanitize = true } = options;
+
     try {
       logger.debug(`[TraceStore] Fetching traces for evaluation ${evaluationId}`);
       const db = this.getDatabase();
@@ -262,7 +293,7 @@ export class TraceStore {
             evaluationId: trace.evaluationId,
             testCaseId: trace.testCaseId,
             metadata: trace.metadata ?? undefined,
-            spans: spans.map((span) => serializeSpan(span)),
+            spans: spans.map((span) => serializeSpan(span, shouldSanitize)),
           };
         }),
       );

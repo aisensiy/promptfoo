@@ -217,8 +217,8 @@ describe('TraceStore', () => {
   describe('getTracesByEvaluation', () => {
     it('should retrieve all traces for an evaluation', async () => {
       const mockTraces = [
-        { id: '1', traceId: 'trace-1', evaluationId: 'eval-1' },
-        { id: '2', traceId: 'trace-2', evaluationId: 'eval-1' },
+        { id: '1', traceId: 'trace-1', evaluationId: 'eval-1', testCaseId: 'test-case-1' },
+        { id: '2', traceId: 'trace-2', evaluationId: 'eval-1', testCaseId: 'test-case-2' },
       ];
 
       const mockSpans = {
@@ -293,7 +293,7 @@ describe('TraceStore', () => {
       expect(result[0]).toEqual({
         traceId: 'trace-1',
         evaluationId: 'eval-1',
-        testCaseId: undefined,
+        testCaseId: 'test-case-1',
         metadata: undefined,
         spans: [
           {
@@ -321,7 +321,7 @@ describe('TraceStore', () => {
       expect(result[1]).toEqual({
         traceId: 'trace-2',
         evaluationId: 'eval-1',
-        testCaseId: undefined,
+        testCaseId: 'test-case-2',
         metadata: undefined,
         spans: [
           {
@@ -367,6 +367,10 @@ describe('TraceStore', () => {
               api_token: 'nested-secret',
               safe: 'ok',
             },
+            'gen_ai.request.max_tokens': 4096,
+            'gen_ai.usage.input_tokens': 100,
+            'gen_ai.usage.output_tokens': 50,
+            'gen_ai.usage.total_tokens': 150,
           },
           statusCode: null,
           statusMessage: null,
@@ -401,7 +405,63 @@ describe('TraceStore', () => {
           api_token: '<redacted>',
           safe: 'ok',
         },
+        'gen_ai.request.max_tokens': 4096,
+        'gen_ai.usage.input_tokens': 100,
+        'gen_ai.usage.output_tokens': 50,
+        'gen_ai.usage.total_tokens': 150,
       });
+    });
+
+    it('should allow callers to retrieve raw span attributes for an evaluation', async () => {
+      const mockTrace = {
+        id: '1',
+        traceId: 'trace-1',
+        evaluationId: 'eval-1',
+        testCaseId: 'test-case-1',
+        metadata: null,
+      };
+      const mockSpans = [
+        {
+          id: '1',
+          traceId: 'trace-1',
+          spanId: 'span-1',
+          parentSpanId: null,
+          name: 'http request',
+          startTime: 1000,
+          endTime: null,
+          attributes: {
+            authorization: 'Bearer trace-secret',
+            'x-api-key': 'gateway-secret',
+            headers: {
+              'api-key': 'header-secret',
+              set_cookie: 'session=trace-secret',
+              accept: 'application/json',
+            },
+          },
+          statusCode: null,
+          statusMessage: null,
+        },
+      ];
+
+      const tracesSelectChain = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn(() => Promise.resolve([mockTrace])),
+      };
+      const spanQuery = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn(() => Promise.resolve(mockSpans)),
+      };
+
+      vi.spyOn(mockDb, 'select')
+        .mockImplementation(() => ({}))
+        .mockReturnValueOnce(tracesSelectChain)
+        .mockReturnValueOnce(spanQuery);
+
+      const result = await traceStore.getTracesByEvaluation('eval-1', {
+        sanitizeAttributes: false,
+      });
+
+      expect(result[0].spans[0].attributes).toEqual(mockSpans[0].attributes);
     });
 
     it('should return empty array if no traces found', async () => {
