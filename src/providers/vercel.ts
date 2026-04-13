@@ -1,3 +1,5 @@
+import { createHmac } from 'crypto';
+
 import { getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
 import logger from '../logger';
@@ -158,33 +160,26 @@ function pickGenerateOptions(config: VercelAiConfig) {
   );
 }
 
-function getAuthSource(config: VercelAiConfig, env?: EnvOverrides) {
-  if (config.apiKey) {
-    return 'config';
-  }
-  if (config.apiKeyEnvar) {
-    return 'custom-env';
-  }
-  if (env?.VERCEL_AI_GATEWAY_API_KEY !== undefined) {
-    return 'env-override';
-  }
-  return 'env';
+function fingerprintGatewayIdentity(value: string) {
+  return createHmac('sha256', 'promptfoo:vercel-gateway-cache-identity')
+    .update(value)
+    .digest('hex');
 }
 
 function getGatewayCacheConfig(config: VercelAiConfig, env?: EnvOverrides) {
   const headers = config.headers
     ? Object.fromEntries(
         Object.entries(config.headers)
-          .sort(([left], [right]) => left.localeCompare(right))
-          .map(([key, value]) => [key, sha256(value)]),
+          .map(([key, value]) => [key.toLowerCase(), fingerprintGatewayIdentity(value)] as const)
+          .sort(([left], [right]) => left.localeCompare(right)),
       )
     : undefined;
   const apiKey = resolveApiKey(config, env);
+  const baseUrl = resolveBaseUrl(config, env);
 
   return {
-    authSource: getAuthSource(config, env),
-    apiKeyHash: apiKey ? sha256(apiKey) : undefined,
-    baseUrl: resolveBaseUrl(config, env),
+    apiKeyFingerprint: apiKey ? fingerprintGatewayIdentity(apiKey) : undefined,
+    baseUrlFingerprint: baseUrl === undefined ? undefined : fingerprintGatewayIdentity(baseUrl),
     headers,
   };
 }
