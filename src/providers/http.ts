@@ -1183,6 +1183,12 @@ function normalizeHttpLineEndings(input: string): string {
   return normalized.replace(/\n/g, '\r\n');
 }
 
+function getRawRequestHttpVersion(input: string): string {
+  const firstLine = normalizeHttpLineEndings(input).split('\r\n', 1)[0].trim();
+  const versionMatch = firstLine.match(/\s+(HTTP\/\d(?:\.\d)?)$/i);
+  return versionMatch ? versionMatch[1].toUpperCase() : 'HTTP/1.1';
+}
+
 function parseRawRequest(input: string) {
   const adjusted = normalizeHttpLineEndings(input) + '\r\n\r\n';
   // If the injectVar is in a query param, we need to encode the URL in the first line
@@ -1203,6 +1209,7 @@ function parseRawRequest(input: string) {
     return {
       method: requestModel.method,
       url: requestModel.target,
+      httpVersion: getRawRequestHttpVersion(input),
       headers: requestModel.headers.reduce(
         (acc: Record<string, string>, header: { name: string; value: string }) => {
           acc[header.name.toLowerCase()] = header.value;
@@ -1273,6 +1280,43 @@ function sanitizeUrlEncodedBody(body: string): string {
   }
 }
 
+function getMultipartBoundary(contentType: string): string | undefined {
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  return boundaryMatch?.[1] ?? boundaryMatch?.[2]?.trim();
+}
+
+function sanitizeMultipartPartBody(part: string): string {
+  const separator = part.includes('\r\n\r\n') ? '\r\n\r\n' : '\n\n';
+  const separatorIndex = part.indexOf(separator);
+  if (separatorIndex === -1) {
+    return part;
+  }
+
+  const headerBlock = part.slice(0, separatorIndex);
+  const bodyStartIndex = separatorIndex + separator.length;
+  const body = part.slice(bodyStartIndex);
+  const fieldName = headerBlock.match(/content-disposition:[^\r\n]*\bname="([^"]+)"/i)?.[1];
+  const shouldRedact = Boolean(fieldName && isSecretField(fieldName)) || looksLikeSecret(body);
+  if (!shouldRedact) {
+    return part;
+  }
+
+  const trailingNewline = body.match(/(\r?\n)$/)?.[1] ?? '';
+  return `${part.slice(0, bodyStartIndex)}${REDACTED}${trailingNewline}`;
+}
+
+function sanitizeMultipartBody(body: string, contentType: string): string {
+  const boundary = getMultipartBoundary(contentType);
+  if (!boundary) {
+    return body;
+  }
+
+  return body
+    .split(`--${boundary}`)
+    .map((part) => sanitizeMultipartPartBody(part))
+    .join(`--${boundary}`);
+}
+
 function sanitizeRequestBodyForMetadata(body: unknown, headers?: Record<string, string>): unknown {
   const sanitizedBody = sanitizeObject(body, { context: 'request body' });
   if (typeof sanitizedBody !== 'string' || sanitizedBody.length === 0) {
@@ -1280,6 +1324,9 @@ function sanitizeRequestBodyForMetadata(body: unknown, headers?: Record<string, 
   }
 
   const contentType = getHeaderValue(headers, 'content-type')?.toLowerCase();
+  if (contentType?.includes('multipart/form-data')) {
+    return sanitizeMultipartBody(sanitizedBody, contentType);
+  }
   if (contentType?.includes('application/x-www-form-urlencoded')) {
     return sanitizeUrlEncodedBody(sanitizedBody);
   }
@@ -1371,7 +1418,9 @@ function formatRawRequestForDebugMetadata(
   parsedRequest: ReturnType<typeof parseRawRequest>,
   bodyContent?: string,
 ): string {
-  const requestLines = [`${parsedRequest.method} ${sanitizeUrl(parsedRequest.url)} HTTP/1.1`];
+  const requestLines = [
+    `${parsedRequest.method} ${sanitizeUrl(parsedRequest.url)} ${parsedRequest.httpVersion}`,
+  ];
   const sanitizedHeaders = sanitizeObject(parsedRequest.headers, {
     context: 'request headers',
   }) as Record<string, string>;
