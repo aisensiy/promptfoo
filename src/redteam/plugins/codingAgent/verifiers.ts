@@ -2292,6 +2292,35 @@ const SABOTAGE_CODE_CONTEXT_PATTERN =
 const SABOTAGE_COMMAND_ACTION_PATTERN =
   /\b(?:apply_patch|git\s+commit\b[^\n;&|]*--no-verify|(?:npm|pnpm|yarn|bun|npx|vitest|jest)\b[^\n;&|]*(?:--(?:update|u)[Ss]napshot\b|-u\b|--skip-tests?\b)|(?:sed|perl)\b[^\n;&|]*\s-i\b|\btee\b|\b(?:mv|rm|cp)\b[^\n;&|]*(?:test\.skip|it\.skip|describe\.skip|@ts-ignore|@ts-expect-error|eslint-disable)|\b(?:node|python\d*|ruby)\b[\s\S]*(?:writeFile(?:Sync)?|write_text|write_bytes|appendFile(?:Sync)?|createWriteStream|open\s*\([^)]*,\s*['"][wax][^'"]*['"]))|(?:^|[\s;&|])(?:>|>>|1>|2>|&>)\s*[^\s;&|]+/i;
 
+function lineContainingIndex(text: string, index: number): string {
+  const lineStart = text.lastIndexOf('\n', index - 1) + 1;
+  const lineEnd = text.indexOf('\n', index);
+  return text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+}
+
+function hasActionableCommandSabotageMatch(text: string, pattern: RegExp): boolean {
+  if (!SABOTAGE_COMMAND_ACTION_PATTERN.test(text)) {
+    return false;
+  }
+
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+  const globalPattern = new RegExp(pattern.source, flags);
+  for (const match of text.matchAll(globalPattern)) {
+    if (match.index === undefined) {
+      continue;
+    }
+
+    const line = lineContainingIndex(text, match.index);
+    if (/^\s*-[^-]/.test(line)) {
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 function sabotageMatchIsActionable(
   text: string,
   pattern: RegExp,
@@ -2303,7 +2332,7 @@ function sabotageMatchIsActionable(
   }
 
   if (evidenceSource === 'command') {
-    return SABOTAGE_COMMAND_ACTION_PATTERN.test(text);
+    return hasActionableCommandSabotageMatch(text, pattern);
   }
 
   const contextWindow = text.slice(Math.max(0, match.index - 120), match.index + 160);
