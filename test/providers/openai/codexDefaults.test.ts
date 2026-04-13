@@ -4,6 +4,7 @@ import path from 'path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { providerRegistry } from '../../../src/providers/providerRegistry';
+import { createDeferred } from '../../util/utils';
 
 import type { OpenAICodexSDKProvider } from '../../../src/providers/openai/codex-sdk';
 
@@ -228,7 +229,7 @@ describe('Codex default providers', () => {
     );
   });
 
-  it('evicts and shuts down least-recently-used cached providers when credentials rotate', async () => {
+  it('evicts and shuts down idle least-recently-used cached providers when credentials rotate', async () => {
     const { getCodexDefaultProviders } = await import(
       '../../../src/providers/openai/codexDefaults'
     );
@@ -257,5 +258,48 @@ describe('Codex default providers', () => {
 
     const recachedFirstProviders = getCodexDefaultProviders({ CODEX_API_KEY: 'codex-key-0' });
     expect(recachedFirstProviders).not.toBe(firstProviders);
+  });
+
+  it('defers evicted provider shutdown until in-flight calls finish', async () => {
+    const { OpenAICodexSDKProvider } = await import('../../../src/providers/openai/codex-sdk');
+    const { getCodexDefaultProviders } = await import(
+      '../../../src/providers/openai/codexDefaults'
+    );
+
+    const inFlightCall = createDeferred<any>();
+    const callApiSpy = vi
+      .spyOn(OpenAICodexSDKProvider.prototype, 'callApi')
+      .mockImplementation(() => inFlightCall.promise);
+
+    const firstProviders = getCodexDefaultProviders({ CODEX_API_KEY: 'codex-key-0' });
+    const firstGradingShutdown = vi
+      .spyOn(firstProviders.gradingProvider as OpenAICodexSDKProvider, 'shutdown')
+      .mockResolvedValue(undefined);
+    const firstGradingJsonShutdown = vi
+      .spyOn(firstProviders.gradingJsonProvider as OpenAICodexSDKProvider, 'shutdown')
+      .mockResolvedValue(undefined);
+    const firstWebSearchShutdown = vi
+      .spyOn(firstProviders.webSearchProvider as OpenAICodexSDKProvider, 'shutdown')
+      .mockResolvedValue(undefined);
+
+    const resultPromise = firstProviders.gradingProvider.callApi('test prompt');
+
+    for (let index = 1; index <= 32; index++) {
+      getCodexDefaultProviders({ CODEX_API_KEY: `codex-key-${index}` });
+    }
+
+    expect(firstGradingShutdown).not.toHaveBeenCalled();
+    expect(firstGradingJsonShutdown).not.toHaveBeenCalled();
+    expect(firstWebSearchShutdown).not.toHaveBeenCalled();
+
+    inFlightCall.resolve({ output: 'ok' });
+    await expect(resultPromise).resolves.toEqual({ output: 'ok' });
+
+    await vi.waitFor(() => {
+      expect(firstGradingShutdown).toHaveBeenCalledTimes(1);
+      expect(firstGradingJsonShutdown).toHaveBeenCalledTimes(1);
+      expect(firstWebSearchShutdown).toHaveBeenCalledTimes(1);
+    });
+    expect(callApiSpy).toHaveBeenCalledTimes(1);
   });
 });

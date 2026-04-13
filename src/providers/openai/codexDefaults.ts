@@ -56,7 +56,13 @@ type CodexDefaultProviderBundle = {
   webSearchProvider: OpenAICodexSDKProvider;
 };
 
-const codexDefaultProvidersByCacheKey = new Map<string, CodexDefaultProviderBundle>();
+type ManagedCodexDefaultProviderBundle = CodexDefaultProviderBundle & {
+  activeCalls: number;
+  shutdownPromise?: Promise<void>;
+  shutdownRequested: boolean;
+};
+
+const codexDefaultProvidersByCacheKey = new Map<string, ManagedCodexDefaultProviderBundle>();
 
 const codexSdkAvailabilityByBaseDir = new Map<string, boolean>();
 
@@ -162,7 +168,50 @@ function getCodexDefaultProvidersCacheKey(env?: EnvOverrides): string {
   });
 }
 
-function shutdownCodexDefaultProviderBundle(providers: CodexDefaultProviderBundle): void {
+function getUniqueCodexDefaultProviders(
+  providers: CodexDefaultProviderBundle,
+): OpenAICodexSDKProvider[] {
+  return Array.from(
+    new Set([
+      providers.gradingJsonProvider,
+      providers.gradingProvider,
+      providers.llmRubricProvider,
+      providers.suggestionsProvider,
+      providers.synthesizeProvider,
+      providers.webSearchProvider,
+    ]),
+  );
+}
+
+function shutdownCodexDefaultProviderBundle(
+  providers: ManagedCodexDefaultProviderBundle,
+): Promise<void> | undefined {
+  if (!providers.shutdownRequested || providers.activeCalls > 0) {
+    return providers.shutdownPromise;
+  }
+  if (providers.shutdownPromise) {
+    return providers.shutdownPromise;
+  }
+
+  providers.shutdownPromise = Promise.all(
+    getUniqueCodexDefaultProviders(providers).map((provider) =>
+      provider.shutdown().catch((error) => {
+        logger.warn('[CodexDefaults] Error shutting down evicted provider', { error });
+      }),
+    ),
+  ).then(() => undefined);
+
+  return providers.shutdownPromise;
+}
+
+function requestCodexDefaultProviderBundleShutdown(
+  providers: ManagedCodexDefaultProviderBundle,
+): void {
+  providers.shutdownRequested = true;
+  void shutdownCodexDefaultProviderBundle(providers);
+}
+
+function trackCodexDefaultProviderUsage(providers: ManagedCodexDefaultProviderBundle): void {
   for (const provider of new Set([
     providers.gradingJsonProvider,
     providers.gradingProvider,
@@ -171,16 +220,23 @@ function shutdownCodexDefaultProviderBundle(providers: CodexDefaultProviderBundl
     providers.synthesizeProvider,
     providers.webSearchProvider,
   ])) {
-    void provider.shutdown().catch((error) => {
-      logger.warn('[CodexDefaults] Error shutting down evicted provider', { error });
-    });
+    const callApi = provider.callApi.bind(provider);
+    provider.callApi = async (...args) => {
+      providers.activeCalls += 1;
+      try {
+        return await callApi(...args);
+      } finally {
+        providers.activeCalls -= 1;
+        void shutdownCodexDefaultProviderBundle(providers);
+      }
+    };
   }
 }
 
 function cacheCodexDefaultProviders(
   cacheKey: string,
-  providers: CodexDefaultProviderBundle,
-): CodexDefaultProviderBundle {
+  providers: ManagedCodexDefaultProviderBundle,
+): ManagedCodexDefaultProviderBundle {
   codexDefaultProvidersByCacheKey.set(cacheKey, providers);
 
   while (codexDefaultProvidersByCacheKey.size > CODEX_DEFAULT_PROVIDERS_CACHE_MAX_ENTRIES) {
@@ -190,7 +246,7 @@ function cacheCodexDefaultProviders(
     }
     const [oldestCacheKey, oldestProviders] = oldestEntry;
     codexDefaultProvidersByCacheKey.delete(oldestCacheKey);
-    shutdownCodexDefaultProviderBundle(oldestProviders);
+    requestCodexDefaultProviderBundleShutdown(oldestProviders);
   }
 
   return providers;
@@ -234,14 +290,17 @@ export function getCodexDefaultProviders(env?: EnvOverrides): CodexDefaultProvid
     env,
   });
 
-  const providers: CodexDefaultProviderBundle = {
+  const providers: ManagedCodexDefaultProviderBundle = {
+    activeCalls: 0,
     gradingJsonProvider,
     gradingProvider,
     llmRubricProvider: gradingJsonProvider,
+    shutdownRequested: false,
     suggestionsProvider: gradingProvider,
     synthesizeProvider: gradingProvider,
     webSearchProvider,
   };
+  trackCodexDefaultProviderUsage(providers);
   return cacheCodexDefaultProviders(cacheKey, providers);
 }
 
