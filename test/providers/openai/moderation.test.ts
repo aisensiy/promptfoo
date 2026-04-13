@@ -309,6 +309,83 @@ describe('OpenAiModerationProvider', () => {
         expect.stringContaining('{"flags":[{"code":"hate"'),
       );
     });
+
+    it('should build cache keys from normalized moderation inputs', async () => {
+      vi.mocked(isCacheEnabled).mockImplementation(function () {
+        return true;
+      });
+
+      const provider = createProvider('omni-moderation-latest');
+      const mockCache = {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+      };
+
+      vi.mocked(getCache).mockImplementation(function () {
+        return mockCache as any;
+      });
+      vi.mocked(fetchWithCache).mockResolvedValue({
+        data: {
+          id: 'modr-123',
+          model: 'omni-moderation-latest',
+          results: [{ flagged: false, categories: {}, category_scores: {} }],
+        },
+        status: 200,
+        statusText: 'OK',
+        cached: false,
+      });
+
+      await provider.callModerationApi('user', 'same normalized text');
+      await provider.callModerationApi('user', [{ type: 'text', text: 'same normalized text' }]);
+
+      expect(mockCache.get.mock.calls[0][0]).toBe(mockCache.get.mock.calls[1][0]);
+    });
+
+    it('should isolate cache keys by resolved API key', async () => {
+      vi.mocked(isCacheEnabled).mockImplementation(function () {
+        return true;
+      });
+
+      const providerA = new OpenAiModerationProvider('text-moderation-latest', {
+        config: { apiKey: 'sk-moderation-tenant-a' },
+      });
+      const providerB = new OpenAiModerationProvider('text-moderation-latest', {
+        config: { apiKey: 'sk-moderation-tenant-b' },
+      });
+      const mockCache = {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+      };
+
+      vi.mocked(getCache).mockImplementation(function () {
+        return mockCache as any;
+      });
+      vi.mocked(fetchWithCache).mockResolvedValue({
+        data: {
+          id: 'modr-123',
+          model: 'text-moderation-latest',
+          results: [{ flagged: false, categories: {}, category_scores: {} }],
+        },
+        status: 200,
+        statusText: 'OK',
+        cached: false,
+      });
+
+      await providerA.callModerationApi('user', 'same sensitive text');
+      await providerB.callModerationApi('user', 'same sensitive text');
+
+      const [cacheKeyA, cacheKeyB] = mockCache.get.mock.calls.map(([key]) => key as string);
+      expect(cacheKeyA).toMatch(
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
+      expect(cacheKeyB).toMatch(
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
+      expect(cacheKeyA).not.toBe(cacheKeyB);
+      expect(cacheKeyA).not.toContain('same sensitive text');
+      expect(cacheKeyA).not.toContain('sk-moderation-tenant-a');
+      expect(cacheKeyB).not.toContain('sk-moderation-tenant-b');
+    });
   });
 
   describe('Multi-modal support', () => {

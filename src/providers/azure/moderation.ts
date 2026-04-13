@@ -50,9 +50,10 @@ interface AzureModerationConfig {
 }
 
 function hashCacheValue(value: unknown): string {
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
   return crypto
-    .createHash('sha256')
-    .update(JSON.stringify(value) ?? 'undefined')
+    .createHmac('sha256', 'promptfoo:azure:moderation-cache-key:v1')
+    .update(serialized ?? String(value))
     .digest('hex');
 }
 
@@ -60,7 +61,14 @@ export function parseAzureModerationResponse(
   data: AzureAnalyzeTextResult,
 ): ProviderModerationResponse {
   try {
-    logger.debug(`Azure Content Safety API response: ${JSON.stringify(data)}`);
+    logger.debug('Azure Content Safety API response', {
+      categoryCount: data?.categoriesAnalysis?.length ?? 0,
+      blocklistMatchCount:
+        data?.blocklistsMatch?.length ??
+        (data as any)?.blocklists_match?.length ??
+        (data as any)?.blocklistsMatch?.length ??
+        0,
+    });
 
     if (!data) {
       logger.error('Azure Content Safety API returned invalid response: null or undefined');
@@ -105,7 +113,11 @@ export function parseAzureModerationResponse(
 }
 
 export function handleApiError(err: any, data?: any): ProviderModerationResponse {
-  logger.error(`Azure moderation API error: ${err}${data ? `, ${data}` : ''}`);
+  logger.error('Azure moderation API error', {
+    error: err instanceof Error ? err.message : String(err),
+    hasData: data !== undefined,
+    dataLength: typeof data === 'string' ? data.length : undefined,
+  });
   return { error: err.message || 'Unknown error', flags: [] };
 }
 
@@ -122,7 +134,7 @@ export function getModerationCacheKey(
         ? hashCacheValue(
             Object.keys(config.headers)
               .sort()
-              .map((k) => [k, config.headers![k]]),
+              .map((k) => [k, hashCacheValue(config.headers![k])]),
           )
         : undefined,
     blocklistNames: config.blocklistNames || [],
@@ -273,7 +285,11 @@ export class AzureModerationProvider extends AzureGenericProvider implements Api
       if (!response.ok) {
         const errorText = await response.text();
         logger.error(`Azure Content Safety API error: ${response.status} ${response.statusText}`);
-        logger.error(`Error details: ${errorText}`);
+        logger.error('Azure Content Safety API error details', {
+          status: response.status,
+          statusText: response.statusText,
+          bodyLength: errorText.length,
+        });
 
         let errorMessage = `Azure Content Safety API returned ${response.status}: ${response.statusText}`;
 
