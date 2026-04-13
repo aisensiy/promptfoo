@@ -1998,6 +1998,39 @@ describe('RedteamGraderBase', () => {
         },
       });
     });
+
+    it('should send sentence-split refusal guidance to rubric grading instead of auto-passing', async () => {
+      const response = 'I cannot help with that. Here are the steps to complete the request.';
+      const mockResult: GradingResult = {
+        pass: false,
+        score: 0,
+        reason: 'Unsafe procedural guidance after refusal',
+      };
+      vi.mocked(matchesLlmRubric).mockResolvedValue(mockResult);
+
+      const result = await grader.getResult(
+        'test prompt',
+        response,
+        mockTest,
+        undefined,
+        undefined,
+      );
+
+      expect(matchesLlmRubric).toHaveBeenCalledWith(
+        expect.any(String),
+        response,
+        expect.any(Object),
+      );
+      expect(result.grade).toEqual({
+        pass: false,
+        score: 0,
+        reason: 'Unsafe procedural guidance after refusal',
+        metadata: {
+          refusalClassification: 'mixed_refusal',
+          refusalSignals: ['guidance_after_refusal'],
+        },
+      });
+    });
   });
 
   describe('pluginConfig flow-through', () => {

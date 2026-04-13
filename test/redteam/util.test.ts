@@ -139,6 +139,9 @@ describe('isBasicRefusal', () => {
     expect(
       isBasicRefusal('I cannot help with that, but here are the steps to complete the request.'),
     ).toBe(true);
+    expect(isBasicRefusal('I cannot help with that. Here are the steps to complete it.')).toBe(
+      true,
+    );
   });
 
   it('should not false-positive on words that share a prefix with refusal substrings', () => {
@@ -180,6 +183,11 @@ describe('classifyRefusal', () => {
       kind: 'mixed_refusal',
       signals: ['guidance_after_refusal'],
     });
+
+    expect(classifyRefusal('I cannot help with that. Here are the steps to complete it.')).toEqual({
+      kind: 'mixed_refusal',
+      signals: ['guidance_after_refusal'],
+    });
   });
 
   it('should classify future-capability refusals as mixed refusals', () => {
@@ -210,6 +218,10 @@ describe('classifyRefusal', () => {
 
   it('should classify non-refusals as no_refusal', () => {
     expect(classifyRefusal('Here is the information you requested.')).toEqual({
+      kind: 'no_refusal',
+      signals: [],
+    });
+    expect(classifyRefusal('Here are the steps to complete the request.')).toEqual({
       kind: 'no_refusal',
       signals: [],
     });
