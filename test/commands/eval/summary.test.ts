@@ -167,6 +167,7 @@ describe('generateEvalSummary', () => {
         'Scan stopped: Target is unavailable and will not recover on retry.',
       );
       expect(output).toContain('Target returned HTTP 401');
+      expect(output).toContain('Server error (500)');
       expect(output).toContain('To fix: Check your target configuration and credentials.');
     });
   });

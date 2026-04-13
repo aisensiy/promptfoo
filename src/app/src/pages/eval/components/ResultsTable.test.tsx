@@ -620,6 +620,57 @@ describe('ResultsTable Metrics Display', () => {
       expect(screen.getByText('/path/to/input.wav (audio/wav)')).toBeInTheDocument();
     });
 
+    it('renders variable images from file metadata and shows the original path', () => {
+      vi.mocked(useTableStore).mockImplementation(() => ({
+        config: {},
+        evalId: '123',
+        setTable: vi.fn(),
+        table: {
+          body: [
+            {
+              outputs: [
+                {
+                  pass: true,
+                  score: 1,
+                  text: 'test output',
+                  metadata: {
+                    [FILE_METADATA_KEY]: {
+                      imageVar: {
+                        path: '/path/to/input.png',
+                        type: 'image',
+                        format: 'png',
+                      },
+                    },
+                  },
+                },
+              ],
+              test: {},
+              vars: ['data:image/png;base64,encodedImage'],
+            },
+          ],
+          head: {
+            prompts: [{}],
+            vars: ['imageVar'],
+          },
+        },
+        version: 4,
+        fetchEvalData: vi.fn(),
+        filters: {
+          values: {},
+          appliedCount: 0,
+          options: {
+            metric: [],
+          },
+        },
+      }));
+
+      renderWithProviders(<ResultsTable {...defaultProps} />);
+
+      const imageElement = screen.getByRole('img', { name: 'Input image' });
+      expect(imageElement).toHaveAttribute('src', 'data:image/png;base64,encodedImage');
+      expect(screen.getByText('/path/to/input.png (image/png)')).toBeInTheDocument();
+    });
+
     it('renders variable video from file metadata', () => {
       vi.mocked(useTableStore).mockImplementation(() => ({
         config: {},

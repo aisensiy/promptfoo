@@ -402,7 +402,6 @@ function renderStructuredImages({
   output,
   normalizedText,
   primaryRenderedImageSrc,
-  primaryRenderedAsImage,
   renderedMarkdownOutput,
   toggleLightbox,
 }: {
@@ -410,7 +409,6 @@ function renderStructuredImages({
   output: EvaluateTableOutput;
   normalizedText: string;
   primaryRenderedImageSrc?: string;
-  primaryRenderedAsImage: boolean;
   renderedMarkdownOutput: boolean;
   toggleLightbox: (url?: string) => void;
 }): React.ReactNode | undefined {
@@ -428,9 +426,7 @@ function renderStructuredImages({
     }
   }
 
-  const imagesToRender =
-    primaryRenderedAsImage && !renderedMarkdownOutput ? output.images.slice(1) : output.images;
-  const imageElements = imagesToRender
+  const imageElements = output.images
     .map((img: ImageOutput, idx: number) => {
       const src = resolveEvalImageOutputSource(img);
       if (!src || renderedImageSrcs.has(normalizeImageSrcForComparison(src))) {
@@ -477,10 +473,9 @@ function renderOutputNode({
   toggleLightbox,
   outputAudioSource,
   primaryRenderedImageSrc,
-  primaryRenderedAsImage,
 }: {
   output: EvaluateTableOutput;
-  firstOutput: EvaluateTableOutput;
+  firstOutput?: EvaluateTableOutput | null;
   showDiffs: boolean;
   searchText?: string;
   shouldHighlightSearchText: boolean;
@@ -492,14 +487,12 @@ function renderOutputNode({
   toggleLightbox: (url?: string) => void;
   outputAudioSource: ReturnType<typeof resolveAudioSource>;
   primaryRenderedImageSrc?: string;
-  primaryRenderedAsImage: boolean;
 }): React.ReactNode | undefined {
   let node: React.ReactNode | undefined;
   let renderedMarkdownOutput = false;
 
   if (showDiffs && firstOutput) {
-    const firstOutputText =
-      typeof firstOutput.text === 'string' ? firstOutput.text : JSON.stringify(firstOutput.text);
+    const firstOutputText = stringifyOutputText(firstOutput.text);
     node = renderDiffNode(firstOutputText, text);
   }
 
@@ -532,7 +525,6 @@ function renderOutputNode({
     output,
     normalizedText,
     primaryRenderedImageSrc,
-    primaryRenderedAsImage,
     renderedMarkdownOutput,
     toggleLightbox,
   });
@@ -546,20 +538,21 @@ function getPassFailCounts(output: EvaluateTableOutput): {
   let passCount = 0;
   let failCount = 0;
 
-  if (output.gradingResult?.componentResults) {
-    output.gradingResult.componentResults.forEach((result) => {
+  const componentResults = output.gradingResult?.componentResults;
+  if (componentResults?.length) {
+    componentResults.forEach((result) => {
       if (result?.pass) {
         passCount++;
       } else {
         failCount++;
       }
     });
-  } else if (output.gradingResult) {
+  } else if (typeof output.gradingResult?.pass === 'boolean') {
     passCount = output.gradingResult.pass ? 1 : 0;
     failCount = output.gradingResult.pass ? 0 : 1;
-  } else if (output.pass) {
+  } else if (output.pass === true) {
     passCount = 1;
-  } else if (!output.pass) {
+  } else if (output.pass === false) {
     failCount = 1;
   }
 
@@ -615,8 +608,8 @@ function getPassFailText({
 }
 
 function getCombinedContextText(output: EvaluateTableOutput): string {
-  if (!output.gradingResult?.componentResults) {
-    return typeof output.text === 'string' ? output.text : JSON.stringify(output.text);
+  if (!output.gradingResult?.componentResults?.length) {
+    return stringifyOutputText(output.text);
   }
 
   return output.gradingResult.componentResults
@@ -760,11 +753,11 @@ function getCostDisplay(cost?: number): React.ReactNode | undefined {
 }
 
 function getCellStyles({
-  output,
+  isHighlighted,
   maxImageWidth,
   maxImageHeight,
 }: {
-  output: EvaluateTableOutput;
+  isHighlighted: boolean;
   maxImageWidth: number;
   maxImageHeight: number;
 }): {
@@ -772,8 +765,6 @@ function getCellStyles({
   contentStyle: React.CSSProperties;
   isHighlighted: boolean;
 } {
-  const isHighlighted = output.gradingResult?.comment?.startsWith('!highlight') ?? false;
-
   return {
     cellStyle: {
       ...(isHighlighted ? { backgroundColor: 'var(--cell-highlight-color)' } : {}),
@@ -871,8 +862,11 @@ function renderStatusBlock({
     return null;
   }
 
+  const { passCount, failCount } = getPassFailCounts(output);
+  const statusClass = output.pass === true || (passCount > 0 && failCount === 0) ? 'pass' : 'fail';
+
   return (
-    <div className={`status ${output.pass ? 'pass' : 'fail'}`}>
+    <div className={`status ${statusClass}`}>
       <div className="status-row">
         <div className="pill">
           {passFailText}
@@ -880,7 +874,7 @@ function renderStatusBlock({
         </div>
         {providerOverride}
       </div>
-      <CustomMetrics lookup={output.namedScores} />
+      <CustomMetrics lookup={output.namedScores ?? {}} />
       {failReasons.length > 0 && (
         <span className="fail-reason">
           <FailReasonCarousel failReasons={failReasons} />
@@ -905,10 +899,10 @@ function renderPromptBlock({
   prompt,
 }: {
   showPrompts: boolean;
-  firstOutput: EvaluateTableOutput;
+  firstOutput?: EvaluateTableOutput | null;
   prompt: EvaluateTableOutput['prompt'];
 }): React.ReactNode {
-  if (!showPrompts || !firstOutput.prompt) {
+  if (!showPrompts || !firstOutput?.prompt) {
     return null;
   }
 
@@ -1262,6 +1256,10 @@ function EvalOutputCell({
   const [commentDialogOpen, setCommentDialogOpen] = React.useState(false);
   const [commentText, setCommentText] = React.useState(output.gradingResult?.comment || '');
 
+  React.useEffect(() => {
+    setCommentText(output.gradingResult?.comment || '');
+  }, [output.gradingResult?.comment]);
+
   const handleCommentOpen = () => {
     setCommentDialogOpen(true);
   };
@@ -1291,7 +1289,6 @@ function EvalOutputCell({
   const normalizedText = normalizeMediaText(text);
   const inlineImageSrc = resolveImageSource(text);
   const primaryRenderedImageSrc = getPrimaryRenderedImageSrc(text, inlineImageSrc);
-  const primaryRenderedAsImage = Boolean(primaryRenderedImageSrc);
   const outputAudioSource = resolveAudioSource(output.audio);
   const { failReasons, passReasons } = getFailAndPassReasons(output);
 
@@ -1317,7 +1314,6 @@ function EvalOutputCell({
     toggleLightbox,
     outputAudioSource,
     primaryRenderedImageSrc,
-    primaryRenderedAsImage,
   });
 
   const handleRating = (isPass: boolean) => {
@@ -1325,7 +1321,7 @@ function EvalOutputCell({
     setActiveRating(newRating);
     // Defer the API call to allow the UI to update first
     queueMicrotask(() => {
-      onRating(newRating, undefined, output.gradingResult?.comment);
+      onRating(newRating, undefined, commentText);
     });
   };
 
@@ -1336,7 +1332,7 @@ function EvalOutputCell({
   };
 
   const handleScoreSave = (score: number) => {
-    onRating(undefined, score, output.gradingResult?.comment);
+    onRating(undefined, score, commentText);
     setScoreDialogOpen(false);
   };
 
@@ -1438,12 +1434,12 @@ function EvalOutputCell({
     latencyMs: output.latencyMs,
   });
   const costDisplay = getCostDisplay(output.cost);
+  const commentIsHighlighted = commentText.startsWith('!highlight');
   const { cellStyle, contentStyle } = getCellStyles({
-    output,
+    isHighlighted: commentIsHighlighted,
     maxImageWidth,
     maxImageHeight,
   });
-  const commentIsHighlighted = commentText.startsWith('!highlight');
 
   const passFailText = getPassFailText(getPassFailCounts(output));
 

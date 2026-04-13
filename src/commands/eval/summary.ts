@@ -98,6 +98,7 @@ function getAbortSummaryLines(targetErrorStatus: number | undefined): string[] {
     chalk.yellow('Possible causes:'),
     chalk.yellow('  • Invalid API key or authentication (401/403)'),
     chalk.yellow('  • Target endpoint does not exist (404)'),
+    chalk.yellow('  • Server error (500)'),
     chalk.yellow('  • Server does not support the request (501)'),
     '',
     chalk.cyan('To fix: Check your target configuration and credentials.'),

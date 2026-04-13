@@ -266,6 +266,29 @@ describe('EvalOutputCell', () => {
     expect(dialogContent).toHaveTextContent('Assertion 2 (relevance): another value');
   });
 
+  it('falls back to overall grading result when component results are empty', async () => {
+    const propsWithEmptyComponentResults: MockEvalOutputCellProps = {
+      ...defaultProps,
+      output: {
+        ...defaultProps.output,
+        gradingResult: {
+          comment: 'Initial comment',
+          componentResults: [],
+          pass: true,
+          reason: 'Test reason',
+          score: 0.8,
+        },
+      },
+    };
+
+    renderWithProviders(<EvalOutputCell {...propsWithEmptyComponentResults} />);
+
+    expect(screen.getByText('PASS')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /edit comment/i }));
+    expect(screen.getByTestId('context-text')).toHaveTextContent('Test output text');
+  });
+
   it('uses assertion type when metric is not available', async () => {
     const propsWithoutMetrics: MockEvalOutputCellProps = {
       ...defaultProps,
@@ -1429,6 +1452,20 @@ describe('EvalOutputCell highlight toggle functionality', () => {
     const highlightButtonAfterRerender = screen.getByLabelText('Toggle test highlight');
     fireEvent.click(highlightButtonAfterRerender);
     expect(mockOnRating).toHaveBeenCalledWith(undefined, undefined, 'Original comment');
+  });
+
+  it('preserves a locally toggled highlight when rating changes immediately afterward', async () => {
+    const props = createPropsWithComment('Original comment');
+    renderWithProviders(<EvalOutputCell {...props} />);
+
+    fireEvent.click(screen.getByLabelText('Toggle test highlight'));
+    mockOnRating.mockClear();
+
+    await userEvent.click(screen.getByLabelText('Mark test failed'));
+
+    await waitFor(() => {
+      expect(mockOnRating).toHaveBeenCalledWith(false, undefined, '!highlight Original comment');
+    });
   });
 });
 
