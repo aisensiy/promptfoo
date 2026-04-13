@@ -129,8 +129,10 @@ describe('gcg strategy', () => {
   });
 
   it('redacts prompts and generated responses from logs', async () => {
+    const secretInjectVar = 'SECRET_GCG_INJECT_VAR';
     const originalPrompt = 'SECRET_GCG_ORIGINAL_PROMPT';
     const generatedResponse = 'SECRET_GCG_GENERATED_RESPONSE';
+    const metadataSecretKey = 'SECRET_GCG_METADATA_KEY';
     const metadataSecret = 'SECRET_GCG_METADATA_VALUE';
     const assertionSecret = 'SECRET_GCG_ASSERTION_VALUE';
 
@@ -147,7 +149,7 @@ describe('gcg strategy', () => {
       [
         {
           vars: {
-            prompt: originalPrompt,
+            [secretInjectVar]: originalPrompt,
           },
           assert: [
             {
@@ -158,15 +160,24 @@ describe('gcg strategy', () => {
           ],
           metadata: {
             pluginId: 'plugin-secret-key',
-            secret: metadataSecret,
+            [metadataSecretKey]: metadataSecret,
           },
         },
       ],
-      'prompt',
+      secretInjectVar,
       {},
     );
 
-    expect(result[0].vars?.prompt).toBe(generatedResponse);
+    expect(result[0].vars?.[secretInjectVar]).toBe(generatedResponse);
+    expect(logger.debug).toHaveBeenCalledWith(
+      '[GCG] Processing test case',
+      expect.objectContaining({
+        hasInjectVar: true,
+        varsKeyCount: 1,
+        assertionCount: 1,
+        metadataKeyCount: 2,
+      }),
+    );
     expect(mockFetchWithCache).toHaveBeenCalledWith(
       'http://test-url',
       expect.objectContaining({
@@ -180,8 +191,10 @@ describe('gcg strategy', () => {
     );
 
     const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
+    expect(logs).not.toContain(secretInjectVar);
     expect(logs).not.toContain(originalPrompt);
     expect(logs).not.toContain(generatedResponse);
+    expect(logs).not.toContain(metadataSecretKey);
     expect(logs).not.toContain(metadataSecret);
     expect(logs).not.toContain(assertionSecret);
   });

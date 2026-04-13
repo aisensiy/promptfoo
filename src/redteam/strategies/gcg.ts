@@ -37,10 +37,10 @@ async function generateGcgPrompts(
       logger.debug('[GCG] Processing test case', {
         caseNumber,
         totalCases: testCases.length,
-        injectVar,
-        varsKeys: Object.keys(testCase.vars ?? {}),
+        hasInjectVar: testCase.vars ? injectVar in testCase.vars : false,
+        varsKeyCount: Object.keys(testCase.vars ?? {}).length,
         assertionCount: testCase.assert?.length ?? 0,
-        metadataKeys: Object.keys(testCase.metadata ?? {}),
+        metadataKeyCount: Object.keys(testCase.metadata ?? {}).length,
       });
       invariant(testCase.vars, `GCG: testCase.vars is required for case ${caseNumber}`);
 
