@@ -31,6 +31,7 @@ import { readConfig } from '../../../src/util/config/load';
 import { writePromptfooConfig } from '../../../src/util/config/writer';
 import { getCustomPolicies } from '../../../src/util/generation';
 import { checkRedteamProbeLimit } from '../../../src/util/redteamProbeLimit';
+import { createMockProvider } from '../../factories/provider';
 
 import type {
   FailedPluginInfo,
@@ -238,11 +239,10 @@ describe('doGenerateRedteam', () => {
     vi.mocked(promptForEmailUnverified)
       .mockReset()
       .mockResolvedValue({ emailNeedsValidation: false });
-    mockProvider = {
-      id: () => 'test-provider',
-      callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-      cleanup: vi.fn().mockResolvedValue(undefined),
-    };
+    mockProvider = createMockProvider({
+      response: { output: 'test output' },
+      cleanup: true,
+    });
 
     vi.mocked(configModule.resolveConfigs).mockResolvedValue({
       basePath: '/mock/path',
@@ -1610,11 +1610,10 @@ describe('doGenerateRedteam', () => {
       vi.mocked(resolveTeamId).mockResolvedValue({ id: 'resolved-team-id', name: 'Resolved Team' });
       vi.mocked(getCustomPolicies).mockResolvedValue(new Map());
 
-      mockProvider = {
-        id: () => 'test-provider',
-        callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-        cleanup: vi.fn().mockResolvedValue(undefined),
-      };
+      mockProvider = createMockProvider({
+        response: { output: 'test output' },
+        cleanup: true,
+      });
 
       vi.mocked(synthesize).mockResolvedValue({
         testCases: [],
@@ -1880,11 +1879,10 @@ describe('doGenerateRedteam', () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
-      mockProvider = {
-        id: () => 'test-provider',
-        callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-        cleanup: vi.fn().mockResolvedValue(undefined),
-      };
+      mockProvider = createMockProvider({
+        response: { output: 'test output' },
+        cleanup: true,
+      });
 
       vi.mocked(synthesize).mockResolvedValue({
         testCases: [],
@@ -3152,11 +3150,10 @@ describe('redteam generate command with target option', () => {
     originalExitCode = process.exitCode as number | undefined;
     process.exitCode = 0;
 
-    mockProvider = {
-      id: () => 'test-provider',
-      callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-      cleanup: vi.fn().mockResolvedValue(undefined),
-    };
+    mockProvider = createMockProvider({
+      response: { output: 'test output' },
+      cleanup: true,
+    });
 
     vi.mocked(configModule.resolveConfigs).mockResolvedValue({
       basePath: '/mock/path',
@@ -3473,11 +3470,10 @@ describe('target ID extraction for retry strategy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockProvider = {
-      id: () => 'test-provider',
-      callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-      cleanup: vi.fn().mockResolvedValue(undefined),
-    };
+    mockProvider = createMockProvider({
+      response: { output: 'test output' },
+      cleanup: true,
+    });
 
     vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({}));
     vi.mocked(synthesize).mockResolvedValue({

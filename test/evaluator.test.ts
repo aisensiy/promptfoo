@@ -28,6 +28,12 @@ import {
 import { processConfigFileReferences } from '../src/util/fileReference';
 import { sleep } from '../src/util/time';
 import { createEmptyTokenUsage } from '../src/util/tokenUsageUtils';
+import {
+  createFailingGradingResult,
+  createGradingProviderResponse,
+  createPassingGradingResult,
+} from './factories/gradingResult';
+import { createMockProvider, createProviderResponse, createTokenUsage } from './factories/provider';
 
 const exactTransformHandlers = new Map<string, (input: any) => any>([
   ['output + " postprocessed"', (input) => input + ' postprocessed'],
@@ -265,52 +271,31 @@ vi.mock('../src/util/functions/loadFunction', async () => {
   };
 });
 
-const mockApiProvider: ApiProvider = {
-  id: vi.fn().mockReturnValue('test-provider'),
-  callApi: vi.fn().mockResolvedValue({
-    output: 'Test output',
-    tokenUsage: { total: 10, prompt: 5, completion: 5, cached: 0, numRequests: 1 },
-  }),
-};
+const mockApiProvider = createMockProvider();
 
-const mockApiProvider2: ApiProvider = {
-  id: vi.fn().mockReturnValue('test-provider-2'),
-  callApi: vi.fn().mockResolvedValue({
-    output: 'Test output',
-    tokenUsage: { total: 10, prompt: 5, completion: 5, cached: 0, numRequests: 1 },
-  }),
-};
+const mockApiProvider2 = createMockProvider({ id: 'test-provider-2' });
 
-const mockReasoningApiProvider: ApiProvider = {
-  id: vi.fn().mockReturnValue('test-reasoning-provider'),
-  callApi: vi.fn().mockResolvedValue({
-    output: 'Test output',
-    tokenUsage: {
+const mockReasoningApiProvider = createMockProvider({
+  id: 'test-reasoning-provider',
+  response: createProviderResponse({
+    tokenUsage: createTokenUsage({
       total: 21,
       prompt: 9,
       completion: 12,
-      cached: 0,
-      numRequests: 1,
       completionDetails: { reasoning: 11, acceptedPrediction: 12, rejectedPrediction: 13 },
-    },
+    }),
   }),
-};
+});
 
-const mockGradingApiProviderPasses: ApiProvider = {
-  id: vi.fn().mockReturnValue('test-grading-provider'),
-  callApi: vi.fn().mockResolvedValue({
-    output: JSON.stringify({ pass: true, reason: 'Test grading output' }),
-    tokenUsage: { total: 10, prompt: 5, completion: 5, cached: 0, numRequests: 1 },
-  }),
-};
+const mockGradingApiProviderPasses = createMockProvider({
+  id: 'test-grading-provider',
+  response: createGradingProviderResponse(createPassingGradingResult()),
+});
 
-const mockGradingApiProviderFails: ApiProvider = {
-  id: vi.fn().mockReturnValue('test-grading-provider'),
-  callApi: vi.fn().mockResolvedValue({
-    output: JSON.stringify({ pass: false, reason: 'Grading failed reason' }),
-    tokenUsage: { total: 10, prompt: 5, completion: 5, cached: 0, numRequests: 1 },
-  }),
-};
+const mockGradingApiProviderFails = createMockProvider({
+  id: 'test-grading-provider',
+  response: createGradingProviderResponse(createFailingGradingResult()),
+});
 
 function toPrompt(text: string): Prompt {
   return { raw: text, label: text };
