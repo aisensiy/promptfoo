@@ -621,7 +621,9 @@ describe('OpenAiTranscriptionProvider', () => {
       const models = [
         'gpt-4o-transcribe',
         'gpt-4o-mini-transcribe',
+        'gpt-4o-mini-transcribe-2025-12-15',
         'gpt-4o-transcribe-diarize',
+        'gpt-4o-transcribe-diarize-2025-10-15',
         'whisper-1',
       ];
 

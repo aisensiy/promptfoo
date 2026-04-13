@@ -41,6 +41,8 @@ const ENV_KEYS_TO_RESTORE = [
 
 const savedEnv = Object.fromEntries(ENV_KEYS_TO_RESTORE.map((key) => [key, process.env[key]]));
 
+const expectedAudioModels = ['gpt-audio-1.5', 'gpt-audio-mini-2025-12-15'] as const;
+
 describe('OpenAiResponsesProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -89,10 +91,9 @@ describe('OpenAiResponsesProvider', () => {
     expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain('gpt-5-nano');
     expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain('gpt-5-mini');
     // Audio models
-    expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain('gpt-audio-1.5');
-    expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain(
-      'gpt-audio-mini-2025-12-15',
-    );
+    expectedAudioModels.forEach((model) => {
+      expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain(model);
+    });
     // GPT-4.5 models deprecated as of 2025-07-14, removed from API
   });
 
@@ -3055,10 +3056,9 @@ describe('OpenAiResponsesProvider', () => {
       'gpt-5.4-pro-2026-03-05',
     );
     // Audio models
-    expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain('gpt-audio-1.5');
-    expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain(
-      'gpt-audio-mini-2025-12-15',
-    );
+    expectedAudioModels.forEach((model) => {
+      expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain(model);
+    });
     // Deep research models
     expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain('o3-deep-research');
     expect(OpenAiResponsesProvider.OPENAI_RESPONSES_MODEL_NAMES).toContain(
