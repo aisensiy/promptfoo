@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.11/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -186,7 +186,8 @@
       },
       "nursery": {
         "noFloatingPromises": "error",
-        "noMisusedPromises": "error"
+        "noMisusedPromises": "error",
+        "noUselessTypeConversion": "error"
       }
     }
   },
@@ -311,7 +312,6 @@
         "!!test/logger.test.ts",
         "!!test/matchers/closed-qa.test.ts",
         "!!test/matchers/factuality.test.ts",
-        "!!test/matchers/moderation.test.ts",
         "!!test/matchers/similarity.test.ts",
         "!!test/matchers/utils.test.ts",
         "!!test/onboarding.test.ts",
