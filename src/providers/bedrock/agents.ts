@@ -400,6 +400,8 @@ export class AwsBedrockAgentsProvider extends AwsBedrockGenericProvider implemen
         ? `session-${crypto.randomUUID()}`
         : `session-${Date.now()}-${process.hrtime.bigint().toString(36)}`);
 
+    const inferenceConfig = this.buildInferenceConfig();
+
     // Build the complete input with all supported features
     const input: InvokeAgentCommandInput = {
       // Required fields
@@ -417,9 +419,7 @@ export class AwsBedrockAgentsProvider extends AwsBedrockGenericProvider implemen
       // Advanced configurations - using type assertions for preview features
       // The AWS SDK types may not be fully up to date with all Bedrock Agents features
       // These configurations are validated by AWS at runtime
-      ...(this.buildInferenceConfig() && {
-        inferenceConfig: this.buildInferenceConfig(),
-      }),
+      ...(inferenceConfig && { inferenceConfig }),
       ...(this.config.guardrailConfiguration && {
         guardrailConfiguration: this.config.guardrailConfiguration,
       }),
@@ -448,7 +448,7 @@ export class AwsBedrockAgentsProvider extends AwsBedrockGenericProvider implemen
         enableTrace: this.config.enableTrace,
         endSession: this.config.endSession,
         guardrailConfiguration: this.config.guardrailConfiguration,
-        inferenceConfig: this.buildInferenceConfig(),
+        inferenceConfig,
         inputDataConfig: this.config.inputDataConfig,
         knowledgeBaseConfigurations: this.config.knowledgeBaseConfigurations,
         memoryId: this.config.memoryId,

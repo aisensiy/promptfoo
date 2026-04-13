@@ -149,6 +149,7 @@ describe('AwsBedrockAgentsProvider', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('should hash prompt and config values while reusing the same cache key', async () => {
