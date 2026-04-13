@@ -3,7 +3,10 @@ import dedent from 'dedent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearCache, disableCache, enableCache, getCache } from '../../../src/cache';
 import logger from '../../../src/logger';
-import { hashAnthropicCacheValue } from '../../../src/providers/anthropic/generic';
+import {
+  getAnthropicAuthCacheNamespace,
+  hashAnthropicCacheValue,
+} from '../../../src/providers/anthropic/generic';
 import { AnthropicMessagesProvider } from '../../../src/providers/anthropic/messages';
 import { MCPClient } from '../../../src/providers/mcp/client';
 import { maybeLoadResponseFormatFromExternalFile } from '../../../src/util/file';
@@ -78,7 +81,7 @@ const createProvider = (
 const anthropicCacheIdentityHash = () =>
   hashAnthropicCacheValue({
     apiBaseUrl: undefined,
-    apiKeyFingerprint: hashAnthropicCacheValue(TEST_API_KEY),
+    authNamespace: getAnthropicAuthCacheNamespace(TEST_API_KEY),
   });
 
 const anthropicMessagesCacheKey = (modelName: string, params: unknown) =>

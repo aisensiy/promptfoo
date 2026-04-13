@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID } from 'crypto';
 
 import Anthropic from '@anthropic-ai/sdk';
 import { getEnvString } from '../../envars';
@@ -17,12 +17,22 @@ interface AnthropicBaseOptions {
 }
 
 const ANTHROPIC_CACHE_HASH_KEY = 'promptfoo:anthropic:cache-key:v1';
+const ANTHROPIC_AUTH_CACHE_NAMESPACES = new Map<string, string>();
 
 export function hashAnthropicCacheValue(value: unknown): string {
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
   return createHmac('sha256', ANTHROPIC_CACHE_HASH_KEY)
     .update(serialized ?? String(value))
     .digest('hex');
+}
+
+export function getAnthropicAuthCacheNamespace(apiKey: string): string {
+  let namespace = ANTHROPIC_AUTH_CACHE_NAMESPACES.get(apiKey);
+  if (!namespace) {
+    namespace = randomUUID();
+    ANTHROPIC_AUTH_CACHE_NAMESPACES.set(apiKey, namespace);
+  }
+  return namespace;
 }
 
 /**
@@ -82,7 +92,7 @@ export class AnthropicGenericProvider implements ApiProvider {
     const apiKey = this.apiKey ?? this.getApiKey();
     return hashAnthropicCacheValue({
       apiBaseUrl: this.getApiBaseUrl(),
-      apiKeyFingerprint: apiKey ? hashAnthropicCacheValue(apiKey) : undefined,
+      authNamespace: apiKey ? getAnthropicAuthCacheNamespace(apiKey) : undefined,
     });
   }
 
