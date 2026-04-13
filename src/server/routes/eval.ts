@@ -92,7 +92,7 @@ evalRouter.post('/job', (req: Request, res: Response): void => {
     .catch((error) => {
       logger.error('Failed to eval tests', {
         error,
-        body: sanitizeObject(req.body, { context: 'request body' }),
+        body: sanitizeObject(testSuite, { context: 'request body' }),
       });
 
       const job = evalJobs.get(id);

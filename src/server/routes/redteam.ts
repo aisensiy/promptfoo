@@ -366,7 +366,7 @@ redteamRouter.post('/:taskId', async (req: Request, res: Response): Promise<void
   logger.debug(`Received ${taskId} task request`, {
     method: req.method,
     url: req.url,
-    body: sanitizeObject(req.body, { context: 'request body' }),
+    body: sanitizeObject(bodyResult.data, { context: 'request body' }),
   });
 
   try {
