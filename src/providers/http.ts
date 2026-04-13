@@ -1089,19 +1089,66 @@ function getOAuthTokenCacheKey(oauthConfig: {
   return `oauth:${digestAuthCacheInput(oauthConfig)}`;
 }
 
-function getFileAuthTokenCacheKey(
-  authPath: string,
+function createFileAuthContext(
   prompt: string,
   vars: Record<string, any>,
   context?: CallApiContextParams,
-): string {
+): CallApiContextParams {
+  return {
+    ...(context ?? {}),
+    prompt: context?.prompt ?? ({ raw: prompt, label: prompt } as CallApiContextParams['prompt']),
+    vars,
+  };
+}
+
+function getProviderCacheIdentity(provider?: ApiProvider): unknown {
+  if (!provider) {
+    return undefined;
+  }
+
+  let id: string | undefined;
+  try {
+    id = provider.id();
+  } catch (err) {
+    id = `error:${String(err)}`;
+  }
+
+  return {
+    type: provider.constructor?.name,
+    id,
+    label: (provider as { label?: unknown }).label,
+    config: (provider as { config?: unknown }).config,
+  };
+}
+
+function getFileAuthContextCacheInput(context: CallApiContextParams): Record<string, unknown> {
+  const {
+    filters,
+    getCache,
+    logger: contextLogger,
+    originalProvider,
+    ...serializableContext
+  } = context;
+
+  return {
+    ...serializableContext,
+    filters: filters
+      ? Object.fromEntries(
+          Object.keys(filters)
+            .sort()
+            .map((filterName) => [filterName, stableSerialize(filters[filterName])]),
+        )
+      : undefined,
+    getCache: getCache == null ? undefined : stableSerialize(getCache),
+    logger: contextLogger == null ? undefined : true,
+    originalProvider: getProviderCacheIdentity(originalProvider),
+  };
+}
+
+function getFileAuthTokenCacheKey(authPath: string, context: CallApiContextParams): string {
   return `file:${digestAuthCacheInput({
     path: authPath,
-    prompt: {
-      raw: context?.prompt?.raw ?? prompt,
-      label: context?.prompt?.label ?? prompt,
-    },
-    vars,
+    context: getFileAuthContextCacheInput(context),
   })}`;
 }
 
@@ -1611,8 +1658,6 @@ export class HttpProvider implements ApiProvider {
   private validateStatus: Promise<(status: number) => boolean>;
   private lastSignatureTimestamp?: number;
   private lastSignature?: string;
-  private lastToken?: string;
-  private lastTokenExpiresAt?: number;
   private authTokenCache = new Map<string, CachedAuthToken>();
   private tokenRefreshLocks = new Map<string, TokenRefreshLock>();
   private httpsAgent?: Agent;
@@ -1755,7 +1800,6 @@ export class HttpProvider implements ApiProvider {
     const cachedToken = this.getValidCachedToken(cacheKey);
     if (cachedToken) {
       logger.debug('[HTTP Provider Auth]: Using cached OAuth token');
-      this.setActiveToken(cachedToken);
       return cachedToken;
     }
 
@@ -1765,7 +1809,6 @@ export class HttpProvider implements ApiProvider {
     );
     const refreshedToken = this.authTokenCache.get(cacheKey);
     invariant(refreshedToken, 'OAuth token should be cached after refresh');
-    this.setActiveToken(refreshedToken);
     return refreshedToken;
   }
 
@@ -1860,12 +1903,6 @@ export class HttpProvider implements ApiProvider {
     this.pruneExpiredAuthTokens();
     this.authTokenCache.set(cacheKey, cachedToken);
     this.enforceAuthTokenCacheLimit();
-    this.setActiveToken(cachedToken);
-  }
-
-  private setActiveToken(cachedToken: CachedAuthToken): void {
-    this.lastToken = cachedToken.token;
-    this.lastTokenExpiresAt = cachedToken.expiresAt;
   }
 
   private getValidCachedToken(cacheKey: string, now = Date.now()): CachedAuthToken | undefined {
@@ -1968,28 +2005,25 @@ export class HttpProvider implements ApiProvider {
       throw new Error('File auth is not configured');
     }
 
-    const cacheKey = getFileAuthTokenCacheKey(this.config.auth.path, prompt, vars, context);
+    const authContext = createFileAuthContext(prompt, vars, context);
+    const cacheKey = getFileAuthTokenCacheKey(this.config.auth.path, authContext);
     const cachedToken = this.getValidCachedToken(cacheKey);
     if (cachedToken) {
       logger.debug('[HTTP Provider Auth]: Using cached file auth token');
-      this.setActiveToken(cachedToken);
       return cachedToken;
     }
 
     logger.debug('[HTTP Provider Auth]: Starting or waiting for file auth token refresh');
     await this.refreshTokenWithLock(cacheKey, () =>
-      this.performFileTokenRefresh(prompt, vars, context, cacheKey),
+      this.performFileTokenRefresh(authContext, cacheKey),
     );
     const refreshedToken = this.authTokenCache.get(cacheKey);
     invariant(refreshedToken, 'File auth token should be cached after refresh');
-    this.setActiveToken(refreshedToken);
     return refreshedToken;
   }
 
   private async performFileTokenRefresh(
-    prompt: string,
-    vars: Record<string, any>,
-    context?: CallApiContextParams,
+    authContext: CallApiContextParams,
     cacheKey?: string,
   ): Promise<void> {
     invariant(this.config.auth?.type === 'file', 'File auth should be configured');
@@ -1997,11 +2031,6 @@ export class HttpProvider implements ApiProvider {
 
     const { filePath, functionName } = parseFileAuthReference(this.config.auth.path);
     const defaultFunctionName = filePath.endsWith('.py') ? 'get_auth' : 'default';
-    const authContext: CallApiContextParams = {
-      ...(context ?? {}),
-      prompt: context?.prompt ?? ({ raw: prompt, label: prompt } as CallApiContextParams['prompt']),
-      vars,
-    };
 
     try {
       const authFn = await loadFunction<
@@ -2283,11 +2312,8 @@ export class HttpProvider implements ApiProvider {
     );
 
     // Add OAuth Bearer token if configured
-    if (this.config.auth?.type === 'oauth') {
-      const token = typeof vars.token === 'string' ? vars.token : this.lastToken;
-      if (token) {
-        allHeaders.authorization = `Bearer ${token}`;
-      }
+    if (this.config.auth?.type === 'oauth' && typeof vars.token === 'string') {
+      allHeaders.authorization = `Bearer ${vars.token}`;
     }
 
     // Add Bearer token if configured
@@ -2732,11 +2758,8 @@ export class HttpProvider implements ApiProvider {
     }
 
     // Add OAuth Bearer token if configured
-    if (this.config.auth?.type === 'oauth') {
-      const token = typeof vars.token === 'string' ? vars.token : this.lastToken;
-      if (token) {
-        parsedRequest.headers.authorization = `Bearer ${token}`;
-      }
+    if (this.config.auth?.type === 'oauth' && typeof vars.token === 'string') {
+      parsedRequest.headers.authorization = `Bearer ${vars.token}`;
     }
 
     // Add Bearer token if configured

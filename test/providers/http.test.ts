@@ -6635,6 +6635,45 @@ describe('HttpProvider - OAuth Token Refresh Deduplication', () => {
     expect(headers?.['x-auth-token']).toBe(expectedToken);
   });
 
+  it('should not inject a cached OAuth token when vars.token is absent', async () => {
+    const provider = new HttpProvider(mockUrl, {
+      config: {
+        method: 'GET',
+        auth: {
+          type: 'oauth',
+          grantType: 'client_credentials',
+          tokenUrl,
+          clientId: 'test-client-id',
+          clientSecret: 'test-client-secret',
+        },
+      },
+    });
+
+    vi.mocked(fetchWithCache).mockImplementation(async (url: RequestInfo) => {
+      const urlString =
+        typeof url === 'string' ? url : url instanceof Request ? url.url : String(url);
+      if (urlString === tokenUrl) {
+        return {
+          data: JSON.stringify({ access_token: 'cached-oauth-token', expires_in: 3600 }),
+          status: 200,
+          statusText: 'OK',
+          cached: false,
+        };
+      }
+
+      return {
+        data: JSON.stringify({ result: 'success' }),
+        status: 200,
+        statusText: 'OK',
+        cached: false,
+      };
+    });
+
+    await provider.callApi('test prompt');
+
+    await expect(provider.getHeaders({}, {})).resolves.not.toHaveProperty('authorization');
+  });
+
   it('should expose the refreshed token as vars.token for body templating', async () => {
     const provider = new HttpProvider(mockUrl, {
       config: {
@@ -7100,6 +7139,70 @@ describe('HttpProvider - File Auth', () => {
     expect(cacheKeys.join('\n')).not.toContain('alice');
     expect(cacheKeys.join('\n')).not.toContain('bob');
     expect(cacheKeys.join('\n')).not.toContain('secret-file');
+  });
+
+  it('should not reuse file auth tokens across different call contexts', async () => {
+    const authFn = vi.fn((authContext: any) => ({
+      token: `token-for-${authContext.testCaseId}-${authContext.repeatIndex}-${authContext.test.metadata.tenant}`,
+    }));
+    vi.mocked(importModule).mockImplementation(async () => ({ default: authFn }));
+
+    const provider = new HttpProvider(mockUrl, {
+      config: {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer {{token}}',
+        },
+        auth: {
+          type: 'file',
+          path: './auth/get-token.js',
+        },
+      },
+    });
+
+    await provider.callApi('same prompt', {
+      prompt: { raw: 'same prompt', label: 'same prompt' },
+      vars: { userId: 'same-user' },
+      testCaseId: 'case-a',
+      repeatIndex: 0,
+      test: {
+        metadata: { tenant: 'tenant-a' },
+      },
+    });
+    await provider.callApi('same prompt', {
+      prompt: { raw: 'same prompt', label: 'same prompt' },
+      vars: { userId: 'same-user' },
+      testCaseId: 'case-b',
+      repeatIndex: 1,
+      test: {
+        metadata: { tenant: 'tenant-b' },
+      },
+    });
+
+    expect(authFn).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetchWithCache).mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer token-for-case-a-0-tenant-a',
+        }),
+      }),
+    );
+    expect(vi.mocked(fetchWithCache).mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer token-for-case-b-1-tenant-b',
+        }),
+      }),
+    );
+
+    const cacheKeys = Array.from((provider as any).authTokenCache.keys());
+    expect(cacheKeys).toHaveLength(2);
+    expect(cacheKeys).toEqual([
+      expect.stringMatching(/^file:[a-f0-9]{64}$/),
+      expect.stringMatching(/^file:[a-f0-9]{64}$/),
+    ]);
+    expect(cacheKeys.join('\n')).not.toContain('case-a');
+    expect(cacheKeys.join('\n')).not.toContain('tenant-a');
   });
 
   it('should prune expired file auth tokens when caching a new token', async () => {
