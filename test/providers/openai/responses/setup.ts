@@ -1,3 +1,16 @@
+// Shared harness for the split OpenAI responses provider tests.
+//
+// Each split test file must import this module with a bare side-effect
+// import (`import './setup';`) BEFORE importing the modules under test, so
+// the `vi.mock` calls below register against the worker's module registry
+// before `src/cache` / `src/logger` / `src/python/pythonUtils` load.
+//
+// The top-level `beforeEach` / `afterEach` hooks register into the importing
+// file's test context because `vitest.config.ts` sets `isolate: true`, which
+// re-evaluates this module for every test file. If that flag is ever
+// disabled, the hooks would register only once per worker (in the first
+// file that imports this module) and env/mocks would silently leak across
+// files — update this harness before flipping it.
 import { afterEach, beforeEach, vi } from 'vitest';
 import { mockProcessEnv } from '../../../util/utils';
 
