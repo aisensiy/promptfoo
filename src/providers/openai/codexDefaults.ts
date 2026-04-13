@@ -1,10 +1,11 @@
-import { scryptSync } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 import { getEnvString } from '../../envars';
 import { getDirectory, resolvePackageEntryPoint } from '../../esm';
+import logger from '../../logger';
 import { OpenAICodexSDKProvider } from './codex-sdk';
 
 import type { EnvOverrides } from '../../types/env';
@@ -12,6 +13,9 @@ import type { DefaultProviders } from '../../types/index';
 import type { OpenAICodexSDKConfig } from './codex-sdk';
 
 const CODEX_AUTH_FILENAME = 'auth.json';
+const CODEX_DEFAULT_PROVIDERS_CACHE_MAX_ENTRIES = 32;
+const CODEX_DEFAULT_PROVIDERS_CACHE_HMAC_CONTEXT = 'promptfoo:codex-default-provider-cache-key';
+const CODEX_DEFAULT_PROVIDERS_CACHE_HMAC_KEY = randomBytes(32);
 const CODEX_SDK_PACKAGE_NAME = '@openai/codex-sdk';
 
 let codexDefaultWorkingDir: string | undefined;
@@ -33,18 +37,26 @@ const CODEX_GRADING_OUTPUT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const codexDefaultProvidersByCacheKey = new Map<
-  string,
-  Pick<
-    DefaultProviders,
-    | 'gradingJsonProvider'
-    | 'gradingProvider'
-    | 'llmRubricProvider'
-    | 'suggestionsProvider'
-    | 'synthesizeProvider'
-    | 'webSearchProvider'
-  >
->();
+type CodexDefaultProviders = Pick<
+  DefaultProviders,
+  | 'gradingJsonProvider'
+  | 'gradingProvider'
+  | 'llmRubricProvider'
+  | 'suggestionsProvider'
+  | 'synthesizeProvider'
+  | 'webSearchProvider'
+>;
+
+type CodexDefaultProviderBundle = {
+  gradingJsonProvider: OpenAICodexSDKProvider;
+  gradingProvider: OpenAICodexSDKProvider;
+  llmRubricProvider: OpenAICodexSDKProvider;
+  suggestionsProvider: OpenAICodexSDKProvider;
+  synthesizeProvider: OpenAICodexSDKProvider;
+  webSearchProvider: OpenAICodexSDKProvider;
+};
+
+const codexDefaultProvidersByCacheKey = new Map<string, CodexDefaultProviderBundle>();
 
 const codexSdkAvailabilityByBaseDir = new Map<string, boolean>();
 
@@ -129,7 +141,11 @@ function getCodexDefaultProviderConfig(
 
 function getSecretCacheFingerprint(value: string | undefined): string | undefined {
   return value
-    ? scryptSync(value, 'promptfoo:codex-default-provider-cache-key', 32).toString('hex')
+    ? createHmac('sha256', CODEX_DEFAULT_PROVIDERS_CACHE_HMAC_KEY)
+        .update(CODEX_DEFAULT_PROVIDERS_CACHE_HMAC_CONTEXT)
+        .update('\0')
+        .update(value)
+        .digest('hex')
     : undefined;
 }
 
@@ -146,20 +162,46 @@ function getCodexDefaultProvidersCacheKey(env?: EnvOverrides): string {
   });
 }
 
-export function getCodexDefaultProviders(
-  env?: EnvOverrides,
-): Pick<
-  DefaultProviders,
-  | 'gradingJsonProvider'
-  | 'gradingProvider'
-  | 'llmRubricProvider'
-  | 'suggestionsProvider'
-  | 'synthesizeProvider'
-  | 'webSearchProvider'
-> {
+function shutdownCodexDefaultProviderBundle(providers: CodexDefaultProviderBundle): void {
+  for (const provider of new Set([
+    providers.gradingJsonProvider,
+    providers.gradingProvider,
+    providers.llmRubricProvider,
+    providers.suggestionsProvider,
+    providers.synthesizeProvider,
+    providers.webSearchProvider,
+  ])) {
+    void provider.shutdown().catch((error) => {
+      logger.warn('[CodexDefaults] Error shutting down evicted provider', { error });
+    });
+  }
+}
+
+function cacheCodexDefaultProviders(
+  cacheKey: string,
+  providers: CodexDefaultProviderBundle,
+): CodexDefaultProviderBundle {
+  codexDefaultProvidersByCacheKey.set(cacheKey, providers);
+
+  while (codexDefaultProvidersByCacheKey.size > CODEX_DEFAULT_PROVIDERS_CACHE_MAX_ENTRIES) {
+    const oldestEntry = codexDefaultProvidersByCacheKey.entries().next().value;
+    if (!oldestEntry) {
+      break;
+    }
+    const [oldestCacheKey, oldestProviders] = oldestEntry;
+    codexDefaultProvidersByCacheKey.delete(oldestCacheKey);
+    shutdownCodexDefaultProviderBundle(oldestProviders);
+  }
+
+  return providers;
+}
+
+export function getCodexDefaultProviders(env?: EnvOverrides): CodexDefaultProviders {
   const cacheKey = getCodexDefaultProvidersCacheKey(env);
   const cachedProviders = codexDefaultProvidersByCacheKey.get(cacheKey);
   if (cachedProviders) {
+    codexDefaultProvidersByCacheKey.delete(cacheKey);
+    codexDefaultProvidersByCacheKey.set(cacheKey, cachedProviders);
     return cachedProviders;
   }
 
@@ -192,7 +234,7 @@ export function getCodexDefaultProviders(
     env,
   });
 
-  const providers = {
+  const providers: CodexDefaultProviderBundle = {
     gradingJsonProvider,
     gradingProvider,
     llmRubricProvider: gradingJsonProvider,
@@ -200,8 +242,7 @@ export function getCodexDefaultProviders(
     synthesizeProvider: gradingProvider,
     webSearchProvider,
   };
-  codexDefaultProvidersByCacheKey.set(cacheKey, providers);
-  return providers;
+  return cacheCodexDefaultProviders(cacheKey, providers);
 }
 
 export function clearCodexDefaultProvidersForTesting(): void {

@@ -166,7 +166,7 @@ describe('Codex default providers', () => {
     });
   });
 
-  it('isolates cached default providers by process API credential without storing raw keys', async () => {
+  it('isolates cached default providers by process API credential without using raw keys in cache keys', async () => {
     const { getCodexDefaultProviders } = await import(
       '../../../src/providers/openai/codexDefaults'
     );
@@ -226,5 +226,36 @@ describe('Codex default providers', () => {
     expect((secondProviders.gradingProvider as OpenAICodexSDKProvider).getApiKey()).toBe(
       'second-codex-key',
     );
+  });
+
+  it('evicts and shuts down least-recently-used cached providers when credentials rotate', async () => {
+    const { getCodexDefaultProviders } = await import(
+      '../../../src/providers/openai/codexDefaults'
+    );
+
+    const firstProviders = getCodexDefaultProviders({ CODEX_API_KEY: 'codex-key-0' });
+    const firstGradingShutdown = vi.spyOn(
+      firstProviders.gradingProvider as OpenAICodexSDKProvider,
+      'shutdown',
+    );
+    const firstGradingJsonShutdown = vi.spyOn(
+      firstProviders.gradingJsonProvider as OpenAICodexSDKProvider,
+      'shutdown',
+    );
+    const firstWebSearchShutdown = vi.spyOn(
+      firstProviders.webSearchProvider as OpenAICodexSDKProvider,
+      'shutdown',
+    );
+
+    for (let index = 1; index <= 32; index++) {
+      getCodexDefaultProviders({ CODEX_API_KEY: `codex-key-${index}` });
+    }
+
+    expect(firstGradingShutdown).toHaveBeenCalledTimes(1);
+    expect(firstGradingJsonShutdown).toHaveBeenCalledTimes(1);
+    expect(firstWebSearchShutdown).toHaveBeenCalledTimes(1);
+
+    const recachedFirstProviders = getCodexDefaultProviders({ CODEX_API_KEY: 'codex-key-0' });
+    expect(recachedFirstProviders).not.toBe(firstProviders);
   });
 });
