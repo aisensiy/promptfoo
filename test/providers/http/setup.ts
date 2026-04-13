@@ -1,3 +1,4 @@
+// Shared mock setup and lifecycle hooks for all HTTP provider test files.
 import { afterAll, afterEach, beforeEach, vi } from 'vitest';
 import { fetchWithCache } from '../../../src/cache';
 import { runPython } from '../../../src/python/pythonUtils';
@@ -41,12 +42,18 @@ vi.mock('../../../src/esm', async (importOriginal) => {
     ...(await importOriginal()),
 
     importModule: vi.fn(async (_modulePath: string, functionName?: string) => {
-      const mockModule = {
+      const mockModule: Record<string, ReturnType<typeof vi.fn>> = {
         default: vi.fn((data) => data.defaultField),
         parseResponse: vi.fn((data) => data.specificField),
       };
       if (functionName) {
-        return mockModule[functionName as keyof typeof mockModule];
+        if (!(functionName in mockModule)) {
+          throw new Error(
+            `importModule mock: unexpected functionName "${functionName}". ` +
+              'Add it to the mockModule in setup.ts or use mockResolvedValueOnce.',
+          );
+        }
+        return mockModule[functionName];
       }
       return mockModule.default;
     }),
@@ -74,7 +81,7 @@ vi.mock('../../../src/python/pythonUtils', async () => {
   };
 });
 
-// Mock jks-js module for JKS tests - don't use importOriginal as the native module may fail to load
+// Mock jks-js module for JKS keystore tests in auth.test.ts - don't use importOriginal as the native module may fail to load
 vi.mock('jks-js', () => ({
   toPem: vi.fn(),
   default: {
@@ -92,7 +99,12 @@ beforeEach(() => {
   vi.mocked(maybeLoadFromExternalFile).mockReset();
   vi.mocked(maybeLoadConfigFromExternalFile).mockReset();
   vi.mocked(runPython).mockReset();
-  vi.mocked(fetchWithCache).mockResolvedValue(undefined as any);
+  vi.mocked(fetchWithCache).mockImplementation(() => {
+    throw new Error(
+      'fetchWithCache called without mockResolvedValueOnce setup. ' +
+        'Add vi.mocked(fetchWithCache).mockResolvedValueOnce({...}) before calling provider.callApi().',
+    );
+  });
   vi.mocked(maybeLoadFromExternalFile).mockImplementation(function (input: unknown) {
     return input;
   });

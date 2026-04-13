@@ -1,9 +1,10 @@
+// Request lifecycle tests: body determination, session handling, validation, transforms, token estimation, abort signals.
 import './setup';
 
 import path from 'path';
 
 import dedent from 'dedent';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithCache } from '../../../src/cache';
 import cliState from '../../../src/cliState';
 import { importModule } from '../../../src/esm';
@@ -11,6 +12,7 @@ import {
   createSessionParser,
   createValidateStatus,
   determineRequestBody,
+  estimateTokenCount,
   HttpProvider,
 } from '../../../src/providers/http';
 import { REQUEST_TIMEOUT_MS } from '../../../src/providers/shared';
@@ -1505,6 +1507,9 @@ describe('transform request error handling', () => {
 });
 
 describe('HttpProvider with token estimation', () => {
+  beforeEach(() => {
+    cliState.config = {} as any;
+  });
   afterEach(() => {
     delete cliState.config;
   });
@@ -1740,5 +1745,222 @@ describe('HttpProvider with token estimation', () => {
     expect(result.tokenUsage).toBeDefined();
     // Should use raw text when output is not a string
     expect(result.tokenUsage!.completion).toBeGreaterThan(0);
+  });
+});
+
+describe('createSessionParser', () => {
+  it('should return empty string when no parser is provided', async () => {
+    const parser = await createSessionParser(undefined);
+    const result = parser({ headers: {}, body: {} });
+    expect(result).toBe('');
+  });
+
+  it('should handle function parser', async () => {
+    const functionParser = ({ headers }: { headers: Record<string, string> }) =>
+      headers['session-id'];
+    const parser = await createSessionParser(functionParser);
+    const result = parser({ headers: { 'session-id': 'test-session' } });
+    expect(result).toBe('test-session');
+  });
+
+  it('should handle header path expression', async () => {
+    const parser = await createSessionParser('data.headers["x-session-id"]');
+    const result = parser({
+      headers: { 'x-session-id': 'test-session' },
+      body: {},
+    });
+    expect(result).toBe('test-session');
+  });
+
+  it('should handle body path expression', async () => {
+    const parser = await createSessionParser('data.body.session.id');
+    const result = parser({
+      headers: {},
+      body: { session: { id: 'test-session' } },
+    });
+    expect(result).toBe('test-session');
+  });
+
+  it('should handle file:// parser', async () => {
+    const mockParser = vi.fn(({ headers }) => headers['session-id']);
+    vi.mocked(importModule).mockResolvedValueOnce(mockParser);
+
+    const parser = await createSessionParser('file://session-parser.js');
+    const result = parser({ headers: { 'session-id': 'test-session' } });
+
+    expect(result).toBe('test-session');
+    expect(importModule).toHaveBeenCalledWith(
+      path.resolve('/mock/base/path', 'session-parser.js'),
+      undefined,
+    );
+  });
+
+  it('should handle file:// parser with specific function', async () => {
+    const mockParser = vi.fn(({ body }) => body.sessionId);
+    vi.mocked(importModule).mockResolvedValueOnce(mockParser);
+
+    const parser = await createSessionParser('file://session-parser.js:parseSession');
+    const result = parser({ headers: {}, body: { sessionId: 'test-session' } });
+
+    expect(result).toBe('test-session');
+    expect(importModule).toHaveBeenCalledWith(
+      path.resolve('/mock/base/path', 'session-parser.js'),
+      'parseSession',
+    );
+  });
+
+  it('should throw error for malformed file:// parser', async () => {
+    vi.mocked(importModule).mockResolvedValueOnce({});
+
+    await expect(createSessionParser('file://invalid-parser.js')).rejects.toThrow(
+      /Response transform malformed/,
+    );
+  });
+
+  it('should handle complex body path expression', async () => {
+    const parser = await createSessionParser('data.body.data.attributes.session.id');
+    const result = parser({
+      headers: {},
+      body: {
+        data: {
+          attributes: {
+            session: {
+              id: 'test-session',
+            },
+          },
+        },
+      },
+    });
+    expect(result).toBe('test-session');
+  });
+});
+
+describe('Token Estimation', () => {
+  describe('estimateTokenCount', () => {
+    it('should count tokens using word-based method', () => {
+      const text = 'Hello world this is a test';
+      const result = estimateTokenCount(text, 1.3);
+      expect(result).toBe(Math.ceil(6 * 1.3)); // 6 words * 1.3 = 7.8, ceil = 8
+    });
+
+    it('should handle empty text', () => {
+      expect(estimateTokenCount('', 1.3)).toBe(0);
+      expect(estimateTokenCount(null as any, 1.3)).toBe(0);
+      expect(estimateTokenCount(undefined as any, 1.3)).toBe(0);
+    });
+
+    it('should filter out empty words', () => {
+      const text = 'hello   world    test'; // Multiple spaces
+      const result = estimateTokenCount(text, 1.0);
+      expect(result).toBe(3); // Should count 3 words, not split on every space
+    });
+
+    it('should use default multiplier when not provided', () => {
+      const text = 'hello world';
+      const result = estimateTokenCount(text);
+      expect(result).toBe(Math.ceil(2 * 1.3)); // Default multiplier is 1.3
+    });
+  });
+});
+
+describe('HttpProvider - Abort Signal Handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should pass abortSignal to fetchWithCache', async () => {
+    const provider = new HttpProvider('http://example.com/api', {
+      config: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: { key: '{{ prompt }}' },
+      },
+    });
+
+    const abortController = new AbortController();
+    const mockResponse = {
+      data: JSON.stringify({ result: 'response text' }),
+      status: 200,
+      statusText: 'OK',
+      cached: false,
+    };
+    vi.mocked(fetchWithCache).mockResolvedValueOnce(mockResponse);
+
+    await provider.callApi('test prompt', undefined, { abortSignal: abortController.signal });
+
+    expect(fetchWithCache).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: abortController.signal }),
+      expect.any(Number),
+      expect.any(String),
+      undefined,
+      undefined,
+    );
+  });
+
+  it('should pass abortSignal to fetchWithCache in raw request mode', async () => {
+    const rawRequest = dedent`
+      POST /api HTTP/1.1
+      Host: example.com
+      Content-Type: application/json
+
+      {"key": "{{ prompt }}"}
+    `;
+
+    const provider = new HttpProvider('http://example.com', {
+      config: {
+        request: rawRequest,
+      },
+    });
+
+    const abortController = new AbortController();
+    const mockResponse = {
+      data: JSON.stringify({ result: 'response text' }),
+      status: 200,
+      statusText: 'OK',
+      cached: false,
+    };
+    vi.mocked(fetchWithCache).mockResolvedValueOnce(mockResponse);
+
+    await provider.callApi('test prompt', undefined, { abortSignal: abortController.signal });
+
+    expect(fetchWithCache).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: abortController.signal }),
+      expect.any(Number),
+      expect.any(String),
+      undefined,
+      undefined,
+    );
+  });
+
+  it('should work without abortSignal (backwards compatibility)', async () => {
+    const provider = new HttpProvider('http://example.com/api', {
+      config: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: { key: '{{ prompt }}' },
+      },
+    });
+
+    const mockResponse = {
+      data: JSON.stringify({ result: 'response text' }),
+      status: 200,
+      statusText: 'OK',
+      cached: false,
+    };
+    vi.mocked(fetchWithCache).mockResolvedValueOnce(mockResponse);
+
+    // Call without options parameter
+    await provider.callApi('test prompt');
+
+    expect(fetchWithCache).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.not.objectContaining({ signal: expect.anything() }),
+      expect.any(Number),
+      expect.any(String),
+      undefined,
+      undefined,
+    );
   });
 });

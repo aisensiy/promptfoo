@@ -1,3 +1,4 @@
+// Tools and template variable tests: tool_choice handling, transformToolsFormat integration.
 import './setup';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -579,7 +580,8 @@ describe('transformToolsFormat integration', () => {
 
     await provider.callApi('test prompt');
 
-    expect(loggerWarnSpy.mock.calls[0]?.[0]).toEqual(
+    expect(loggerWarnSpy).toHaveBeenCalled();
+    expect(loggerWarnSpy.mock.calls[0][0]).toEqual(
       expect.stringContaining('tool_choice is set but tools is empty'),
     );
 
@@ -614,7 +616,8 @@ describe('transformToolsFormat integration', () => {
 
     await provider.callApi('test prompt');
 
-    expect(loggerWarnSpy.mock.calls[0]?.[0]).toEqual(
+    expect(loggerWarnSpy).toHaveBeenCalled();
+    expect(loggerWarnSpy.mock.calls[0][0]).toEqual(
       expect.stringContaining('tool_choice is set but tools is empty'),
     );
 
