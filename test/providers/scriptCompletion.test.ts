@@ -233,7 +233,10 @@ describe('ScriptCompletionProvider', () => {
     const cachedResult = { output: 'cached sk-test-cached-output-secret result' };
     const options = { config: { basePath: '/base', apiKey: 'sk-test-script-secret' } } as any;
     const provider = new ScriptCompletionProvider('node script.js', options);
-    const context = { vars: { promptSecret: 'sk-test-context-secret' } } as any;
+    const context = {
+      vars: { promptSecret: 'sk-test-context-secret' },
+      prompt: { label: 'sk-test-context-label-secret' },
+    } as any;
     const mockCache = {
       get: vi.fn().mockResolvedValue(JSON.stringify(cachedResult)),
       set: vi.fn(),
@@ -262,7 +265,7 @@ describe('ScriptCompletionProvider', () => {
     const fileHash = realSha256('file content');
     const expectedCacheKey = `exec:node script.js:${fileHash}:${fileHash}:${realSha256('test prompt')}:${realSha256(
       JSON.stringify(options) ?? 'undefined',
-    )}:${realSha256(JSON.stringify(context.vars) ?? 'undefined')}`;
+    )}:${realSha256(JSON.stringify(context) ?? 'undefined')}`;
 
     expect(result.cached).toBe(true);
     expect(result).toEqual({ ...cachedResult, cached: true });
@@ -270,6 +273,7 @@ describe('ScriptCompletionProvider', () => {
     expect(expectedCacheKey).not.toContain('test prompt');
     expect(expectedCacheKey).not.toContain('sk-test-script-secret');
     expect(expectedCacheKey).not.toContain('sk-test-context-secret');
+    expect(expectedCacheKey).not.toContain('sk-test-context-label-secret');
     const debugLogs = vi.mocked(logger.debug).mock.calls.map((call) => JSON.stringify(call));
     expect(debugLogs.join('\n')).not.toContain('sk-test-cached-output-secret');
     expect(logger.debug).toHaveBeenCalledWith('Returning cached result for script', {
@@ -281,7 +285,10 @@ describe('ScriptCompletionProvider', () => {
   it('should hash cache keys when storing fresh results', async () => {
     const options = { config: { basePath: '/base', apiKey: 'sk-test-script-secret' } } as any;
     const provider = new ScriptCompletionProvider('node script.js', options);
-    const context = { vars: { promptSecret: 'sk-test-context-secret' } } as any;
+    const context = {
+      vars: { promptSecret: 'sk-test-context-secret' },
+      prompt: { label: 'sk-test-context-label-secret' },
+    } as any;
     const mockCache = {
       get: vi.fn().mockResolvedValue(null),
       set: vi.fn(),
@@ -316,7 +323,7 @@ describe('ScriptCompletionProvider', () => {
     const fileHash = realSha256('file content');
     const expectedCacheKey = `exec:node script.js:${fileHash}:${fileHash}:${realSha256('test prompt')}:${realSha256(
       JSON.stringify(options) ?? 'undefined',
-    )}:${realSha256(JSON.stringify(context.vars) ?? 'undefined')}`;
+    )}:${realSha256(JSON.stringify(context) ?? 'undefined')}`;
 
     expect(result.output).toBe('fresh result');
     expect(mockCache.set).toHaveBeenCalledWith(
@@ -326,9 +333,10 @@ describe('ScriptCompletionProvider', () => {
     expect(expectedCacheKey).not.toContain('test prompt');
     expect(expectedCacheKey).not.toContain('sk-test-script-secret');
     expect(expectedCacheKey).not.toContain('sk-test-context-secret');
+    expect(expectedCacheKey).not.toContain('sk-test-context-label-secret');
   });
 
-  it('should separate cache keys for different context vars', async () => {
+  it('should separate cache keys for different context payloads', async () => {
     const mockCache = {
       get: vi.fn().mockResolvedValue(null),
       set: vi.fn(),
@@ -359,15 +367,23 @@ describe('ScriptCompletionProvider', () => {
       return {} as any;
     });
 
-    await provider.callApi('test prompt', { vars: { tenant: 'SECRET_TENANT_A' } } as any);
-    await provider.callApi('test prompt', { vars: { tenant: 'SECRET_TENANT_B' } } as any);
+    await provider.callApi('test prompt', {
+      vars: { tenant: 'SECRET_TENANT' },
+      prompt: { label: 'SECRET_LABEL_A' },
+    } as any);
+    await provider.callApi('test prompt', {
+      vars: { tenant: 'SECRET_TENANT' },
+      prompt: { label: 'SECRET_LABEL_B' },
+    } as any);
 
     const firstCacheKey = mockCache.get.mock.calls[0][0] as string;
     const secondCacheKey = mockCache.get.mock.calls[1][0] as string;
 
     expect(firstCacheKey).not.toBe(secondCacheKey);
-    expect(firstCacheKey).not.toContain('SECRET_TENANT_A');
-    expect(secondCacheKey).not.toContain('SECRET_TENANT_B');
+    expect(firstCacheKey).not.toContain('SECRET_TENANT');
+    expect(secondCacheKey).not.toContain('SECRET_TENANT');
+    expect(firstCacheKey).not.toContain('SECRET_LABEL_A');
+    expect(secondCacheKey).not.toContain('SECRET_LABEL_B');
   });
 
   it('should handle script execution errors', async () => {

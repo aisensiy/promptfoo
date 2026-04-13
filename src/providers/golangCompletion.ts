@@ -10,6 +10,7 @@ import logger from '../logger';
 import { sha256 } from '../util/createHash';
 import { parsePathOrGlob } from '../util/index';
 import { safeJsonStringify } from '../util/json';
+import { sanitizeScriptContext } from './scriptContext';
 
 import type {
   ApiProvider,
@@ -73,9 +74,12 @@ export class GolangProvider implements ApiProvider {
     logger.debug(`Found module root at ${moduleRoot}`);
     logger.debug(`Computing file hash for script ${absPath}`);
     const fileHash = sha256(fs.readFileSync(absPath, 'utf-8'));
-    const cacheKey = `golang:${this.scriptPath}:${apiType}:${fileHash}:${sha256(prompt)}:${sha256(
-      JSON.stringify(this.options) ?? 'undefined',
-    )}:${sha256(JSON.stringify(context?.vars) ?? 'undefined')}`;
+    const functionName = this.functionName || apiType;
+    const sanitizedContext = sanitizeScriptContext('GolangProvider', context);
+    const args =
+      apiType === 'call_api' ? [prompt, this.options, sanitizedContext] : [prompt, this.options];
+    const jsonArgs = safeJsonStringify(args) || '[]';
+    const cacheKey = `golang:${this.scriptPath}:${functionName}:${apiType}:${fileHash}:${sha256(jsonArgs)}`;
     const cache = await getCache();
     let cachedResult;
 
@@ -87,25 +91,13 @@ export class GolangProvider implements ApiProvider {
       logger.debug(`Returning cached ${apiType} result for script ${absPath}`);
       return { ...JSON.parse(cachedResult), cached: true };
     } else {
-      if (context) {
-        // Remove properties not useful in Golang and non-serializable objects
-        // These can contain circular references (e.g., Timeout objects) that break JSON serialization
-        delete context.getCache;
-        delete context.logger;
-        delete context.filters; // NunjucksFilterMap contains functions
-        delete context.originalProvider; // ApiProvider object with methods
-      }
-
-      const args =
-        apiType === 'call_api' ? [prompt, this.options, context] : [prompt, this.options];
       logger.debug('Running Golang script', {
         scriptPath: absPath,
         providerPath: this.scriptPath,
         apiType,
         argCount: args.length,
-        hasContext: Boolean(context),
+        hasContext: Boolean(sanitizedContext),
       });
-      const functionName = this.functionName || apiType;
 
       let tempDir: string | undefined;
       try {
@@ -149,7 +141,6 @@ export class GolangProvider implements ApiProvider {
           { cwd: scriptDir },
         );
 
-        const jsonArgs = safeJsonStringify(args) || '[]';
         logger.debug(`Running Go executable: ${executablePath}`);
 
         // Execute compiled binary with args (no shell escaping needed)

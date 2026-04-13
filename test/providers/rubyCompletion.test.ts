@@ -8,6 +8,7 @@ import * as rubyUtils from '../../src/ruby/rubyUtils';
 import { runRuby } from '../../src/ruby/rubyUtils';
 import { sha256 } from '../../src/util/createHash';
 import * as fileReference from '../../src/util/fileReference';
+import { safeJsonStringify } from '../../src/util/json';
 
 const fsMocks = vi.hoisted(() => ({
   readFileSync: vi.fn(),
@@ -325,7 +326,10 @@ describe('RubyProvider', () => {
         config: { basePath: '/base', apiKey: 'sk-test-ruby-secret' },
       } as any;
       const provider = new RubyProvider('script.rb', options);
-      const context = { vars: { promptSecret: 'sk-test-context-secret' } } as any;
+      const context = {
+        vars: { promptSecret: 'sk-test-context-secret' },
+        prompt: { label: 'sk-test-context-label-secret' },
+      } as any;
       mockIsCacheEnabled.mockReturnValue(true);
       const mockCache = {
         get: vi.fn().mockResolvedValue(JSON.stringify({ output: 'cached result' })),
@@ -335,16 +339,19 @@ describe('RubyProvider', () => {
 
       const result = await provider.callApi('test prompt', context);
       const expectedCacheKey = mockCache.get.mock.calls[0][0] as string;
+      const expectedOptions = { ...options, config: { ...options.config } };
+      const expectedArgsHash = sha256(
+        safeJsonStringify(['test prompt', expectedOptions, context]) ?? 'undefined',
+      );
 
       expect(expectedCacheKey).toContain('ruby:');
-      expect(expectedCacheKey).toContain(':default:call_api:');
+      expect(expectedCacheKey).toContain(':call_api:call_api:');
       expect(expectedCacheKey).toContain(sha256('mock file content'));
-      expect(expectedCacheKey).toContain(sha256('test prompt'));
-      expect(expectedCacheKey).toContain(sha256(JSON.stringify(options) ?? 'undefined'));
-      expect(expectedCacheKey).toContain(sha256(JSON.stringify(context.vars) ?? 'undefined'));
+      expect(expectedCacheKey).toContain(expectedArgsHash);
       expect(expectedCacheKey).not.toContain('test prompt');
       expect(expectedCacheKey).not.toContain('sk-test-ruby-secret');
       expect(expectedCacheKey).not.toContain('sk-test-context-secret');
+      expect(expectedCacheKey).not.toContain('sk-test-context-label-secret');
       expect(mockRunRuby).not.toHaveBeenCalled();
       expect(result).toEqual({ output: 'cached result', cached: true });
     });
@@ -354,7 +361,10 @@ describe('RubyProvider', () => {
         config: { basePath: '/base', apiKey: 'sk-test-ruby-secret' },
       } as any;
       const provider = new RubyProvider('script.rb', options);
-      const context = { vars: { promptSecret: 'sk-test-context-secret' } } as any;
+      const context = {
+        vars: { promptSecret: 'sk-test-context-secret' },
+        prompt: { label: 'sk-test-context-label-secret' },
+      } as any;
       mockIsCacheEnabled.mockReturnValue(true);
       const mockCache = {
         get: vi.fn().mockResolvedValue(null),
@@ -365,17 +375,20 @@ describe('RubyProvider', () => {
 
       await provider.callApi('test prompt', context);
       const expectedCacheKey = mockCache.set.mock.calls[0][0] as string;
+      const expectedOptions = { ...options, config: { ...options.config } };
+      const expectedArgsHash = sha256(
+        safeJsonStringify(['test prompt', expectedOptions, context]) ?? 'undefined',
+      );
 
       expect(expectedCacheKey).toContain('ruby:');
-      expect(expectedCacheKey).toContain(':default:call_api:');
+      expect(expectedCacheKey).toContain(':call_api:call_api:');
       expect(expectedCacheKey).toContain(sha256('mock file content'));
-      expect(expectedCacheKey).toContain(sha256('test prompt'));
-      expect(expectedCacheKey).toContain(sha256(JSON.stringify(options) ?? 'undefined'));
-      expect(expectedCacheKey).toContain(sha256(JSON.stringify(context.vars) ?? 'undefined'));
+      expect(expectedCacheKey).toContain(expectedArgsHash);
       expect(mockCache.set).toHaveBeenCalledWith(expectedCacheKey, '{"output":"new result"}');
       expect(expectedCacheKey).not.toContain('test prompt');
       expect(expectedCacheKey).not.toContain('sk-test-ruby-secret');
       expect(expectedCacheKey).not.toContain('sk-test-context-secret');
+      expect(expectedCacheKey).not.toContain('sk-test-context-label-secret');
     });
 
     it('should properly transform token usage in cached results', async () => {
@@ -526,8 +539,11 @@ describe('RubyProvider', () => {
         cached: false,
       });
       const cacheKey = mockCache.set.mock.calls[0][0] as string;
-      expect(cacheKey).toMatch(/^ruby:script\.rb:default:call_api:[a-f0-9]{64}:/);
-      expect(cacheKey).toContain(sha256('test prompt'));
+      const expectedArgsHash = sha256(
+        safeJsonStringify(['test prompt', { config: {} }, undefined]) ?? 'undefined',
+      );
+      expect(cacheKey).toMatch(/^ruby:script\.rb:call_api:call_api:[a-f0-9]{64}:/);
+      expect(cacheKey).toContain(expectedArgsHash);
       expect(cacheKey).not.toContain('test prompt');
       expect(mockCache.set).toHaveBeenCalledWith(cacheKey, '{"output":"fresh result"}');
     });
@@ -553,8 +569,8 @@ describe('RubyProvider', () => {
       const cacheSetCalls = mockCache.set.mock.calls;
       expect(cacheSetCalls).toHaveLength(2);
 
-      // The first call should contain 'default' in the cache key
-      expect(cacheSetCalls[0][0]).toContain(':default:');
+      // The first call should contain the resolved call_api function in the cache key
+      expect(cacheSetCalls[0][0]).toContain(':call_api:');
 
       // The second call should contain the custom function name
       expect(cacheSetCalls[1][0]).toContain(':custom_function:');

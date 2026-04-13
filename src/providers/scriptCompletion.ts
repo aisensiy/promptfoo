@@ -7,6 +7,7 @@ import logger from '../logger';
 import { sha256 } from '../util/createHash';
 import invariant from '../util/invariant';
 import { safeJsonStringify } from '../util/json';
+import { sanitizeScriptContext } from './scriptContext';
 
 import type {
   ApiProvider,
@@ -68,14 +69,17 @@ export class ScriptCompletionProvider implements ApiProvider {
   async callApi(prompt: string, context?: CallApiContextParams): Promise<ProviderResponse> {
     const scriptParts = parseScriptParts(this.scriptPath);
     const fileHashes = getFileHashes(scriptParts);
+    const serializedOptions = safeJsonStringify(this.options ?? {}) ?? '{}';
+    const sanitizedContext = sanitizeScriptContext('ScriptCompletionProvider', context) ?? {};
+    const serializedContext = safeJsonStringify(sanitizedContext) ?? '{}';
 
     if (fileHashes.length === 0) {
       logger.warn(`Could not find any valid files in the command: ${this.scriptPath}`);
     }
 
     const cacheKey = `exec:${this.scriptPath}:${fileHashes.join(':')}:${sha256(prompt)}:${sha256(
-      JSON.stringify(this.options) ?? 'undefined',
-    )}:${sha256(safeJsonStringify(context?.vars) ?? 'undefined')}`;
+      serializedOptions,
+    )}:${sha256(serializedContext)}`;
 
     let cachedResult;
     if (fileHashes.length > 0 && isCacheEnabled()) {
@@ -95,17 +99,7 @@ export class ScriptCompletionProvider implements ApiProvider {
     return new Promise<ProviderResponse>((resolve, reject) => {
       const command = scriptParts.shift();
       invariant(command, 'No command found in script path');
-      // Remove properties not useful in shell scripts and non-serializable objects
-      // These can contain circular references (e.g., Timeout objects) that break JSON serialization
-      delete context?.getCache;
-      delete context?.logger;
-      delete context?.filters; // NunjucksFilterMap contains functions
-      delete context?.originalProvider; // ApiProvider object with methods
-      const scriptArgs = scriptParts.concat([
-        prompt,
-        safeJsonStringify(this.options || {}) as string,
-        safeJsonStringify(context || {}) as string,
-      ]);
+      const scriptArgs = scriptParts.concat([prompt, serializedOptions, serializedContext]);
       const options = this.options?.config.basePath ? { cwd: this.options.config.basePath } : {};
 
       execFile(command, scriptArgs, options, async (error, stdout, stderr) => {

@@ -246,11 +246,26 @@ export class RubyProvider implements ApiProvider {
     const absPath = path.resolve(path.join(this.options?.config.basePath || '', this.scriptPath));
     logger.debug(`Computing file hash for script ${absPath}`);
     const fileHash = sha256(fs.readFileSync(absPath, 'utf-8'));
+    const functionName = this.functionName || apiType;
+    const sanitizedContext = sanitizeScriptContext('RubyProvider', context);
 
-    // Create cache key including the function name to ensure different functions don't share caches
-    const cacheKey = `ruby:${this.scriptPath}:${this.functionName || 'default'}:${apiType}:${fileHash}:${sha256(prompt)}:${sha256(
-      safeJsonStringify(this.options) ?? 'undefined',
-    )}:${sha256(safeJsonStringify(context?.vars) ?? 'undefined')}`;
+    // Create a new options object with processed file references included in the config
+    // This ensures any file:// references are replaced with their actual content
+    const optionsWithProcessedConfig = {
+      ...this.options,
+      config: {
+        ...this.options?.config,
+        ...this.config, // Merge in the processed config containing resolved file references
+      },
+    };
+
+    const args = buildRubyScriptArgs(apiType, prompt, optionsWithProcessedConfig, sanitizedContext);
+
+    // Create cache key including the resolved function and exact worker args to ensure
+    // different invocation payloads don't share caches.
+    const cacheKey = `ruby:${this.scriptPath}:${functionName}:${apiType}:${fileHash}:${sha256(
+      safeJsonStringify(args) ?? 'undefined',
+    )}`;
     logger.debug(`RubyProvider cache key: ${cacheKey}`);
 
     const cache = await getCache();
@@ -276,25 +291,6 @@ export class RubyProvider implements ApiProvider {
       // IMPORTANT: Set cached flag to true so evaluator recognizes this as cached
       return applyCachedRubyCallApiMetadata(apiType, parsedResult);
     } else {
-      const sanitizedContext = sanitizeScriptContext('RubyProvider', context);
-
-      // Create a new options object with processed file references included in the config
-      // This ensures any file:// references are replaced with their actual content
-      const optionsWithProcessedConfig = {
-        ...this.options,
-        config: {
-          ...this.options?.config,
-          ...this.config, // Merge in the processed config containing resolved file references
-        },
-      };
-
-      const args = buildRubyScriptArgs(
-        apiType,
-        prompt,
-        optionsWithProcessedConfig,
-        sanitizedContext,
-      );
-
       logger.debug('Running ruby script', {
         scriptPath: absPath,
         providerPath: this.scriptPath,
@@ -303,7 +299,6 @@ export class RubyProvider implements ApiProvider {
         hasContext: Boolean(sanitizedContext),
       });
 
-      const functionName = this.functionName || apiType;
       const result = await runRuby(absPath, functionName, args, {
         rubyExecutable: this.config.rubyExecutable,
       });

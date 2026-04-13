@@ -9,6 +9,7 @@ import { PythonWorkerPool } from '../python/workerPool';
 import { sha256 } from '../util/createHash';
 import { processConfigFileReferences } from '../util/fileReference';
 import { parsePathOrGlob } from '../util/index';
+import { safeJsonStringify } from '../util/json';
 import { providerRegistry } from './providerRegistry';
 import { sanitizeScriptContext } from './scriptContext';
 
@@ -326,11 +327,31 @@ export class PythonProvider implements ApiProvider {
     const absPath = path.resolve(path.join(this.options?.config.basePath || '', this.scriptPath));
     logger.debug(`Computing file hash for script ${absPath}`);
     const fileHash = sha256(fs.readFileSync(absPath, 'utf-8'));
+    const functionName = this.functionName || apiType;
+    const sanitizedContext = sanitizeScriptContext('PythonProvider', context);
 
-    // Create cache key including the function name to ensure different functions don't share caches
-    const cacheKey = `python:${this.scriptPath}:${this.functionName || 'default'}:${apiType}:${fileHash}:${sha256(prompt)}:${sha256(
-      JSON.stringify(this.options) ?? 'undefined',
-    )}:${sha256(JSON.stringify(context?.vars) ?? 'undefined')}`;
+    // Create a new options object with processed file references included in the config
+    // This ensures any file:// references are replaced with their actual content
+    const optionsWithProcessedConfig = {
+      ...this.options,
+      config: {
+        ...this.options?.config,
+        ...this.config, // Merge in the processed config containing resolved file references
+      },
+    };
+
+    const args = buildPythonScriptArgs(
+      apiType,
+      prompt,
+      optionsWithProcessedConfig,
+      sanitizedContext,
+    );
+
+    // Create cache key including the resolved function and exact worker args to ensure
+    // different invocation payloads don't share caches.
+    const cacheKey = `python:${this.scriptPath}:${functionName}:${apiType}:${fileHash}:${sha256(
+      safeJsonStringify(args) ?? 'undefined',
+    )}`;
     logger.debug(`PythonProvider cache key: ${cacheKey}`);
 
     const cache = await getCache();
@@ -356,25 +377,6 @@ export class PythonProvider implements ApiProvider {
       // IMPORTANT: Set cached flag to true so evaluator recognizes this as cached
       return applyCachedCallApiMetadata(apiType, parsedResult);
     } else {
-      const sanitizedContext = sanitizeScriptContext('PythonProvider', context);
-
-      // Create a new options object with processed file references included in the config
-      // This ensures any file:// references are replaced with their actual content
-      const optionsWithProcessedConfig = {
-        ...this.options,
-        config: {
-          ...this.options?.config,
-          ...this.config, // Merge in the processed config containing resolved file references
-        },
-      };
-
-      const args = buildPythonScriptArgs(
-        apiType,
-        prompt,
-        optionsWithProcessedConfig,
-        sanitizedContext,
-      );
-
       logger.debug('Executing python script via worker pool', {
         scriptPath: absPath,
         apiType,
@@ -382,7 +384,6 @@ export class PythonProvider implements ApiProvider {
         hasContext: Boolean(sanitizedContext),
       });
 
-      const functionName = this.functionName || apiType;
       // Use worker pool instead of runPython
       const result = await this.pool!.execute(functionName, args);
 
