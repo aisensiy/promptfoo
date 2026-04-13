@@ -50,6 +50,14 @@ const SERVER_PROMPT_SOURCE_EXECUTABLE_EXTENSIONS = [
   '.sh',
 ];
 
+function isPathLikeSegment(value: string): boolean {
+  return value.length > 1 && /^[\w.-]+$/.test(value) && /[a-z0-9]/i.test(value);
+}
+
+function hasTrailingFileLikeExtension(value: string): boolean {
+  return /\.[a-z0-9]{1,8}(?::[a-z_$][\w$]*)?$/i.test(value.trim());
+}
+
 function hasPathLikeSeparator(value: string): boolean {
   const separatorIndex = value.search(/[/\\]/);
   if (separatorIndex < 0) {
@@ -58,10 +66,19 @@ function hasPathLikeSeparator(value: string): boolean {
 
   const firstSegment = value.slice(0, separatorIndex);
   if (/\s/.test(firstSegment)) {
-    return false;
+    const pathToken = firstSegment.trimEnd().split(/\s+/).at(-1) ?? '';
+    if (!isPathLikeSegment(pathToken)) {
+      return false;
+    }
+
+    const afterSeparator = value.slice(separatorIndex + 1);
+    return (
+      Boolean(afterSeparator.trim()) &&
+      (!/\s/.test(afterSeparator) || hasTrailingFileLikeExtension(value))
+    );
   }
 
-  return firstSegment.length > 1;
+  return isPathLikeSegment(firstSegment);
 }
 
 function hasFileLikeExtension(value: string): boolean {

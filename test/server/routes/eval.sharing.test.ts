@@ -137,6 +137,17 @@ describe('Eval Routes - Sharing behavior', () => {
     expect(mockedEvaluate).not.toHaveBeenCalled();
   });
 
+  it('rejects local prompt file sources with spaces before the first separator', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['my prompts/template.txt'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
   it('rejects executable prompt files from web job creation', async () => {
     const response = await postJob({
       ...minimalTestSuite,
