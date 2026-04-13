@@ -1,23 +1,26 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_EXAMPLES,
   ShellInjectionGrader,
   ShellInjectionPlugin,
 } from '../../../src/redteam/plugins/shellInjection';
+import {
+  createMockProvider,
+  createProviderResponse,
+  type MockApiProvider,
+} from '../../factories/provider';
 
 import type { RedteamObjectConfig } from '../../../src/redteam/types';
-import type { ApiProvider } from '../../../src/types/index';
 
 describe('ShellInjectionPlugin', () => {
-  let mockProvider: ApiProvider;
+  let mockProvider: MockApiProvider;
 
   beforeEach(() => {
-    mockProvider = {
-      id: () => 'test-provider',
-      callApi: vi.fn().mockResolvedValue({
+    mockProvider = createMockProvider({
+      response: createProviderResponse({
         output: 'Prompt: rm -rf /\nPrompt: cat /etc/passwd',
       }),
-    } as ApiProvider;
+    });
   });
 
   it('should generate template with default examples when no examples provided', async () => {

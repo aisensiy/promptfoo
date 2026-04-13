@@ -11,6 +11,7 @@ import {
   ResultFailureReason,
 } from '../../src/types/index';
 import { createEvaluateResult } from '../factories/eval';
+import { createMockProvider, createProviderResponse } from '../factories/provider';
 import { createAtomicTestCase, createPrompt } from '../factories/testSuite';
 
 describe('EvalResult', () => {
@@ -48,14 +49,12 @@ describe('EvalResult', () => {
 
   describe('sanitizeProvider', () => {
     it('should handle ApiProvider objects', () => {
-      const apiProvider: ApiProvider = {
-        id: () => 'test-provider',
+      const apiProvider = createMockProvider({
+        id: 'test-provider',
         label: 'Test Provider',
-        callApi: async () => ({ output: 'test' }),
-        config: {
-          apiKey: 'test-key',
-        },
-      };
+        response: createProviderResponse({ output: 'test' }),
+        config: { apiKey: 'test-key' },
+      });
 
       const result = sanitizeProvider(apiProvider);
       expect(result).toEqual({
