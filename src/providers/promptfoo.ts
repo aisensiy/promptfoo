@@ -36,22 +36,40 @@ function getHarmfulGenerationLogMetadata(body: {
   purpose: string;
   version: string;
 }) {
+  const remoteGenerationUrl = getRemoteGenerationUrlForUnaligned();
+
   return {
-    url: getRemoteGenerationUrlForUnaligned(),
+    ...getRemoteGenerationUrlLogMetadata(remoteGenerationUrl),
     harmCategory: body.harmCategory,
     n: body.n,
     purposeLength: body.purpose.length,
     hasEmail: Boolean(body.email),
     version: body.version,
     hasConfig: Boolean(body.config),
-    configKeys: body.config ? Object.keys(body.config) : [],
+    configKeyCount: body.config ? Object.keys(body.config).length : 0,
   };
+}
+
+function getRemoteGenerationUrlLogMetadata(remoteGenerationUrl: string) {
+  try {
+    const url = new URL(remoteGenerationUrl);
+    return {
+      remoteGenerationProtocol: url.protocol.replace(':', ''),
+      remoteGenerationHost: url.host,
+      remoteGenerationPathLength: url.pathname.length,
+      hasRemoteGenerationQuery: Boolean(url.search),
+    };
+  } catch {
+    return {
+      remoteGenerationUrlConfigured: Boolean(remoteGenerationUrl),
+      remoteGenerationUrlParseError: true,
+    };
+  }
 }
 
 function getErrorMetadata(err: unknown) {
   return {
     errorType: err instanceof Error ? err.constructor.name : typeof err,
-    errorName: err instanceof Error ? err.name : undefined,
   };
 }
 
@@ -133,7 +151,7 @@ export class PromptfooHarmfulCompletionProvider implements ApiProvider {
         const responseBody = await response.text();
         logger.info('[HarmfulCompletionProvider] Generate harmful API failed', {
           status: response.status,
-          statusText: response.statusText,
+          statusTextLength: response.statusText.length,
           responseBodyLength: responseBody.length,
         });
         return {

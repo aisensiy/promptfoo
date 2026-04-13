@@ -85,8 +85,8 @@ describe('PromptfooHarmfulCompletionProvider', () => {
       ...options,
       purpose: 'secret-purpose-sentinel',
       config: {
-        prompt: 'secret-config-sentinel',
-      },
+        'secret-config-key-sentinel': 'secret-config-sentinel',
+      } as any,
     });
     const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
     const mockResponse = new Response(JSON.stringify({ output: 'test output' }), {
@@ -104,12 +104,13 @@ describe('PromptfooHarmfulCompletionProvider', () => {
       expect(debugCall?.[1]).toEqual(
         expect.objectContaining({
           purposeLength: 'secret-purpose-sentinel'.length,
-          configKeys: ['prompt'],
+          configKeyCount: 1,
         }),
       );
 
       const loggedContext = JSON.stringify(debugCall?.[1]);
       expect(loggedContext).not.toContain('secret-purpose-sentinel');
+      expect(loggedContext).not.toContain('secret-config-key-sentinel');
       expect(loggedContext).not.toContain('secret-config-sentinel');
       expect(loggedContext).not.toContain('test@example.com');
     } finally {
@@ -149,7 +150,7 @@ describe('PromptfooHarmfulCompletionProvider', () => {
     const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {});
     const mockResponse = new Response(responseBody, {
       status: 400,
-      statusText: 'Bad Request',
+      statusText: 'secret-status-text-sentinel',
     });
     vi.mocked(fetchWithRetries).mockResolvedValue(mockResponse);
 
@@ -161,11 +162,41 @@ describe('PromptfooHarmfulCompletionProvider', () => {
         '[HarmfulCompletionProvider] Generate harmful API failed',
         expect.objectContaining({
           status: 400,
-          statusText: 'Bad Request',
+          statusTextLength: 'secret-status-text-sentinel'.length,
           responseBodyLength: responseBody.length,
         }),
       );
       expect(JSON.stringify([result, infoSpy.mock.calls])).not.toContain(responseBody);
+      expect(JSON.stringify([result, infoSpy.mock.calls])).not.toContain(
+        'secret-status-text-sentinel',
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
+  it('should redact harmful generation fetch errors', async () => {
+    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    const err = new Error('secret-harmful-fetch-error-message');
+    err.name = 'secret-harmful-fetch-error-name';
+    vi.mocked(fetchWithRetries).mockRejectedValue(err);
+
+    try {
+      const result = await provider.callApi('test prompt');
+
+      expect(result.error).toBe('[HarmfulCompletionProvider] Error generating harmful content');
+      expect(infoSpy).toHaveBeenCalledWith(
+        '[HarmfulCompletionProvider] Error generating harmful content',
+        expect.objectContaining({
+          errorType: 'Error',
+        }),
+      );
+      expect(JSON.stringify([result, infoSpy.mock.calls])).not.toContain(
+        'secret-harmful-fetch-error-message',
+      );
+      expect(JSON.stringify([result, infoSpy.mock.calls])).not.toContain(
+        'secret-harmful-fetch-error-name',
+      );
     } finally {
       infoSpy.mockRestore();
     }
