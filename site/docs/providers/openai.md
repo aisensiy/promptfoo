@@ -15,7 +15,8 @@ export OPENAI_API_KEY=your_api_key_here
 
 The OpenAI provider supports the following model formats:
 
-- `openai:<model name>` or `openai:chat:<model name>` - use any chat model against the `/v1/chat/completions` endpoint (`openai:<model name>` is shorthand for `openai:chat:<model name>`)
+- `openai:<model name>` - auto-routes known OpenAI model IDs to their supported promptfoo provider (chat, realtime, or responses); unknown model names default to Chat Completions. Use an explicit endpoint prefix when you need deterministic routing.
+- `openai:chat:<model name>` - uses chat models against the `/v1/chat/completions` endpoint
 - `openai:responses:<model name>` - uses responses API models over HTTP connections
 - `openai:assistant:<assistant id>` - use an assistant
 - `openai:chat` - defaults to `gpt-4.1-2025-04-14`
@@ -527,7 +528,7 @@ GPT-5.4 is a GPT-5 family model for complex professional work, agentic coding, a
 - **Context window**: `gpt-5.4` and `gpt-5.4-pro` support 1,050,000 tokens. `gpt-5.4-mini` and `gpt-5.4-nano` support 400,000 tokens.
 - **Max output tokens**: 128,000 tokens
 - **Reasoning effort**: `gpt-5.4`, `gpt-5.4-mini`, and `gpt-5.4-nano` support `none`, `low`, `medium`, `high`, `xhigh`. `gpt-5.4-pro` supports `medium`, `high`, `xhigh`.
-- **Endpoint support**: Chat Completions API and Responses API across the GPT-5.4 family. Promptfoo's Codex SDK provider currently supports `gpt-5.4` and `gpt-5.4-pro`.
+- **Endpoint support**: `gpt-5.4`, `gpt-5.4-mini`, and `gpt-5.4-nano` support Chat Completions and Responses API. `gpt-5.4-pro` is Responses API only. Promptfoo's Codex SDK provider currently supports `gpt-5.4` and `gpt-5.4-pro`.
 - **Cached input**: `gpt-5.4` cached input tokens $0.25 per 1M, `gpt-5.4-mini` $0.075 per 1M, and `gpt-5.4-nano` $0.02 per 1M. `gpt-5.4-pro` has no cached-input discount.
 
 #### Usage Examples

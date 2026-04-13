@@ -360,13 +360,6 @@ export const OPENAI_CHAT_MODELS = [
       output: 1.25 / 1e6,
     },
   })),
-  ...['gpt-5.4-pro', 'gpt-5.4-pro-2026-03-05'].map((model) => ({
-    id: model,
-    cost: {
-      input: 30 / 1e6,
-      output: 180 / 1e6,
-    },
-  })),
   // gpt-audio models
   ...['gpt-audio', 'gpt-audio-2025-08-28'].map((model) => ({
     id: model,
@@ -393,6 +386,16 @@ export const OPENAI_CHAT_MODELS = [
       output: 2.4 / 1e6,
       audioInput: 10 / 1e6,
       audioOutput: 20 / 1e6,
+    },
+  })),
+];
+
+export const OPENAI_RESPONSES_ONLY_MODELS = [
+  ...['gpt-5.4-pro', 'gpt-5.4-pro-2026-03-05'].map((model) => ({
+    id: model,
+    cost: {
+      input: 30 / 1e6,
+      output: 180 / 1e6,
     },
   })),
 ];
@@ -566,6 +569,7 @@ export function calculateOpenAICost(
       ...OPENAI_CHAT_MODELS,
       ...OPENAI_COMPLETION_MODELS,
       ...OPENAI_REALTIME_MODELS,
+      ...OPENAI_RESPONSES_ONLY_MODELS,
       ...OPENAI_DEEP_RESEARCH_MODELS,
     ]);
   }
@@ -588,6 +592,7 @@ export function calculateOpenAICost(
     ...OPENAI_CHAT_MODELS,
     ...OPENAI_COMPLETION_MODELS,
     ...OPENAI_REALTIME_MODELS,
+    ...OPENAI_RESPONSES_ONLY_MODELS,
     ...OPENAI_DEEP_RESEARCH_MODELS,
   ].find((m) => m.id === modelName);
   if (!model || !model.cost) {

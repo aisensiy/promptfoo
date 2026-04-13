@@ -6,6 +6,7 @@ import {
   formatOpenAiError,
   getTokenUsage,
   OPENAI_CHAT_MODELS,
+  OPENAI_RESPONSES_ONLY_MODELS,
   validateFunctionCall,
 } from '../../../src/providers/openai/util';
 
@@ -298,6 +299,15 @@ describe('calculateOpenAICost', () => {
   it('should calculate cost correctly for gpt-5.4-pro-2026-03-05', () => {
     const cost = calculateOpenAICost('gpt-5.4-pro-2026-03-05', {}, 1000, 500);
     expect(cost).toBeCloseTo((1000 * 30 + 500 * 180) / 1e6, 6);
+  });
+
+  it('should keep GPT-5.4 Pro out of Chat Completions routing', () => {
+    expect(OPENAI_CHAT_MODELS.some((model) => model.id === 'gpt-5.4-pro')).toBe(false);
+    expect(OPENAI_CHAT_MODELS.some((model) => model.id === 'gpt-5.4-pro-2026-03-05')).toBe(false);
+    expect(OPENAI_RESPONSES_ONLY_MODELS.some((model) => model.id === 'gpt-5.4-pro')).toBe(true);
+    expect(
+      OPENAI_RESPONSES_ONLY_MODELS.some((model) => model.id === 'gpt-5.4-pro-2026-03-05'),
+    ).toBe(true);
   });
 
   it('should calculate cost correctly for gpt-5-nano', () => {
