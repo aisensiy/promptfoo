@@ -51,7 +51,9 @@ import type {
   TokenUsage,
 } from '../types/index';
 
-const AUTH_TOKEN_CACHE_SALT = 'promptfoo:http-auth-token-cache-key';
+const AUTH_TOKEN_CACHE_HMAC_CONTEXT = 'promptfoo:http-auth-token-cache-key';
+const AUTH_TOKEN_CACHE_HMAC_KEY = crypto.randomBytes(32);
+const MAX_AUTH_TOKEN_CACHE_ENTRIES = 256;
 
 /**
  * Escapes string values in variables for safe JSON template substitution.
@@ -1067,7 +1069,12 @@ function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
 }
 
 function digestAuthCacheInput(value: unknown): string {
-  return crypto.scryptSync(stableSerialize(value), AUTH_TOKEN_CACHE_SALT, 32).toString('hex');
+  return crypto
+    .createHmac('sha256', AUTH_TOKEN_CACHE_HMAC_KEY)
+    .update(AUTH_TOKEN_CACHE_HMAC_CONTEXT)
+    .update('\0')
+    .update(stableSerialize(value))
+    .digest('hex');
 }
 
 function getOAuthTokenCacheKey(oauthConfig: {
@@ -1850,7 +1857,9 @@ export class HttpProvider implements ApiProvider {
 
   private cacheToken(cacheKey: string, token: string, expiresAt?: number): void {
     const cachedToken = { token, expiresAt };
+    this.pruneExpiredAuthTokens();
     this.authTokenCache.set(cacheKey, cachedToken);
+    this.enforceAuthTokenCacheLimit();
     this.setActiveToken(cachedToken);
   }
 
@@ -1866,10 +1875,40 @@ export class HttpProvider implements ApiProvider {
     }
 
     if (cachedToken.expiresAt == null) {
+      this.touchCachedToken(cacheKey, cachedToken);
       return cachedToken;
     }
 
-    return now + TOKEN_REFRESH_BUFFER_MS < cachedToken.expiresAt ? cachedToken : undefined;
+    if (now + TOKEN_REFRESH_BUFFER_MS < cachedToken.expiresAt) {
+      this.touchCachedToken(cacheKey, cachedToken);
+      return cachedToken;
+    }
+
+    this.authTokenCache.delete(cacheKey);
+    return undefined;
+  }
+
+  private touchCachedToken(cacheKey: string, cachedToken: CachedAuthToken): void {
+    this.authTokenCache.delete(cacheKey);
+    this.authTokenCache.set(cacheKey, cachedToken);
+  }
+
+  private pruneExpiredAuthTokens(now = Date.now()): void {
+    for (const [cacheKey, cachedToken] of this.authTokenCache) {
+      if (cachedToken.expiresAt != null && now + TOKEN_REFRESH_BUFFER_MS >= cachedToken.expiresAt) {
+        this.authTokenCache.delete(cacheKey);
+      }
+    }
+  }
+
+  private enforceAuthTokenCacheLimit(): void {
+    while (this.authTokenCache.size > MAX_AUTH_TOKEN_CACHE_ENTRIES) {
+      const oldestCacheKey = this.authTokenCache.keys().next().value;
+      if (oldestCacheKey == null) {
+        return;
+      }
+      this.authTokenCache.delete(oldestCacheKey);
+    }
   }
 
   private async waitForInFlightTokenRefresh(cacheKey: string): Promise<boolean> {

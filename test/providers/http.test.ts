@@ -7102,6 +7102,78 @@ describe('HttpProvider - File Auth', () => {
     expect(cacheKeys.join('\n')).not.toContain('secret-file');
   });
 
+  it('should prune expired file auth tokens when caching a new token', async () => {
+    const authFn = vi.fn((authContext: any) => ({
+      token: `token-for-${authContext.vars.userId}`,
+      expiration: Date.now() + TOKEN_REFRESH_BUFFER_MS + 1_000,
+    }));
+    vi.mocked(importModule).mockImplementation(async () => ({ default: authFn }));
+
+    const provider = new HttpProvider(mockUrl, {
+      config: {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer {{token}}',
+        },
+        auth: {
+          type: 'file',
+          path: './auth/get-token.js',
+        },
+      },
+    });
+
+    await provider.callApi('same prompt', {
+      prompt: { raw: 'same prompt', label: 'same prompt' },
+      vars: { userId: 'alice' },
+    });
+    expect((provider as any).authTokenCache.size).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1_001);
+    await provider.callApi('same prompt', {
+      prompt: { raw: 'same prompt', label: 'same prompt' },
+      vars: { userId: 'bob' },
+    });
+
+    const cachedTokens = Array.from((provider as any).authTokenCache.values()).map(
+      (cachedToken: any) => cachedToken.token,
+    );
+    expect(cachedTokens).toEqual(['token-for-bob']);
+  });
+
+  it('should cap file auth token cache entries for long-lived providers', async () => {
+    const authFn = vi.fn((authContext: any) => ({
+      token: `token-for-${authContext.vars.userId}`,
+    }));
+    vi.mocked(importModule).mockImplementation(async () => ({ default: authFn }));
+
+    const provider = new HttpProvider(mockUrl, {
+      config: {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer {{token}}',
+        },
+        auth: {
+          type: 'file',
+          path: './auth/get-token.js',
+        },
+      },
+    });
+
+    for (let index = 0; index < 260; index++) {
+      await provider.callApi('same prompt', {
+        prompt: { raw: 'same prompt', label: 'same prompt' },
+        vars: { userId: `user-${index}` },
+      });
+    }
+
+    const cachedTokens = Array.from((provider as any).authTokenCache.values()).map(
+      (cachedToken: any) => cachedToken.token,
+    );
+    expect(cachedTokens).toHaveLength(256);
+    expect(cachedTokens).not.toContain('token-for-user-0');
+    expect(cachedTokens).toContain('token-for-user-259');
+  });
+
   it('should refresh a file auth token when it is within the oauth refresh buffer', async () => {
     const authFn = vi
       .fn()
