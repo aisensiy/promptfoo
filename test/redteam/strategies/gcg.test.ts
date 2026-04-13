@@ -22,7 +22,13 @@ vi.mock('../../../src/logger', () => ({
 }));
 
 function stringifyLoggerCalls(...mocks: ReturnType<typeof vi.fn>[]) {
-  return JSON.stringify(mocks.flatMap((mock) => mock.mock.calls));
+  return JSON.stringify(
+    mocks.flatMap((mock) => mock.mock.calls),
+    (_key, value) =>
+      value instanceof Error
+        ? { ...value, name: value.name, message: value.message, stack: value.stack }
+        : value,
+  );
 }
 
 describe('gcg strategy', () => {
@@ -198,6 +204,17 @@ describe('gcg strategy', () => {
       status: 500,
       statusText: 'Error',
     });
+    expect(mockFetchWithCache).toHaveBeenCalledWith(
+      'http://test-url',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-promptfoo-silent': 'true',
+        }),
+      }),
+      expect.any(Number),
+      'json',
+      true,
+    );
 
     const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
     expect(logs).not.toContain(remoteError);
