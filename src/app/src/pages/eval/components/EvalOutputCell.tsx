@@ -402,7 +402,6 @@ function renderStructuredImages({
   output,
   normalizedText,
   primaryRenderedImageSrc,
-  primaryRenderedAsImage,
   renderedMarkdownOutput,
   toggleLightbox,
 }: {
@@ -410,7 +409,6 @@ function renderStructuredImages({
   output: EvaluateTableOutput;
   normalizedText: string;
   primaryRenderedImageSrc?: string;
-  primaryRenderedAsImage: boolean;
   renderedMarkdownOutput: boolean;
   toggleLightbox: (url?: string) => void;
 }): React.ReactNode | undefined {
@@ -428,13 +426,7 @@ function renderStructuredImages({
     }
   }
 
-  // Skip the first structured image when the primary output is already rendered as an image.
-  // Some providers repeat that same image first but encode it differently enough that direct
-  // source comparison alone is not reliable.
-  const imagesToRender =
-    primaryRenderedAsImage && !renderedMarkdownOutput ? output.images.slice(1) : output.images;
-
-  const imageElements = imagesToRender
+  const imageElements = output.images
     .map((img: ImageOutput, idx: number) => {
       const src = resolveEvalImageOutputSource(img);
       if (!src || renderedImageSrcs.has(normalizeImageSrcForComparison(src))) {
@@ -481,7 +473,6 @@ function renderOutputNode({
   toggleLightbox,
   outputAudioSource,
   primaryRenderedImageSrc,
-  primaryRenderedAsImage,
 }: {
   output: EvaluateTableOutput;
   firstOutput?: EvaluateTableOutput | null;
@@ -496,7 +487,6 @@ function renderOutputNode({
   toggleLightbox: (url?: string) => void;
   outputAudioSource: ReturnType<typeof resolveAudioSource>;
   primaryRenderedImageSrc?: string;
-  primaryRenderedAsImage: boolean;
 }): React.ReactNode | undefined {
   let node: React.ReactNode | undefined;
   let renderedMarkdownOutput = false;
@@ -535,7 +525,6 @@ function renderOutputNode({
     output,
     normalizedText,
     primaryRenderedImageSrc,
-    primaryRenderedAsImage,
     renderedMarkdownOutput,
     toggleLightbox,
   });
@@ -1300,7 +1289,6 @@ function EvalOutputCell({
   const normalizedText = normalizeMediaText(text);
   const inlineImageSrc = resolveImageSource(text);
   const primaryRenderedImageSrc = getPrimaryRenderedImageSrc(text, inlineImageSrc);
-  const primaryRenderedAsImage = Boolean(primaryRenderedImageSrc);
   const outputAudioSource = resolveAudioSource(output.audio);
   const { failReasons, passReasons } = getFailAndPassReasons(output);
 
@@ -1326,7 +1314,6 @@ function EvalOutputCell({
     toggleLightbox,
     outputAudioSource,
     primaryRenderedImageSrc,
-    primaryRenderedAsImage,
   });
 
   const handleRating = (isPass: boolean) => {
