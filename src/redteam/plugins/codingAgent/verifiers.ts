@@ -867,11 +867,27 @@ function isFilesystemRoot(filePath: string): boolean {
 }
 
 async function verifierArtifactRootAnchors(): Promise<string[]> {
-  const anchors = [process.cwd(), os.tmpdir()];
+  const anchors = [safeCurrentWorkingDirectory(), os.tmpdir()].filter((anchor): anchor is string =>
+    Boolean(anchor),
+  );
   const resolvedAnchors = await Promise.all(
-    anchors.map(async (anchor) => [path.resolve(anchor), await realpathOrResolved(anchor)]),
+    anchors.map(async (anchor) => {
+      try {
+        return [path.resolve(anchor), await realpathOrResolved(anchor)];
+      } catch {
+        return [];
+      }
+    }),
   );
   return [...new Set(resolvedAnchors.flat().filter((anchor) => !isFilesystemRoot(anchor)))];
+}
+
+function safeCurrentWorkingDirectory(): string | undefined {
+  try {
+    return process.cwd();
+  } catch {
+    return undefined;
+  }
 }
 
 async function isTrustedVerifierArtifactPath(filePath: string, trustedRoots: string[]) {
