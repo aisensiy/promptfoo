@@ -169,7 +169,7 @@ describe('OpenAiResponsesProvider error handling', () => {
     expect(result.error).toContain('Invalid response format: Missing output array');
   });
 
-  it('should handle JSON stringify errors during logging', async () => {
+  it('should handle successful JSON response payloads correctly', async () => {
     // Mock API response
     const mockApiResponse = {
       id: 'resp_abc123',
@@ -190,14 +190,6 @@ describe('OpenAiResponsesProvider error handling', () => {
       usage: { input_tokens: 10, output_tokens: 10, total_tokens: 20 },
     };
 
-    // Setup mock for fetchWithCache
-    vi.mocked(cache.fetchWithCache).mockResolvedValue({
-      data: mockApiResponse,
-      cached: false,
-      status: 200,
-      statusText: 'OK',
-    });
-
     // Initialize the provider
     const provider = new OpenAiResponsesProvider('gpt-4o', {
       config: {
@@ -205,14 +197,11 @@ describe('OpenAiResponsesProvider error handling', () => {
       },
     });
 
-    // Mock fetchWithCache with successful result
-    vi.mocked(cache.fetchWithCache).mockImplementationOnce(async function () {
-      return {
-        data: mockApiResponse,
-        cached: false,
-        status: 200,
-        statusText: 'OK',
-      };
+    vi.mocked(cache.fetchWithCache).mockResolvedValue({
+      data: mockApiResponse,
+      cached: false,
+      status: 200,
+      statusText: 'OK',
     });
 
     // Ensure we get output without error
