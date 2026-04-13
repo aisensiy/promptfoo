@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DataTable } from './data-table';
+import { useServerVirtualizedRows } from './use-server-virtualized-rows';
 import type { ColumnDef } from '@tanstack/react-table';
 
 interface TestRow {
@@ -348,6 +349,38 @@ describe('DataTable', () => {
       expect(screen.getByText('Loaded row')).toBeInTheDocument();
       expect(container.querySelectorAll('tbody tr[data-rowindex]').length).toBeLessThan(100);
       expect(container.querySelector('tbody tr[aria-busy="true"]')).toBeInTheDocument();
+    });
+
+    it('should not refetch the initial server range when seeded rows cover it', async () => {
+      const fetchRows = vi.fn().mockResolvedValue({ rows: [], offset: 0 });
+
+      function SeededServerTable() {
+        const { serverVirtualization } = useServerVirtualizedRows<TestRow>({
+          initialRows: generateData(25),
+          rowCount: 25,
+          pageSize: 25,
+          fetchRows,
+        });
+
+        return (
+          <DataTable
+            columns={columns}
+            data={[]}
+            rowDisplayMode="server-virtualized"
+            maxHeight="400px"
+            virtualRowEstimate={40}
+            virtualOverscan={2}
+            serverVirtualization={serverVirtualization}
+          />
+        );
+      }
+
+      render(<SeededServerTable />);
+
+      expect(screen.getByText('Item 1')).toBeInTheDocument();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(fetchRows).not.toHaveBeenCalled();
     });
 
     it('should fall back to client virtualization when server configuration is missing', async () => {
