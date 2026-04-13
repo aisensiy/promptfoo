@@ -339,7 +339,9 @@ describe('Mistral', () => {
       await provider.callApi('Sensitive prompt sk-mistral-secret');
 
       const cacheKey = cacheGet.mock.calls[0]?.[0] as string;
-      expect(cacheKey).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKey).toMatch(
+        /^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
       expect(cacheKey).not.toContain('Sensitive prompt');
       expect(cacheKey).not.toContain('sk-mistral-secret');
       expect(cacheSet).toHaveBeenCalledWith(
@@ -403,8 +405,12 @@ describe('Mistral', () => {
 
       const cacheKeyA = cacheGet.mock.calls[0][0] as string;
       const cacheKeyB = cacheGet.mock.calls[1][0] as string;
-      expect(cacheKeyA).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}$/);
-      expect(cacheKeyB).toMatch(/^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKeyA).toMatch(
+        /^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
+      expect(cacheKeyB).toMatch(
+        /^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
       expect(cacheKeyA).not.toBe(cacheKeyB);
       expect(fetchWithCache).toHaveBeenCalledTimes(2);
       for (const cacheKey of [cacheKeyA, cacheKeyB]) {
@@ -413,6 +419,45 @@ describe('Mistral', () => {
         expect(cacheKey).not.toContain('sk-mistral-tenant-b');
         expect(cacheKey).not.toContain('shared.mistral.example');
       }
+    });
+
+    it('should keep auth cache identity stable across module reloads', async () => {
+      async function getCacheKeyFromFreshModule() {
+        vi.resetModules();
+        const freshCache = await import('../../src/cache');
+        const cacheGet = vi.fn().mockResolvedValue({
+          output: 'Cached output',
+          tokenUsage: { total: 10, prompt: 5, completion: 5 },
+        });
+        vi.mocked(freshCache.isCacheEnabled).mockReturnValue(true);
+        vi.mocked(freshCache.getCache).mockReturnValue({
+          get: cacheGet,
+          set: vi.fn(),
+        } as any);
+        const { MistralChatCompletionProvider: FreshMistralChatCompletionProvider } = await import(
+          '../../src/providers/mistral'
+        );
+        const freshProvider = new FreshMistralChatCompletionProvider('mistral-tiny', {
+          config: {
+            apiKey: 'sk-mistral-reload-secret',
+            apiBaseUrl: 'https://shared.mistral.example/v1',
+          },
+        });
+
+        await freshProvider.callApi('Shared sensitive prompt');
+        return cacheGet.mock.calls[0][0] as string;
+      }
+
+      const firstCacheKey = await getCacheKeyFromFreshModule();
+      const secondCacheKey = await getCacheKeyFromFreshModule();
+
+      expect(firstCacheKey).toBe(secondCacheKey);
+      expect(firstCacheKey).toMatch(
+        /^mistral:chat:mistral-tiny:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
+      expect(firstCacheKey).not.toContain('sk-mistral-reload-secret');
+      expect(firstCacheKey).not.toContain('Shared sensitive prompt');
+      expect(firstCacheKey).not.toContain('shared.mistral.example');
     });
 
     it('should deduplicate in-flight chat requests without using raw fetch cache keys', async () => {
@@ -823,7 +868,9 @@ describe('Mistral', () => {
       await provider.callEmbeddingApi('Sensitive embedding input sk-mistral-secret');
 
       const cacheKey = cacheGet.mock.calls[0]?.[0] as string;
-      expect(cacheKey).toMatch(/^mistral:embedding:mistral-embed:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKey).toMatch(
+        /^mistral:embedding:mistral-embed:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
       expect(cacheKey).not.toContain('Sensitive embedding input');
       expect(cacheKey).not.toContain('sk-mistral-secret');
       expect(cacheSet).toHaveBeenCalledWith(cacheKey, mockResponse);
