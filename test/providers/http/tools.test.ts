@@ -579,7 +579,7 @@ describe('transformToolsFormat integration', () => {
 
     await provider.callApi('test prompt');
 
-    expect(loggerWarnSpy).toHaveBeenCalledWith(
+    expect(loggerWarnSpy.mock.calls[0]?.[0]).toEqual(
       expect.stringContaining('tool_choice is set but tools is empty'),
     );
 
@@ -614,7 +614,7 @@ describe('transformToolsFormat integration', () => {
 
     await provider.callApi('test prompt');
 
-    expect(loggerWarnSpy).toHaveBeenCalledWith(
+    expect(loggerWarnSpy.mock.calls[0]?.[0]).toEqual(
       expect.stringContaining('tool_choice is set but tools is empty'),
     );
 
@@ -649,9 +649,11 @@ describe('transformToolsFormat integration', () => {
 
     await provider.callApi('test prompt');
 
-    expect(loggerWarnSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining('tool_choice is set but tools is empty'),
-    );
+    expect(
+      loggerWarnSpy.mock.calls.some(([message]) =>
+        String(message).includes('tool_choice is set but tools is empty'),
+      ),
+    ).toBe(false);
 
     loggerWarnSpy.mockRestore();
   });

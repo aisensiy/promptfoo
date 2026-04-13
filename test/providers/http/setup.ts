@@ -48,7 +48,7 @@ vi.mock('../../../src/esm', async (importOriginal) => {
       if (functionName) {
         return mockModule[functionName as keyof typeof mockModule];
       }
-      return mockModule;
+      return mockModule.default;
     }),
   };
 });
