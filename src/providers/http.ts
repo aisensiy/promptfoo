@@ -1323,11 +1323,12 @@ function sanitizeRequestBodyForMetadata(body: unknown, headers?: Record<string, 
     return sanitizedBody;
   }
 
-  const contentType = getHeaderValue(headers, 'content-type')?.toLowerCase();
-  if (contentType?.includes('multipart/form-data')) {
+  const contentType = getHeaderValue(headers, 'content-type');
+  const normalizedContentType = contentType?.toLowerCase();
+  if (contentType && normalizedContentType?.includes('multipart/form-data')) {
     return sanitizeMultipartBody(sanitizedBody, contentType);
   }
-  if (contentType?.includes('application/x-www-form-urlencoded')) {
+  if (normalizedContentType?.includes('application/x-www-form-urlencoded')) {
     return sanitizeUrlEncodedBody(sanitizedBody);
   }
 

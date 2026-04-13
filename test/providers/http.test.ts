@@ -2111,7 +2111,7 @@ describe('HttpProvider', () => {
     });
 
     it('should redact multipart raw request bodies in debug metadata', async () => {
-      const boundary = '----promptfoo-boundary';
+      const boundary = '----WebKitFormBoundaryPromptFooABC123';
       const rawRequest = dedent`
         POST /upload HTTP/1.1
         Host: example.com
@@ -2152,6 +2152,7 @@ describe('HttpProvider', () => {
         prompt: { raw: 'test prompt', label: 'test' },
       });
 
+      expect(result.metadata?.transformedRequest).toContain(boundary);
       expect(result.metadata?.transformedRequest).toContain('name="username"');
       expect(result.metadata?.transformedRequest).toContain('alice');
       expect(result.metadata?.transformedRequest).toContain('name="password"');
