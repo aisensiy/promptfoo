@@ -228,7 +228,10 @@ export default class GoatProvider implements ApiProvider {
         }
         if (typeof value === 'object' && value !== null) {
           return Object.fromEntries(
-            Object.entries(value).map(([key, item]) => [key, restoreInJsonValue(item)]),
+            Object.entries(value).map(([key, item]) => [
+              restoreInString(key),
+              restoreInJsonValue(item),
+            ]),
           );
         }
         return value;

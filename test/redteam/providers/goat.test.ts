@@ -82,6 +82,31 @@ describe('RedteamGoatProvider', () => {
     return filePath;
   };
 
+  const collectJsonStrings = (value: unknown): string[] => {
+    if (typeof value === 'string') {
+      return [value];
+    }
+    if (Array.isArray(value)) {
+      return value.flatMap((item) => collectJsonStrings(item));
+    }
+    if (typeof value === 'object' && value !== null) {
+      return Object.entries(value).flatMap(([key, item]) => [key, ...collectJsonStrings(item)]);
+    }
+    return [];
+  };
+
+  const getRenderedTargetPrompt = (targetProvider: ApiProvider): string =>
+    (targetProvider.callApi as Mock).mock.calls[0][0] as string;
+
+  const getRenderedTargetPromptText = (targetProvider: ApiProvider): string => {
+    const renderedPrompt = getRenderedTargetPrompt(targetProvider);
+    try {
+      return collectJsonStrings(JSON.parse(renderedPrompt)).join('\n');
+    } catch {
+      return renderedPrompt;
+    }
+  };
+
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'promptfoo-goat-provider-'));
     mockFetch = vi.fn().mockImplementation(async function () {
@@ -217,16 +242,9 @@ describe('RedteamGoatProvider', () => {
 
     await provider.callApi('test prompt', context);
 
-    expect(targetProvider.callApi).toHaveBeenCalledWith(
-      expect.stringContaining(fileUrl),
-      context,
-      undefined,
-    );
-    expect(targetProvider.callApi).toHaveBeenCalledWith(
-      expect.not.stringContaining(fileContent),
-      context,
-      undefined,
-    );
+    const renderedPromptText = getRenderedTargetPromptText(targetProvider);
+    expect(renderedPromptText).toContain(fileUrl);
+    expect(renderedPromptText).not.toContain(fileContent);
   });
 
   it('should not dereference multi-input attacker vars and should preserve JSON escaping', async () => {
@@ -277,15 +295,41 @@ describe('RedteamGoatProvider', () => {
     await provider.callApi('test prompt', context);
 
     expect(targetProvider.callApi).toHaveBeenCalledTimes(1);
-    const renderedPrompt = (targetProvider.callApi as Mock).mock.calls[0][0] as string;
+    const renderedPrompt = getRenderedTargetPrompt(targetProvider);
+    const renderedPromptText = getRenderedTargetPromptText(targetProvider);
     const parsedPrompt = JSON.parse(renderedPrompt);
     expect(parsedPrompt).toEqual({
       role: 'user',
       content: `Goal=${attackerGoal}\nEmail=${fileUrl}\nNotes=${packageRef}`,
     });
-    expect(renderedPrompt).toContain(fileUrl);
-    expect(renderedPrompt).toContain(packageRef);
-    expect(renderedPrompt).not.toContain(fileContent);
+    expect(renderedPromptText).toContain(fileUrl);
+    expect(renderedPromptText).toContain(packageRef);
+    expect(renderedPromptText).not.toContain(fileContent);
+  });
+
+  it('should restore attacker vars in JSON object keys', () => {
+    const restoreAttackerVarPlaceholders = (
+      RedteamGoatProvider as unknown as {
+        restoreAttackerVarPlaceholders: (
+          renderedPromptTemplate: string,
+          valueByPlaceholder: Record<string, string>,
+        ) => string;
+      }
+    ).restoreAttackerVarPlaceholders;
+    const placeholder = '__PROMPTFOO_GOAT_ATTACKER_VAR__test__';
+    const attackerValue = 'file:///tmp/attacker-key.txt';
+
+    const restoredPrompt = restoreAttackerVarPlaceholders(
+      JSON.stringify({
+        [placeholder]: placeholder,
+      }),
+      { [placeholder]: attackerValue },
+    );
+
+    const parsedPrompt = JSON.parse(restoredPrompt);
+    expect(parsedPrompt).toEqual({
+      [attackerValue]: attackerValue,
+    });
   });
 
   it('should pass excludeTargetOutputFromAgenticAttackGeneration through config', async () => {
