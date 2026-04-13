@@ -31,6 +31,10 @@ trim_file() {
   tr -d '[:space:]' <"$1"
 }
 
+trim_file_edges() {
+  sed 's/^[[:space:]]*//; s/[[:space:]]*$//' <"$1"
+}
+
 resolve_node_version() {
   if [[ ! -f "${ROOT_NVMRC}" ]]; then
     echo "Missing ${ROOT_NVMRC}" >&2
@@ -276,7 +280,7 @@ port_lock_is_stale() {
       actual_started_at=''
 
       if [[ -f "${PORT_LOCK_PROCESS_STARTED_AT_FILE}" ]]; then
-        expected_started_at="$(trim_file "${PORT_LOCK_PROCESS_STARTED_AT_FILE}")"
+        expected_started_at="$(trim_file_edges "${PORT_LOCK_PROCESS_STARTED_AT_FILE}")"
       fi
       actual_started_at="$(ps -p "${lock_pid}" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)"
 
