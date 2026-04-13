@@ -523,7 +523,7 @@ describe('AzureResponsesProvider', () => {
     });
 
     it('should not log request or response content', async () => {
-      const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+      const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => logger as any);
       const mockResponse = {
         id: 'resp_123',
         model: 'gpt-4.1-test',
@@ -561,6 +561,15 @@ describe('AzureResponsesProvider', () => {
         config: {
           instructions: 'secret-instructions-sentinel',
           metadata: { trace: 'secret-metadata-sentinel' },
+          tools: [
+            {
+              type: 'function',
+              function: {
+                name: 'secret-tool-name-sentinel',
+                description: 'secret-tool-description-sentinel',
+              },
+            },
+          ],
           tool_choice: {
             type: 'secret-tool-choice-type-sentinel',
             function: {
@@ -587,6 +596,8 @@ describe('AzureResponsesProvider', () => {
         expect(azureDebugLogs).not.toContain('secret-instructions-sentinel');
         expect(azureDebugLogs).not.toContain('secret-metadata-sentinel');
         expect(azureDebugLogs).not.toContain('secret-response-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-tool-name-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-tool-description-sentinel');
         expect(azureDebugLogs).not.toContain('secret-tool-choice-type-sentinel');
         expect(azureDebugLogs).not.toContain('secret-tool-choice-function-sentinel');
         expect(azureDebugLogs).not.toContain('secret-response-status-sentinel');
@@ -614,7 +625,7 @@ describe('AzureResponsesProvider', () => {
     });
 
     it('should redact thrown API call errors', async () => {
-      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger as any);
       const err = new Error('secret-azure-responses-thrown-error');
       err.name = 'secret-azure-responses-error-name';
       mockFetchWithCache.mockRejectedValue(err);
