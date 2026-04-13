@@ -585,6 +585,53 @@ describe('TraceStore', () => {
       });
     });
 
+    it('should allow callers to retrieve raw span attributes for a single trace', async () => {
+      const mockTrace = {
+        id: '1',
+        traceId: 'trace-1',
+        evaluationId: 'eval-1',
+        testCaseId: 'test-case-1',
+        metadata: null,
+      };
+      const mockSpans = [
+        {
+          id: '1',
+          traceId: 'trace-1',
+          spanId: 'span-1',
+          parentSpanId: null,
+          name: 'tool call',
+          startTime: 1000,
+          endTime: null,
+          attributes: {
+            api_key: 'trace-aware-assertion-secret',
+            token: 'trace-aware-token',
+            arguments: { api_key: 'nested-secret' },
+          },
+          statusCode: null,
+          statusMessage: null,
+        },
+      ];
+
+      const traceSelectChain = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn(() => Promise.resolve([mockTrace])),
+      };
+      const spanQuery = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn(() => Promise.resolve(mockSpans)),
+      };
+
+      vi.spyOn(mockDb, 'select')
+        .mockImplementation(() => ({}))
+        .mockReturnValueOnce(traceSelectChain)
+        .mockReturnValueOnce(spanQuery);
+
+      const result = await traceStore.getTrace('trace-1', { sanitizeAttributes: false });
+
+      expect(result?.spans[0].attributes).toEqual(mockSpans[0].attributes);
+    });
+
     it('should return null if trace not found', async () => {
       // Mock trace query - update the select chain to include limit
       const traceSelectChain = {

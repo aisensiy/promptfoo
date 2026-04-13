@@ -306,7 +306,12 @@ export class TraceStore {
     }
   }
 
-  async getTrace(traceId: string): Promise<TraceData | null> {
+  async getTrace(
+    traceId: string,
+    options: TraceAttributeSanitizationOptions = {},
+  ): Promise<TraceData | null> {
+    const { sanitizeAttributes: shouldSanitize = true } = options;
+
     try {
       logger.debug(`[TraceStore] Fetching trace ${traceId}`);
       const db = this.getDatabase();
@@ -332,7 +337,7 @@ export class TraceStore {
         evaluationId: trace.evaluationId,
         testCaseId: trace.testCaseId,
         metadata: trace.metadata ?? undefined,
-        spans: spans.map((span) => serializeSpan(span)),
+        spans: spans.map((span) => serializeSpan(span, shouldSanitize)),
       };
     } catch (error) {
       logger.error(`[TraceStore] Failed to get trace: ${error}`);
