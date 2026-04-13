@@ -37,7 +37,7 @@ import {
   createMockProvider,
   createProviderResponse,
   createTokenUsage,
-  type MockApiProvider,
+  resetMockProvider,
 } from './factories/provider';
 
 const exactTransformHandlers = new Map<string, (input: any) => any>([
@@ -287,14 +287,6 @@ function createReasoningProviderResponse(): ProviderResponse {
   });
 }
 
-function resetMockProviderCallApi(
-  provider: MockApiProvider,
-  response: ProviderResponse = createProviderResponse(),
-) {
-  vi.mocked(provider.callApi).mockReset();
-  vi.mocked(provider.callApi).mockResolvedValue(response);
-}
-
 const mockApiProvider = createMockProvider();
 
 const mockApiProvider2 = createMockProvider({ id: 'test-provider-2' });
@@ -325,17 +317,20 @@ describe('evaluator', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    resetMockProviderCallApi(mockApiProvider);
-    resetMockProviderCallApi(mockApiProvider2);
-    resetMockProviderCallApi(mockReasoningApiProvider, createReasoningProviderResponse());
-    resetMockProviderCallApi(
-      mockGradingApiProviderPasses,
-      createGradingProviderResponse(createPassingGradingResult()),
-    );
-    resetMockProviderCallApi(
-      mockGradingApiProviderFails,
-      createGradingProviderResponse(createFailingGradingResult()),
-    );
+    resetMockProvider(mockApiProvider);
+    resetMockProvider(mockApiProvider2, { id: 'test-provider-2' });
+    resetMockProvider(mockReasoningApiProvider, {
+      id: 'test-reasoning-provider',
+      response: createReasoningProviderResponse(),
+    });
+    resetMockProvider(mockGradingApiProviderPasses, {
+      id: 'test-grading-provider',
+      response: createGradingProviderResponse(createPassingGradingResult()),
+    });
+    resetMockProvider(mockGradingApiProviderFails, {
+      id: 'test-grading-provider',
+      response: createGradingProviderResponse(createFailingGradingResult()),
+    });
     // Reset runExtensionHook to default implementation (other tests may have overridden it)
     vi.mocked(runExtensionHook).mockReset();
     vi.mocked(runExtensionHook).mockImplementation(

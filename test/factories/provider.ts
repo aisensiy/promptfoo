@@ -100,4 +100,15 @@ export function createMockProvider(options: MockProviderOptions = {}): MockApiPr
   return provider;
 }
 
-export const createMockApiProvider = createMockProvider;
+export function resetMockProvider(
+  provider: MockApiProvider,
+  options: { id?: string | (() => string); response?: ProviderResponse } = {},
+): void {
+  const { id = 'test-provider', response = createProviderResponse() } = options;
+  provider.id.mockReset();
+  provider.id.mockImplementation(typeof id === 'function' ? id : () => id);
+  provider.callApi.mockReset();
+  provider.callApi.mockResolvedValue(response);
+  provider.cleanup?.mockReset();
+  provider.cleanup?.mockResolvedValue(undefined);
+}

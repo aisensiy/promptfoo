@@ -11,6 +11,8 @@ export function createGradingResult(overrides: Partial<GradingResult> = {}): Gra
   };
 }
 
+// pass/score are locked after overrides so callers cannot accidentally flip
+// a passing fixture to a failure (or vice versa). reason remains overridable.
 export function createPassingGradingResult(overrides: Partial<GradingResult> = {}): GradingResult {
   return createGradingResult({ ...overrides, pass: true, score: 1 });
 }
