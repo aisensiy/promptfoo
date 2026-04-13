@@ -309,7 +309,9 @@ async function runRedteamConversation({
         continue;
       }
 
-      let improvement: string, newInjectVar: string;
+      let improvement: string;
+      let newInjectVar: string;
+      let parsedPromptVars: Record<string, string> | undefined;
       try {
         const parsed = extractFirstJsonObject<{
           improvement: string;
@@ -317,8 +319,12 @@ async function runRedteamConversation({
         }>(redteamResp.output);
         improvement = parsed.improvement;
         // Handle multi-input mode where prompt is an object
-        newInjectVar =
-          typeof parsed.prompt === 'object' ? JSON.stringify(parsed.prompt) : parsed.prompt;
+        if (typeof parsed.prompt === 'object') {
+          parsedPromptVars = parsed.prompt;
+          newInjectVar = JSON.stringify(parsed.prompt);
+        } else {
+          newInjectVar = parsed.prompt;
+        }
         logger.debug(
           `Iteration ${i + 1}: Generated new prompt with improvement: ${improvement.slice(0, 100)}${improvement.length > 100 ? '...' : ''}`,
         );
@@ -335,6 +341,7 @@ async function runRedteamConversation({
         prompt,
         {
           ...iterationVars,
+          ...(parsedPromptVars ?? {}),
           [injectVar]: newInjectVar,
         },
         filters,

@@ -255,41 +255,43 @@ export abstract class RedteamPluginBase {
     const hasMultipleInputs = this.config.inputs && Object.keys(this.config.inputs).length > 0;
 
     return Promise.all(
-      prompts.sort().map(async (promptObj, materializationIndex) => {
-        // Extract input vars from the prompt for multi-input mode
-        const inputVars = hasMultipleInputs
-          ? extractInputVarsFromPrompt(promptObj.__prompt, this.config.inputs)
-          : undefined;
-        const materializedInputVars =
-          inputVars && this.config.inputs
-            ? await materializeInputVariablesWithMetadata(inputVars, this.config.inputs, {
-                materializationIndex,
-                pluginId: getShortPluginId(this.id),
-                provider: this.provider,
-                purpose: this.purpose,
-              })
+      [...prompts]
+        .sort((a, b) => a.__prompt.localeCompare(b.__prompt))
+        .map(async (promptObj, materializationIndex) => {
+          // Extract input vars from the prompt for multi-input mode
+          const inputVars = hasMultipleInputs
+            ? extractInputVarsFromPrompt(promptObj.__prompt, this.config.inputs)
             : undefined;
+          const materializedInputVars =
+            inputVars && this.config.inputs
+              ? await materializeInputVariablesWithMetadata(inputVars, this.config.inputs, {
+                  materializationIndex,
+                  pluginId: getShortPluginId(this.id),
+                  provider: this.provider,
+                  purpose: this.purpose,
+                })
+              : undefined;
 
-        // Use the configured injectVar (will be MULTI_INPUT_VAR in multi-input mode)
-        const vars: Record<string, string> = {
-          [this.injectVar]: promptObj.__prompt,
-          ...(materializedInputVars?.vars || {}),
-        };
+          // Use the configured injectVar (will be MULTI_INPUT_VAR in multi-input mode)
+          const vars: Record<string, string> = {
+            [this.injectVar]: promptObj.__prompt,
+            ...(materializedInputVars?.vars || {}),
+          };
 
-        return {
-          vars,
-          assert: this.getAssertions(promptObj.__prompt),
-          metadata: {
-            pluginId: getShortPluginId(this.id),
-            pluginConfig: this.config,
-            ...(materializedInputVars?.metadata
-              ? { inputMaterialization: materializedInputVars.metadata }
-              : {}),
-            // Include extracted input vars in metadata for multi-turn strategies
-            ...(inputVars ? { inputVars } : {}),
-          },
-        };
-      }),
+          return {
+            vars,
+            assert: this.getAssertions(promptObj.__prompt),
+            metadata: {
+              pluginId: getShortPluginId(this.id),
+              pluginConfig: this.config,
+              ...(materializedInputVars?.metadata
+                ? { inputMaterialization: materializedInputVars.metadata }
+                : {}),
+              // Include extracted input vars in metadata for multi-turn strategies
+              ...(inputVars ? { inputVars } : {}),
+            },
+          };
+        }),
     );
   }
 

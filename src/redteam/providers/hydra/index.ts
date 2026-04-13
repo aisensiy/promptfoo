@@ -13,6 +13,7 @@ import invariant from '../../../util/invariant';
 import { isValidJson } from '../../../util/json';
 import { sleep } from '../../../util/time';
 import { accumulateResponseTokenUsage, createEmptyTokenUsage } from '../../../util/tokenUsageUtils';
+import { materializeInputVariablesWithMetadata } from '../../inputVariables';
 import { shouldGenerateRemote } from '../../remoteGeneration';
 import {
   applyRuntimeTransforms,
@@ -108,7 +109,8 @@ interface HydraConfig {
   _perTurnLayers?: LayerConfig[];
   /**
    * Multi-input schema for generating multiple vars at each turn.
-   * Keys are variable names, values are descriptions.
+   * Keys are variable names, values are Inputs definitions: plain descriptions
+   * or structured typed configs with fields like description, type, and default.
    */
   inputs?: Inputs;
 }
@@ -406,6 +408,14 @@ export class HydraProvider implements ApiProvider {
 
       // Extract input vars from the processed message for multi-input mode
       const currentInputVars = extractInputVarsFromPrompt(processedMessage, this.config.inputs);
+      const materializedInputVars =
+        currentInputVars && this.config.inputs
+          ? await materializeInputVariablesWithMetadata(currentInputVars, this.config.inputs, {
+              materializationIndex: turn,
+              pluginId: 'hydra',
+            })
+          : undefined;
+      const currentRenderInputVars = materializedInputVars?.vars ?? currentInputVars;
 
       // Add message to conversation history (without <Prompt> tags)
       this.conversationHistory.push({
@@ -430,7 +440,7 @@ export class HydraProvider implements ApiProvider {
           [this.injectVar]: escapedMessage,
           ...(this.sessionId ? { sessionId: this.sessionId } : {}),
           // Add extracted input vars if available
-          ...(currentInputVars || {}),
+          ...(currentRenderInputVars || {}),
         };
 
         targetPrompt = await renderPrompt(
@@ -840,7 +850,7 @@ export class HydraProvider implements ApiProvider {
         trace: traceContext ? formatTraceForMetadata(traceContext) : undefined,
         traceSummary: computedTraceSummary,
         // Include input vars for multi-input mode (extracted from current prompt)
-        inputVars: currentInputVars,
+        inputVars: currentRenderInputVars,
       });
 
       // Check if vulnerability was achieved

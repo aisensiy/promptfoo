@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@app/components/ui/button';
 import {
@@ -74,6 +74,18 @@ export default function InputsEditor({
   const [isExpanded, setIsExpanded] = useState(() => {
     return inputs ? Object.keys(inputs).length > 0 : false;
   });
+  const variableKeysRef = useRef(new Map<string, string>());
+  const nextVariableKeyRef = useRef(0);
+
+  const getVariableKey = (name: string) => {
+    let key = variableKeysRef.current.get(name);
+    if (!key) {
+      key = `input-variable-${nextVariableKeyRef.current}`;
+      nextVariableKeyRef.current += 1;
+      variableKeysRef.current.set(name, key);
+    }
+    return key;
+  };
 
   // Derive variables from inputs prop
   const variables = useMemo(() => {
@@ -115,6 +127,11 @@ export default function InputsEditor({
   const updateVariableName = (oldName: string, newName: string) => {
     if (!inputs) {
       return;
+    }
+    const existingKey = variableKeysRef.current.get(oldName);
+    if (existingKey) {
+      variableKeysRef.current.delete(oldName);
+      variableKeysRef.current.set(newName, existingKey);
     }
     // Build new object preserving order, replacing the old key with new key
     const newInputs: Inputs = {};
@@ -166,6 +183,7 @@ export default function InputsEditor({
     if (!inputs) {
       return;
     }
+    variableKeysRef.current.delete(name);
     const { [name]: _, ...rest } = inputs;
     onChange(Object.keys(rest).length > 0 ? rest : undefined);
   };
@@ -193,12 +211,12 @@ export default function InputsEditor({
     <>
       {variables.length > 0 ? (
         <div className="flex flex-col gap-3">
-          {variables.map((variable, index) => {
+          {variables.map((variable) => {
             const isDuplicate = duplicateNames.has(variable.name.trim());
-            const inputId = `input-${index}`;
+            const inputId = getVariableKey(variable.name);
             return (
               <div
-                key={index}
+                key={inputId}
                 className="flex items-start gap-3 rounded-lg border border-border p-3"
               >
                 <div className="flex flex-1 flex-col gap-3 sm:flex-row">

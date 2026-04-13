@@ -41,23 +41,32 @@ async function processPromptForInputs(
 
   // If inputs are defined, try to parse JSON and extract individual keys
   if (inputs && Object.keys(inputs).length > 0) {
+    let parsed: Record<string, unknown> | undefined;
     try {
-      const parsed = JSON.parse(processedPrompt);
-      const materializedVars = await extractMaterializedVariablesFromJsonWithMetadata(
-        parsed,
-        inputs,
-        {
-          materializationIndex,
-          pluginId: plugin,
-          provider,
-          purpose,
-        },
-      );
-      Object.assign(additionalVars, materializedVars.vars);
-      additionalMetadata = materializedVars.metadata;
-    } catch {
+      parsed = JSON.parse(processedPrompt);
+    } catch (error) {
       // If parsing fails, processedPrompt is plain text - keep it as is
-      logger.debug('[Harmful] Could not parse prompt as JSON for multi-input mode');
+      logger.debug('[Harmful] Could not parse prompt as JSON for multi-input mode', { error });
+    }
+
+    if (parsed) {
+      try {
+        const materializedVars = await extractMaterializedVariablesFromJsonWithMetadata(
+          parsed,
+          inputs,
+          {
+            materializationIndex,
+            pluginId: plugin,
+            provider,
+            purpose,
+          },
+        );
+        Object.assign(additionalVars, materializedVars.vars);
+        additionalMetadata = materializedVars.metadata;
+      } catch (error) {
+        logger.debug('[Harmful] Failed to materialize prompt inputs', { error });
+        throw error;
+      }
     }
   }
 

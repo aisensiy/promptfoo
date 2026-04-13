@@ -1,3 +1,4 @@
+import logger from '../logger';
 import {
   buildInputPromptDescription,
   DocumentMediaInjectionPlacementSchema,
@@ -727,7 +728,12 @@ export async function materializeInputValueWithMetadata(
     ({ output } = await context.provider.callApi(
       buildDocxWrapperPrompt(value, definition, context, injectionPlacement),
     ));
-  } catch {
+  } catch (error) {
+    logger.debug('[inputVariables] Failed to generate DOCX wrapper, using fallback render plan', {
+      error,
+      inputPurpose: normalizedInput.config?.inputPurpose,
+      injectionPlacement,
+    });
     const renderPlan = createFallbackDocxRenderPlan(value, definition, injectionPlacement);
     return {
       metadata: {
@@ -837,7 +843,10 @@ export async function materializeInputVariablesWithMetadata(
   };
 }
 
-export function createPlaceholderInputValue(name: string, definition: InputDefinition): string {
-  const placeholder = `Test value for ${name}`;
-  return materializeInputValue(placeholder, definition);
+export function createPlaceholderInputValue(
+  name: string,
+  definition: InputDefinition,
+  value = `test_${name}`,
+): string {
+  return materializeInputValue(value, definition);
 }

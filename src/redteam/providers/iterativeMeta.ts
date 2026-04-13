@@ -11,6 +11,7 @@ import {
 import invariant from '../../util/invariant';
 import { sleep } from '../../util/time';
 import { accumulateResponseTokenUsage, createEmptyTokenUsage } from '../../util/tokenUsageUtils';
+import { materializeInputVariablesWithMetadata } from '../inputVariables';
 import { shouldGenerateRemote } from '../remoteGeneration';
 import {
   applyRuntimeTransforms,
@@ -335,12 +336,20 @@ export async function runMetaAgentRedteam({
 
     // Extract input vars from the attack prompt for multi-input mode
     const currentInputVars = extractInputVarsFromPrompt(attackPrompt, inputs);
+    const materializedInputVars =
+      currentInputVars && inputs
+        ? await materializeInputVariablesWithMetadata(currentInputVars, inputs, {
+            materializationIndex: i,
+            pluginId: String(test?.metadata?.pluginId || 'iterative-meta'),
+          })
+        : undefined;
+    const currentRenderInputVars = materializedInputVars?.vars ?? currentInputVars;
 
     // Build updated vars - handle multi-input mode
     const updatedVars: Record<string, VarValue> = {
       ...iterationVars,
       [injectVar]: escapedAttackPrompt,
-      ...(currentInputVars || {}),
+      ...(currentRenderInputVars || {}),
     };
 
     const targetPrompt = await renderPrompt(
@@ -562,7 +571,7 @@ export async function runMetaAgentRedteam({
       trace: traceContext ? formatTraceForMetadata(traceContext) : undefined,
       traceSummary: computedTraceSummary,
       // Include input vars for multi-input mode (extracted from current prompt)
-      inputVars: currentInputVars,
+      inputVars: currentRenderInputVars,
     });
 
     // Check if vulnerability was achieved

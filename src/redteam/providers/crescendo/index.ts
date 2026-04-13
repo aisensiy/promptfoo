@@ -14,7 +14,10 @@ import { getNunjucksEngine } from '../../../util/templates';
 import { sleep } from '../../../util/time';
 import { TokenUsageTracker } from '../../../util/tokenUsage';
 import { accumulateResponseTokenUsage, createEmptyTokenUsage } from '../../../util/tokenUsageUtils';
-import { buildPromptInputDescriptions } from '../../inputVariables';
+import {
+  buildPromptInputDescriptions,
+  materializeInputVariablesWithMetadata,
+} from '../../inputVariables';
 import { shouldGenerateRemote } from '../../remoteGeneration';
 import {
   applyRuntimeTransforms,
@@ -118,7 +121,8 @@ interface CrescendoConfig {
   _perTurnLayers?: LayerConfig[];
   /**
    * Multi-input schema for generating multiple vars at each turn.
-   * Keys are variable names, values are descriptions.
+   * Keys are variable names, values are Inputs definitions: plain descriptions
+   * or structured typed configs with fields like description, type, and default.
    */
   inputs?: Inputs;
   [key: string]: unknown;
@@ -928,12 +932,20 @@ export class CrescendoProvider implements ApiProvider {
 
     // Extract input vars from the processed prompt for multi-input mode
     const currentInputVars = extractInputVarsFromPrompt(processedPrompt, this.config.inputs);
+    const materializedInputVars =
+      currentInputVars && this.config.inputs
+        ? await materializeInputVariablesWithMetadata(currentInputVars, this.config.inputs, {
+            materializationIndex: _roundNum,
+            pluginId: 'crescendo',
+          })
+        : undefined;
+    const currentRenderInputVars = materializedInputVars?.vars ?? currentInputVars;
 
     // Build updated vars - handle multi-input mode
     const updatedVars: Record<string, VarValue> = {
       ...vars,
       [this.config.injectVar]: processedPrompt,
-      ...(currentInputVars || {}),
+      ...(currentRenderInputVars || {}),
     };
 
     const renderedPrompt = await renderPrompt(
@@ -1129,7 +1141,7 @@ export class CrescendoProvider implements ApiProvider {
     return {
       response: targetResponse,
       transformResult: lastTransformResult,
-      inputVars: currentInputVars,
+      inputVars: currentRenderInputVars,
     };
   }
 

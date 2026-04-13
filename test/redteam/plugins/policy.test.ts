@@ -164,10 +164,13 @@ describe('PolicyPlugin', () => {
 
     await plugin.generateTests(1, 0);
 
-    expect(mockProvider.callApi).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "User's summarization request Generate benign, natural, non-adversarial content for this input. Do not place attack instructions or policy-violating content here.",
-      ),
+    const generationPrompt = vi.mocked(mockProvider.callApi).mock.calls[0][0] as string;
+    expect(generationPrompt).toContain("User's summarization request");
+    expect(generationPrompt).toContain(
+      'Generate benign, natural, non-adversarial content for this input.',
+    );
+    expect(generationPrompt).toContain(
+      'Do not place attack instructions or policy-violating content here.',
     );
   });
 

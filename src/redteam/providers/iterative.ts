@@ -15,7 +15,10 @@ import { getNunjucksEngine } from '../../util/templates';
 import { sleep } from '../../util/time';
 import { TokenUsageTracker } from '../../util/tokenUsage';
 import { accumulateResponseTokenUsage, createEmptyTokenUsage } from '../../util/tokenUsageUtils';
-import { buildPromptInputDescriptions } from '../inputVariables';
+import {
+  buildPromptInputDescriptions,
+  materializeInputVariablesWithMetadata,
+} from '../inputVariables';
 import { shouldGenerateRemote } from '../remoteGeneration';
 import {
   applyRuntimeTransforms,
@@ -360,12 +363,22 @@ export async function runRedteamConversation({
 
     // Extract input vars from the attack prompt for multi-input mode
     const currentInputVars = extractInputVarsFromPrompt(newInjectVar, inputs);
+    const materializedInputVars =
+      currentInputVars && inputs
+        ? await materializeInputVariablesWithMetadata(currentInputVars, inputs, {
+            materializationIndex: i,
+            pluginId: String(test?.metadata?.pluginId || 'iterative'),
+            provider: redteamProvider,
+            purpose: test?.metadata?.purpose as string | undefined,
+          })
+        : undefined;
+    const currentRenderInputVars = materializedInputVars?.vars ?? currentInputVars;
 
     // Build updated vars - handle multi-input mode
     const updatedVars: Record<string, VarValue> = {
       ...iterationVars,
       [injectVar]: finalInjectVar,
-      ...(currentInputVars || {}),
+      ...(currentRenderInputVars || {}),
     };
 
     targetPrompt = await renderPrompt(
@@ -736,8 +749,11 @@ export async function runRedteamConversation({
       trace: traceContext ? formatTraceForMetadata(traceContext) : undefined,
       traceSummary,
       // Include input vars for multi-input mode (extracted from current prompt)
-      inputVars: currentInputVars,
+      inputVars: currentRenderInputVars,
       metadata: {
+        ...(materializedInputVars?.metadata
+          ? { inputMaterialization: materializedInputVars.metadata }
+          : {}),
         sessionId,
       },
     });

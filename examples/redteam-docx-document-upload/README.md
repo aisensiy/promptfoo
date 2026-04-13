@@ -10,6 +10,12 @@ Copy this example into a new working directory:
 npx promptfoo@latest init --example redteam-docx-document-upload
 ```
 
+Set an OpenAI API key for red team generation and grading, or configure an equivalent provider in `promptfooconfig.yaml`:
+
+```bash
+export OPENAI_API_KEY=your-key-here
+```
+
 From the repository root, start the example app:
 
 ```bash

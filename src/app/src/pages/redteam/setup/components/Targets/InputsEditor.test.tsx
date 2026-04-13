@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 import { TooltipProvider } from '@app/components/ui/tooltip';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import InputsEditor from './InputsEditor';
@@ -137,7 +137,7 @@ describe('InputsEditor', () => {
 
       renderWithProviders(<ControlledInputsEditor {...defaultProps} onChange={onChange} compact />);
 
-      fireEvent.click(screen.getByRole('button', { name: /add variable/i }));
+      await user.click(screen.getByRole('button', { name: /add variable/i }));
 
       await user.click(screen.getByRole('combobox'));
       await user.click(await screen.findByRole('option', { name: 'PDF' }));

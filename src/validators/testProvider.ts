@@ -464,8 +464,18 @@ export async function testProviderSession({
 
     const initialSessionId = effectiveSessionSource === 'server' ? undefined : crypto.randomUUID();
 
-    // Generate dummy values for each input variable defined in multi-input configuration
-    // If mainInputVariable is specified, that variable will use the actual conversation prompts
+    const materializeSessionPrompt = (prompt: string) => {
+      if (!mainInputVariable) {
+        return prompt;
+      }
+      const definition = inputs?.[mainInputVariable];
+      return definition
+        ? createPlaceholderInputValue(mainInputVariable, definition, prompt)
+        : prompt;
+    };
+
+    // Generate dummy values for each input variable defined in multi-input configuration.
+    // If mainInputVariable is specified, it is materialized from the actual conversation prompts.
     const inputVars: Record<string, string> = {};
     if (inputs && typeof inputs === 'object') {
       for (const [varName, definition] of Object.entries(inputs)) {
@@ -491,9 +501,10 @@ export async function testProviderSession({
       vars: {
         ...(initialSessionId ? { sessionId: initialSessionId } : {}),
         ...inputVars,
-        // If mainInputVariable is specified, set it to the first prompt
-        // This allows multi-input configurations to use a custom variable for the conversation
-        ...(mainInputVariable ? { [mainInputVariable]: firstPrompt } : {}),
+        // This allows multi-input configurations to use a custom variable for the conversation.
+        ...(mainInputVariable
+          ? { [mainInputVariable]: materializeSessionPrompt(firstPrompt) }
+          : {}),
       },
       prompt: {
         raw: firstPrompt,
@@ -555,8 +566,9 @@ export async function testProviderSession({
       vars: {
         ...(extractedSessionId ? { sessionId: extractedSessionId } : {}),
         ...inputVars,
-        // If mainInputVariable is specified, set it to the second prompt
-        ...(mainInputVariable ? { [mainInputVariable]: secondPrompt } : {}),
+        ...(mainInputVariable
+          ? { [mainInputVariable]: materializeSessionPrompt(secondPrompt) }
+          : {}),
       },
       prompt: {
         raw: secondPrompt,

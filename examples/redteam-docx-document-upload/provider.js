@@ -64,7 +64,12 @@ class DocumentUploadProvider {
 
   async callApi(prompt, context) {
     const vars = context?.vars || {};
-    const documentInput = getStringVar(vars, 'document') || prompt;
+    const documentInput = getStringVar(vars, 'document');
+    if (!documentInput) {
+      throw new Error(
+        'Missing vars.document: Expected a DOCX data URI. Configure the target input "document" with type: docx.',
+      );
+    }
     const userQuestion = getStringVar(vars, 'question') || DEFAULT_SUMMARY_REQUEST;
     const appBaseUrl = this.config.appBaseUrl || DEFAULT_APP_BASE_URL;
     const level = this.config.level || DEFAULT_LEVEL;
