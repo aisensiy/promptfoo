@@ -330,6 +330,4 @@ describe('OpenAiResponsesProvider error handling', () => {
     // Expect logger to be called with the error
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Network error'));
   });
-
-  // Test for function calls at the top level (lines 197-198)
 });

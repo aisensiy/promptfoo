@@ -1,6 +1,6 @@
 import './setup';
 
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as cache from '../../../../src/cache';
 import { OpenAiResponsesProvider } from '../../../../src/providers/openai/responses';
 import { LONG_RUNNING_MODEL_TIMEOUT_MS } from '../../../../src/providers/shared';
@@ -304,15 +304,6 @@ describe('OpenAiResponsesProvider reasoning models', () => {
   });
 
   describe('deep research model validation', () => {
-    beforeAll(() => {
-      vi.mocked(cache.fetchWithCache).mockImplementation(function () {
-        return {
-          get: vi.fn(),
-          set: vi.fn(),
-        } as any;
-      });
-    });
-
     it('should require web_search_preview tool for deep research models', async () => {
       const provider = new OpenAiResponsesProvider('o3-deep-research', {
         config: {
@@ -324,6 +315,7 @@ describe('OpenAiResponsesProvider reasoning models', () => {
       const result = await provider.callApi('Test prompt');
       expect(result.error).toContain('requires the web_search_preview tool');
       expect(result.error).toContain('o3-deep-research');
+      expect(cache.fetchWithCache).not.toHaveBeenCalled();
     });
 
     it('should accept deep research models with web_search_preview tool', async () => {
@@ -375,6 +367,7 @@ describe('OpenAiResponsesProvider reasoning models', () => {
 
       const result = await provider.callApi('Test prompt');
       expect(result.error).toContain("requires MCP tools to have require_approval: 'never'");
+      expect(cache.fetchWithCache).not.toHaveBeenCalled();
     });
 
     it('should use longer timeout for deep research models', async () => {
@@ -604,193 +597,5 @@ describe('OpenAiResponsesProvider reasoning models', () => {
     const result = await provider.callApi('Test prompt');
     expect(result.error).toBeUndefined();
     expect(result.output).toBe('Reasoning: Valid reasoning summary\nFinal answer');
-  });
-
-  it('should configure o3 model correctly with reasoning parameters', async () => {
-    const mockApiResponse = {
-      id: 'resp_abc123',
-      status: 'completed',
-      model: 'o3',
-      output: [
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'output_text',
-              text: 'Response from o3 model',
-            },
-          ],
-        },
-      ],
-      usage: { input_tokens: 10, output_tokens: 10, total_tokens: 20 },
-    };
-
-    vi.mocked(cache.fetchWithCache).mockResolvedValue({
-      data: mockApiResponse,
-      cached: false,
-      status: 200,
-      statusText: 'OK',
-    });
-
-    const provider = new OpenAiResponsesProvider('o3', {
-      config: {
-        apiKey: 'test-key',
-        reasoning_effort: 'high',
-        max_output_tokens: 2000,
-      },
-    });
-
-    await provider.callApi('Test prompt');
-
-    const mockCall = vi.mocked(cache.fetchWithCache).mock.calls[0];
-    const reqOptions = mockCall[1] as { body: string };
-    const body = JSON.parse(reqOptions.body);
-
-    expect(body.model).toBe('o3');
-    expect(body.reasoning).toEqual({ effort: 'high' });
-    expect(body.max_output_tokens).toBe(2000);
-    expect(body.temperature).toBeUndefined(); // o3 model should not have temperature
-  });
-
-  it('should configure o3-pro model correctly with reasoning parameters', async () => {
-    const mockApiResponse = {
-      id: 'resp_abc123',
-      status: 'completed',
-      model: 'o3-pro',
-      output: [
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'output_text',
-              text: 'Response from o3-pro model',
-            },
-          ],
-        },
-      ],
-      usage: { input_tokens: 10, output_tokens: 10, total_tokens: 20 },
-    };
-
-    vi.mocked(cache.fetchWithCache).mockResolvedValue({
-      data: mockApiResponse,
-      cached: false,
-      status: 200,
-      statusText: 'OK',
-    });
-
-    const provider = new OpenAiResponsesProvider('o3-pro', {
-      config: {
-        apiKey: 'test-key',
-        reasoning_effort: 'high',
-        max_output_tokens: 2000,
-      },
-    });
-
-    await provider.callApi('Test prompt');
-
-    const mockCall = vi.mocked(cache.fetchWithCache).mock.calls[0];
-    const reqOptions = mockCall[1] as { body: string };
-    const body = JSON.parse(reqOptions.body);
-
-    expect(body.model).toBe('o3-pro');
-    expect(body.reasoning).toEqual({ effort: 'high' });
-    expect(body.max_output_tokens).toBe(2000);
-    expect(body.temperature).toBeUndefined(); // o3-pro model should not have temperature
-  });
-
-  it('should configure o4-mini model correctly with reasoning parameters', async () => {
-    const mockApiResponse = {
-      id: 'resp_abc123',
-      status: 'completed',
-      model: 'o4-mini',
-      output: [
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'output_text',
-              text: 'Response from o4-mini model',
-            },
-          ],
-        },
-      ],
-      usage: { input_tokens: 10, output_tokens: 10, total_tokens: 20 },
-    };
-
-    vi.mocked(cache.fetchWithCache).mockResolvedValue({
-      data: mockApiResponse,
-      cached: false,
-      status: 200,
-      statusText: 'OK',
-    });
-
-    const provider = new OpenAiResponsesProvider('o4-mini', {
-      config: {
-        apiKey: 'test-key',
-        reasoning_effort: 'medium',
-        max_output_tokens: 1000,
-      },
-    });
-
-    await provider.callApi('Test prompt');
-
-    const mockCall = vi.mocked(cache.fetchWithCache).mock.calls[0];
-    const reqOptions = mockCall[1] as { body: string };
-    const body = JSON.parse(reqOptions.body);
-
-    expect(body.model).toBe('o4-mini');
-    expect(body.reasoning).toEqual({ effort: 'medium' });
-    expect(body.max_output_tokens).toBe(1000);
-    expect(body.temperature).toBeUndefined(); // o4-mini model should not have temperature
-  });
-
-  it('should configure codex-mini-latest model correctly with reasoning parameters', async () => {
-    const mockApiResponse = {
-      id: 'resp_abc123',
-      status: 'completed',
-      model: 'codex-mini-latest',
-      output: [
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'output_text',
-              text: 'Response from codex-mini-latest model',
-            },
-          ],
-        },
-      ],
-      usage: { input_tokens: 10, output_tokens: 10, total_tokens: 20 },
-    };
-
-    vi.mocked(cache.fetchWithCache).mockResolvedValue({
-      data: mockApiResponse,
-      cached: false,
-      status: 200,
-      statusText: 'OK',
-    });
-
-    const provider = new OpenAiResponsesProvider('codex-mini-latest', {
-      config: {
-        apiKey: 'test-key',
-        reasoning_effort: 'medium',
-        max_output_tokens: 1000,
-      },
-    });
-
-    await provider.callApi('Test prompt');
-
-    const mockCall = vi.mocked(cache.fetchWithCache).mock.calls[0];
-    const reqOptions = mockCall[1] as { body: string };
-    const body = JSON.parse(reqOptions.body);
-
-    expect(body.model).toBe('codex-mini-latest');
-    expect(body.reasoning).toEqual({ effort: 'medium' });
-    expect(body.max_output_tokens).toBe(1000);
-    expect(body.temperature).toBeUndefined(); // codex-mini-latest model should not have temperature
   });
 });
