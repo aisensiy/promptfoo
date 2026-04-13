@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 import * as genaiTracer from '../../../src/tracing/genaiTracer';
+import { mockProcessEnv } from '../../util/utils';
 import type { ContentBlock, StopReason } from '@aws-sdk/client-bedrock-runtime';
 
 // Define mock module type
@@ -32,25 +33,19 @@ interface MockConverseCommandOutput {
 }
 
 const mockSend = vi.hoisted(() => vi.fn<any>());
-const ORIGINAL_HTTP_PROXY = process.env.HTTP_PROXY;
-const ORIGINAL_HTTPS_PROXY = process.env.HTTPS_PROXY;
+let restoreProxyEnvMock: (() => void) | undefined;
 
 function clearProxyEnv() {
-  delete process.env.HTTP_PROXY;
-  delete process.env.HTTPS_PROXY;
+  restoreProxyEnv();
+  restoreProxyEnvMock = mockProcessEnv({
+    HTTP_PROXY: undefined,
+    HTTPS_PROXY: undefined,
+  });
 }
 
 function restoreProxyEnv() {
-  if (ORIGINAL_HTTP_PROXY === undefined) {
-    delete process.env.HTTP_PROXY;
-  } else {
-    process.env.HTTP_PROXY = ORIGINAL_HTTP_PROXY;
-  }
-  if (ORIGINAL_HTTPS_PROXY === undefined) {
-    delete process.env.HTTPS_PROXY;
-  } else {
-    process.env.HTTPS_PROXY = ORIGINAL_HTTPS_PROXY;
-  }
+  restoreProxyEnvMock?.();
+  restoreProxyEnvMock = undefined;
 }
 
 vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {

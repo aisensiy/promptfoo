@@ -5,7 +5,7 @@
  * This is extracted to avoid circular dependency issues.
  */
 
-import { createHmac, randomUUID } from 'crypto';
+import { createHmac } from 'crypto';
 
 import { getEnvInt, getEnvString } from '../../envars';
 import logger from '../../logger';
@@ -31,7 +31,6 @@ export interface BedrockOptions {
 }
 
 const BEDROCK_CACHE_KEY_HMAC_KEY = 'promptfoo:bedrock:cache-key:v1';
-const BEDROCK_AUTH_CACHE_NAMESPACES = new Map<string, string>();
 
 function hashBedrockCacheValue(value: unknown) {
   return createHmac('sha256', BEDROCK_CACHE_KEY_HMAC_KEY)
@@ -44,13 +43,7 @@ function getNonEmptyString(value: unknown): string | undefined {
 }
 
 function getBedrockAuthCacheNamespace(authSource: string, values: (string | undefined)[]) {
-  const namespaceKey = JSON.stringify([authSource, ...values]);
-  let namespace = BEDROCK_AUTH_CACHE_NAMESPACES.get(namespaceKey);
-  if (!namespace) {
-    namespace = randomUUID();
-    BEDROCK_AUTH_CACHE_NAMESPACES.set(namespaceKey, namespace);
-  }
-  return namespace;
+  return hashBedrockCacheValue([authSource, ...values]);
 }
 
 function createBedrockAuthCacheMetadata({ config }: { config: BedrockOptions }) {
@@ -61,12 +54,12 @@ function createBedrockAuthCacheMetadata({ config }: { config: BedrockOptions }) 
   const sessionToken = getNonEmptyString(config.sessionToken);
   const profile = getNonEmptyString(config.profile);
   const hasExplicitCredentials = Boolean(accessKeyId && secretAccessKey);
-  const authSource = bearerConfig
-    ? 'bearer-config'
-    : bearerEnv
-      ? 'bearer-env'
-      : hasExplicitCredentials
-        ? 'explicit-credentials'
+  const authSource = hasExplicitCredentials
+    ? 'explicit-credentials'
+    : bearerConfig
+      ? 'bearer-config'
+      : bearerEnv
+        ? 'bearer-env'
         : profile
           ? 'profile'
           : 'default';
