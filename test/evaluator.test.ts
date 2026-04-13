@@ -39,6 +39,7 @@ import {
   createTokenUsage,
   resetMockProvider,
 } from './factories/provider';
+import { createPrompt } from './factories/testSuite';
 
 const exactTransformHandlers = new Map<string, (input: any) => any>([
   ['output + " postprocessed"', (input) => input + ' postprocessed'],
@@ -5169,18 +5170,9 @@ describe('generateVarCombinations', () => {
 });
 
 describe('isAllowedPrompt', () => {
-  const prompt1: Prompt = {
-    label: 'prompt1',
-    raw: '',
-  };
-  const prompt2: Prompt = {
-    label: 'group1:prompt2',
-    raw: '',
-  };
-  const prompt3: Prompt = {
-    label: 'group2:prompt3',
-    raw: '',
-  };
+  const prompt1: Prompt = createPrompt('', { label: 'prompt1' });
+  const prompt2: Prompt = createPrompt('', { label: 'group1:prompt2' });
+  const prompt3: Prompt = createPrompt('', { label: 'group2:prompt3' });
 
   it('should return true if allowedPrompts is undefined', () => {
     expect(isAllowedPrompt(prompt1, undefined)).toBe(true);
