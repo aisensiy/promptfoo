@@ -3005,6 +3005,7 @@ describe('Language configuration', () => {
 
     it('should log config shape at debug level for policy plugins', async () => {
       const policyText = 'SECRET_POLICY_DEBUG_TEXT';
+      const secretConfigKey = 'SECRET_CONFIG_KEY_NAME';
       const mockPluginAction = vi.fn().mockResolvedValue([{ vars: { query: 'test' } }]);
       vi.spyOn(Plugins, 'find').mockReturnValue({
         action: mockPluginAction,
@@ -3013,7 +3014,9 @@ describe('Language configuration', () => {
 
       await synthesize({
         numTests: 1,
-        plugins: [{ id: 'policy', numTests: 1, config: { policy: policyText } }],
+        plugins: [
+          { id: 'policy', numTests: 1, config: { policy: policyText, [secretConfigKey]: true } },
+        ],
         prompts: ['Test prompt'],
         strategies: [],
         targetIds: ['test-provider'],
@@ -3021,9 +3024,11 @@ describe('Language configuration', () => {
 
       expect(logger.debug).toHaveBeenCalledWith('Plugin config', {
         pluginId: 'policy',
-        configKeys: ['policy'],
+        configKeyCount: 2,
       });
-      expect(JSON.stringify(vi.mocked(logger.debug).mock.calls)).not.toContain(policyText);
+      const debugLogs = JSON.stringify(vi.mocked(logger.debug).mock.calls);
+      expect(debugLogs).not.toContain(policyText);
+      expect(debugLogs).not.toContain(secretConfigKey);
     });
 
     it('should show "(custom config)" for non-policy plugins with config', async () => {

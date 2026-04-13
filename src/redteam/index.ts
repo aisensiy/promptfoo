@@ -941,7 +941,7 @@ export async function synthesize({
             }
             logger.debug('Plugin config', {
               pluginId: p.id,
-              configKeys: Object.keys(p.config),
+              configKeyCount: Object.keys(p.config).length,
             });
           }
           return `${p.id} (${formatTestCount(actualTestCount, false)})${configSummary}`;
