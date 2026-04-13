@@ -24,6 +24,79 @@ import type { AzureChatResponsesOptions, AzureProviderOptions } from './types';
 // Azure Responses API uses the v1 preview API version
 const AZURE_RESPONSES_API_VERSION = 'preview';
 
+const SAFE_AZURE_RESPONSE_ITEM_TYPES = new Set([
+  'code_interpreter_call',
+  'function_call',
+  'mcp_approval_request',
+  'mcp_call',
+  'mcp_list_tools',
+  'message',
+  'reasoning',
+  'tool_result',
+  'web_search_call',
+]);
+const SAFE_AZURE_RESPONSE_STATUSES = new Set([
+  'cancelled',
+  'completed',
+  'failed',
+  'in_progress',
+  'incomplete',
+  'queued',
+]);
+const SAFE_AZURE_TEXT_FORMAT_TYPES = new Set(['json_object', 'json_schema', 'text']);
+const SAFE_AZURE_TOOL_CHOICE_TYPES = new Set(['auto', 'function', 'none', 'required']);
+
+function getStringLength(value: unknown): number | undefined {
+  return typeof value === 'string' ? value.length : undefined;
+}
+
+function getSafeStringValue(value: unknown, safeValues: Set<string>): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  return safeValues.has(value) ? value : 'custom';
+}
+
+function getAzureResponsesOutputTypeCounts(output: any[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of output) {
+    const type = getSafeStringValue(item?.type, SAFE_AZURE_RESPONSE_ITEM_TYPES);
+    if (type) {
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
+
+function getAzureToolChoiceLogMetadata(toolChoice: unknown): Record<string, any> {
+  if (toolChoice == null) {
+    return {
+      hasToolChoice: false,
+    };
+  }
+
+  if (typeof toolChoice === 'string') {
+    return {
+      hasToolChoice: true,
+      toolChoiceType: getSafeStringValue(toolChoice, SAFE_AZURE_TOOL_CHOICE_TYPES),
+    };
+  }
+
+  if (typeof toolChoice === 'object') {
+    const toolChoiceObject = toolChoice as Record<string, any>;
+    return {
+      hasToolChoice: true,
+      toolChoiceType: getSafeStringValue(toolChoiceObject.type, SAFE_AZURE_TOOL_CHOICE_TYPES),
+      hasToolChoiceFunction: Boolean(toolChoiceObject.function),
+    };
+  }
+
+  return {
+    hasToolChoice: true,
+    toolChoiceValueType: typeof toolChoice,
+  };
+}
+
 function getAzureResponsesRequestLogMetadata(body: Record<string, any>): Record<string, any> {
   const input = body.input;
   const tools = body.tools;
@@ -34,8 +107,8 @@ function getAzureResponsesRequestLogMetadata(body: Record<string, any>): Record<
     hasInstructions: body.instructions != null,
     hasMetadata: body.metadata != null,
     toolCount: Array.isArray(tools) ? tools.length : tools ? 1 : 0,
-    toolChoice: body.tool_choice,
-    textFormat: body.text?.format?.type,
+    ...getAzureToolChoiceLogMetadata(body.tool_choice),
+    textFormat: getSafeStringValue(body.text?.format?.type, SAFE_AZURE_TEXT_FORMAT_TYPES),
     maxOutputTokens: body.max_output_tokens,
     hasReasoning: body.reasoning != null,
     stream: body.stream,
@@ -50,12 +123,10 @@ function getAzureResponsesResponseLogMetadata(data: any): Record<string, any> {
     responseLength: typeof data === 'string' ? data.length : undefined,
     id: data?.id,
     model: data?.model,
-    status: data?.status,
+    status: getSafeStringValue(data?.status, SAFE_AZURE_RESPONSE_STATUSES),
     hasError: Boolean(data?.error),
     outputCount: output?.length ?? 0,
-    outputTypes: output
-      ?.map((item: any) => item?.type)
-      .filter((type: unknown): type is string => typeof type === 'string'),
+    outputTypeCounts: output ? getAzureResponsesOutputTypeCounts(output) : undefined,
     usage: data?.usage
       ? {
           inputTokens: data.usage.input_tokens,
@@ -69,7 +140,6 @@ function getAzureResponsesResponseLogMetadata(data: any): Record<string, any> {
 function getAzureResponsesErrorLogMetadata(err: unknown): Record<string, any> {
   return {
     errorType: err instanceof Error ? err.constructor.name : typeof err,
-    errorName: err instanceof Error ? err.name : undefined,
     errorMessageLength: err instanceof Error ? err.message.length : String(err).length,
   };
 }
@@ -344,7 +414,14 @@ export class AzureResponsesProvider extends AzureGenericProvider {
 
       if (status < 200 || status >= 300) {
         return {
-          error: `API error: ${status} ${statusText}\nResponse metadata: ${JSON.stringify(getAzureResponsesResponseLogMetadata(data), null, 2)}`,
+          error: `API error: ${status}\nResponse metadata: ${JSON.stringify(
+            {
+              ...getAzureResponsesResponseLogMetadata(data),
+              statusTextLength: getStringLength(statusText),
+            },
+            null,
+            2,
+          )}`,
         };
       }
     } catch (err) {

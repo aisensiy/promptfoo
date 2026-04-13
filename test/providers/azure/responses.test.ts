@@ -527,7 +527,7 @@ describe('AzureResponsesProvider', () => {
       const mockResponse = {
         id: 'resp_123',
         model: 'gpt-4.1-test',
-        status: 'completed',
+        status: 'secret-response-status-sentinel',
         output: [
           {
             type: 'message',
@@ -538,6 +538,9 @@ describe('AzureResponsesProvider', () => {
                 text: 'secret-response-sentinel',
               },
             ],
+          },
+          {
+            type: 'secret-response-output-type-sentinel',
           },
         ],
         usage: {
@@ -558,6 +561,12 @@ describe('AzureResponsesProvider', () => {
         config: {
           instructions: 'secret-instructions-sentinel',
           metadata: { trace: 'secret-metadata-sentinel' },
+          tool_choice: {
+            type: 'secret-tool-choice-type-sentinel',
+            function: {
+              name: 'secret-tool-choice-function-sentinel',
+            },
+          },
         } as any,
       });
 
@@ -573,10 +582,15 @@ describe('AzureResponsesProvider', () => {
         expect(azureDebugLogs).toContain('inputType');
         expect(azureDebugLogs).toContain('outputCount');
         expect(azureDebugLogs).toContain('inputTokens');
+        expect(azureDebugLogs).toContain('outputTypeCounts');
         expect(azureDebugLogs).not.toContain('secret-prompt-sentinel');
         expect(azureDebugLogs).not.toContain('secret-instructions-sentinel');
         expect(azureDebugLogs).not.toContain('secret-metadata-sentinel');
         expect(azureDebugLogs).not.toContain('secret-response-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-tool-choice-type-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-tool-choice-function-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-response-status-sentinel');
+        expect(azureDebugLogs).not.toContain('secret-response-output-type-sentinel');
       } finally {
         debugSpy.mockRestore();
       }
@@ -587,7 +601,7 @@ describe('AzureResponsesProvider', () => {
         data: { error: { message: 'secret-azure-responses-error-body' } },
         cached: false,
         status: 401,
-        statusText: 'Unauthorized',
+        statusText: 'secret-azure-status-text-sentinel',
       });
 
       const provider = new AzureResponsesProvider('gpt-4.1-test');
@@ -596,11 +610,14 @@ describe('AzureResponsesProvider', () => {
       expect(result.error).toContain('API error: 401');
       expect(result.error).toContain('Response metadata');
       expect(result.error).not.toContain('secret-azure-responses-error-body');
+      expect(result.error).not.toContain('secret-azure-status-text-sentinel');
     });
 
     it('should redact thrown API call errors', async () => {
       const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
-      mockFetchWithCache.mockRejectedValue(new Error('secret-azure-responses-thrown-error'));
+      const err = new Error('secret-azure-responses-thrown-error');
+      err.name = 'secret-azure-responses-error-name';
+      mockFetchWithCache.mockRejectedValue(err);
 
       const provider = new AzureResponsesProvider('gpt-4.1-test');
 
@@ -610,8 +627,12 @@ describe('AzureResponsesProvider', () => {
         expect(result.error).toContain('API call error');
         expect(result.error).toContain('Error metadata');
         expect(result.error).not.toContain('secret-azure-responses-thrown-error');
+        expect(result.error).not.toContain('secret-azure-responses-error-name');
         expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
           'secret-azure-responses-thrown-error',
+        );
+        expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+          'secret-azure-responses-error-name',
         );
       } finally {
         errorSpy.mockRestore();
