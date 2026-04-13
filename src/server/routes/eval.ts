@@ -8,6 +8,7 @@ import promptfoo from '../../index';
 import logger from '../../logger';
 import Eval, { EvalQueries } from '../../models/eval';
 import EvalResult from '../../models/evalResult';
+import { VALID_FILE_EXTENSIONS } from '../../prompts/constants';
 import { EvalSchemas } from '../../types/api/eval';
 import { deleteEval, deleteEvals, updateResult, writeResultsToDatabase } from '../../util/database';
 import invariant from '../../util/invariant';
@@ -58,6 +59,13 @@ function hasTrailingFileLikeExtension(value: string): boolean {
   return /\.[a-z0-9]{1,8}(?::[a-z_$][\w$]*)?$/i.test(value.trim());
 }
 
+function hasKnownPromptFileExtension(value: string): boolean {
+  const lower = value.toLowerCase();
+  return [...VALID_FILE_EXTENSIONS, ...SERVER_PROMPT_SOURCE_EXECUTABLE_EXTENSIONS].some(
+    (extension) => lower.endsWith(extension),
+  );
+}
+
 function hasPathLikeSeparator(value: string): boolean {
   const separatorIndex = value.search(/[/\\]/);
   if (separatorIndex < 0) {
@@ -82,13 +90,29 @@ function hasPathLikeSeparator(value: string): boolean {
 }
 
 function hasFileLikeExtension(value: string): boolean {
-  const pathOrFunctionToken = value.split(':')[0].trim();
+  let pathOrFunctionToken = value.trim();
   if (!pathOrFunctionToken || /[\n{}[\]]/.test(pathOrFunctionToken)) {
     return false;
   }
 
+  const lastColonIndex = pathOrFunctionToken.lastIndexOf(':');
+  if (lastColonIndex > 1) {
+    const pathWithoutFunction = pathOrFunctionToken.slice(0, lastColonIndex);
+    if (hasKnownPromptFileExtension(pathWithoutFunction)) {
+      pathOrFunctionToken = pathWithoutFunction;
+    }
+  }
+
   const candidate = pathOrFunctionToken.split(/\s+/).at(-1) ?? '';
-  return isPathLikeSegment(candidate) && /\.[a-z][a-z0-9]{0,7}$/i.test(candidate);
+  if (!/[a-z0-9]/i.test(candidate)) {
+    return false;
+  }
+
+  if (hasKnownPromptFileExtension(candidate)) {
+    return true;
+  }
+
+  return /^[\w.-]+$/.test(candidate) && /\.[a-z][a-z0-9]{0,7}$/i.test(candidate);
 }
 
 function hasGlobLikeWildcard(value: string): boolean {

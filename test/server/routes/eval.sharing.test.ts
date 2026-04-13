@@ -159,6 +159,17 @@ describe('Eval Routes - Sharing behavior', () => {
     expect(mockedEvaluate).not.toHaveBeenCalled();
   });
 
+  it('rejects local prompt file sources with non-word path segments', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['my+prompts/runner.py:run'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
   it('rejects glob prompt sources that contain spaces', async () => {
     const response = await postJob({
       ...minimalTestSuite,
@@ -185,6 +196,28 @@ describe('Eval Routes - Sharing behavior', () => {
     const response = await postJob({
       ...minimalTestSuite,
       prompts: ['my script.py:run'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects local executable prompt files with non-word file names', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['my+script.py:run'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects colon-separated prompt file references', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['label:path/to/filename.py:functionName'],
     });
 
     expect(response.status).toBe(400);
@@ -244,6 +277,8 @@ describe('Eval Routes - Sharing behavior', () => {
         '{"role":"user","content":"hello"}',
         '["hello","world"]',
         'Explain A/B testing and calculate 2 * 2.',
+        'Discuss C++/CLI interop.',
+        'Contact foo@example.com for support.',
         'Use version 1.2 in the answer.',
       ],
     });
