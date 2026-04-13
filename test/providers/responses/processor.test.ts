@@ -16,6 +16,7 @@ describe('ResponsesProcessor', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCostCalculator.mockReturnValue(0.001);
 
     processor = new ResponsesProcessor({
       modelName: 'gpt-4.1',
@@ -267,7 +268,7 @@ describe('ResponsesProcessor', () => {
     });
 
     it('should redact JSON schema parse failure logs', async () => {
-      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger as any);
       const mockData = {
         output: [
           {
@@ -312,7 +313,7 @@ describe('ResponsesProcessor', () => {
     });
 
     it('should redact invalid output item warning logs', async () => {
-      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => logger as any);
       const mockData = {
         output: [
           'secret-invalid-output-item-sentinel',
@@ -386,7 +387,7 @@ describe('ResponsesProcessor', () => {
         functionCallbackHandler: mockFunctionCallbackHandler,
         costCalculator: mockCostCalculator,
       });
-      const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+      const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => logger as any);
       const mockData = {
         id: 'resp_research_logs',
         model: 'o3-deep-research',
