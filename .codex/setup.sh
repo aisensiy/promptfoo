@@ -11,6 +11,7 @@ NEXT_PORT_FILE="${PORT_STATE_DIR}/next-port"
 PORT_LOCK_DIR="${PORT_STATE_DIR}/port-lock"
 PORT_LOCK_PID_FILE="${PORT_LOCK_DIR}/pid"
 PORT_LOCK_CREATED_AT_FILE="${PORT_LOCK_DIR}/created_at"
+PORT_LOCK_PROCESS_STARTED_AT_FILE="${PORT_LOCK_DIR}/process_started_at"
 
 ROOT_NVMRC="${WORKTREE_ROOT}/.nvmrc"
 PORT_BLOCK_SIZE=10
@@ -240,6 +241,7 @@ EOF
 write_port_lock_metadata() {
   printf '%s\n' "$$" >"${PORT_LOCK_PID_FILE}"
   date +%s >"${PORT_LOCK_CREATED_AT_FILE}"
+  ps -p "$$" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' >"${PORT_LOCK_PROCESS_STARTED_AT_FILE}" || true
 }
 
 port_lock_age_seconds() {
@@ -268,10 +270,26 @@ port_lock_is_stale() {
   if [[ -f "${PORT_LOCK_PID_FILE}" ]]; then
     local lock_pid
     lock_pid="$(trim_file "${PORT_LOCK_PID_FILE}")"
-    # PID alive and lock is young — not stale
-    if [[ "${lock_pid}" =~ ^[0-9]+$ ]] && kill -0 "${lock_pid}" 2>/dev/null &&
-      ((age < PORT_LOCK_STALE_SECONDS)); then
-      return 1
+    if [[ "${lock_pid}" =~ ^[0-9]+$ ]] && kill -0 "${lock_pid}" 2>/dev/null; then
+      local expected_started_at actual_started_at
+      expected_started_at=''
+      actual_started_at=''
+
+      if [[ -f "${PORT_LOCK_PROCESS_STARTED_AT_FILE}" ]]; then
+        expected_started_at="$(trim_file "${PORT_LOCK_PROCESS_STARTED_AT_FILE}")"
+      fi
+      actual_started_at="$(ps -p "${lock_pid}" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)"
+
+      # Preserve the live process that created the lock, even if the allocation is slow.
+      if [[ -n "${expected_started_at}" && "${actual_started_at}" == "${expected_started_at}" ]]; then
+        return 1
+      fi
+
+      # If process start-time metadata is unavailable, give a young live lock time to finish.
+      if [[ -z "${expected_started_at}" || -z "${actual_started_at}" ]] &&
+        ((age < PORT_LOCK_STALE_SECONDS)); then
+        return 1
+      fi
     fi
     return 0
   fi
@@ -308,7 +326,7 @@ acquire_port_lock() {
 }
 
 release_port_lock() {
-  rm -f "${PORT_LOCK_PID_FILE}" "${PORT_LOCK_CREATED_AT_FILE}" 2>/dev/null || true
+  rm -f "${PORT_LOCK_PID_FILE}" "${PORT_LOCK_CREATED_AT_FILE}" "${PORT_LOCK_PROCESS_STARTED_AT_FILE}" 2>/dev/null || true
   rmdir "${PORT_LOCK_DIR}" 2>/dev/null || true
 }
 
@@ -376,7 +394,7 @@ copy_env_files() {
 
   while IFS= read -r -d '' source_env; do
     local rel_path dest_path
-    rel_path="${source_env#${SOURCE_REPO_ROOT}/}"
+    rel_path="${source_env#"${SOURCE_REPO_ROOT}"/}"
     dest_path="${WORKTREE_ROOT}/${rel_path}"
 
     if [[ "${source_env}" == "${dest_path}" ]]; then
