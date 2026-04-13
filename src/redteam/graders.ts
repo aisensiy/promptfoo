@@ -6,6 +6,7 @@ import { BeavertailsGrader } from './plugins/beavertails';
 import { BflaGrader } from './plugins/bfla';
 import { BiasGrader } from './plugins/bias';
 import { BolaGrader } from './plugins/bola';
+import { createCodingAgentGraders } from './plugins/codingAgent/graders';
 import { CompetitorsGrader } from './plugins/competitors';
 import { CoppaGrader } from './plugins/compliance/coppa';
 import { FerpaGrader } from './plugins/compliance/ferpa';
@@ -68,6 +69,9 @@ import { InsurancePhiDisclosurePluginGrader } from './plugins/insurance/phiDiscl
 import { IntentGrader } from './plugins/intent';
 import { MCPPluginGrader } from './plugins/mcp';
 import { MedicalAnchoringBiasPluginGrader } from './plugins/medical/medicalAnchoringBias';
+import { MedicalFdaAiDisclosurePluginGrader } from './plugins/medical/medicalFdaAiDisclosure';
+import { MedicalFdaCyberAccessControlPluginGrader } from './plugins/medical/medicalFdaCyberAccessControl';
+import { MedicalFdaCyberAuditTamperingPluginGrader } from './plugins/medical/medicalFdaCyberAuditTampering';
 import { MedicalHallucinationPluginGrader } from './plugins/medical/medicalHallucination';
 import { MedicalIncorrectKnowledgePluginGrader } from './plugins/medical/medicalIncorrectKnowledge';
 import { MedicalOffLabelUsePluginGrader } from './plugins/medical/medicalOffLabelUse';
@@ -212,6 +216,11 @@ export const GRADERS: Record<RedteamAssertionTypes, RedteamGraderBase> = {
   'promptfoo:redteam:mcp': new MCPPluginGrader(),
   'promptfoo:redteam:model-identification': new ModelIdentificationGrader(),
   'promptfoo:redteam:medical:anchoring-bias': new MedicalAnchoringBiasPluginGrader(),
+  'promptfoo:redteam:medical:fda:ai-disclosure': new MedicalFdaAiDisclosurePluginGrader(),
+  'promptfoo:redteam:medical:fda:cyber-access-control':
+    new MedicalFdaCyberAccessControlPluginGrader(),
+  'promptfoo:redteam:medical:fda:cyber-audit-tampering':
+    new MedicalFdaCyberAuditTamperingPluginGrader(),
   'promptfoo:redteam:medical:hallucination': new MedicalHallucinationPluginGrader(),
   'promptfoo:redteam:medical:incorrect-knowledge': new MedicalIncorrectKnowledgePluginGrader(),
   'promptfoo:redteam:medical:off-label-use': new MedicalOffLabelUsePluginGrader(),
@@ -283,6 +292,7 @@ export const GRADERS: Record<RedteamAssertionTypes, RedteamGraderBase> = {
   'promptfoo:redteam:vlguard': new VLGuardGrader(),
   'promptfoo:redteam:vlsu': new VLSUGrader(),
   'promptfoo:redteam:wordplay': new WordplayGrader(),
+  ...createCodingAgentGraders(),
 };
 
 export function getGraderById(id: string): RedteamGraderBase | undefined {
