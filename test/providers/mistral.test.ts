@@ -415,6 +415,37 @@ describe('Mistral', () => {
       }
     });
 
+    it('should deduplicate in-flight chat requests without using raw fetch cache keys', async () => {
+      const mockResponse = {
+        choices: [{ message: { content: 'Shared output' } }],
+        usage: { total_tokens: 10, prompt_tokens: 5, completion_tokens: 5 },
+      };
+      let resolveFetch: (value: any) => void;
+      vi.mocked(fetchWithCache).mockReturnValueOnce(
+        new Promise<any>((resolve) => {
+          resolveFetch = resolve;
+        }) as ReturnType<typeof fetchWithCache>,
+      );
+
+      const first = provider.callApi('Concurrent sensitive prompt');
+      const second = provider.callApi('Concurrent sensitive prompt');
+
+      await Promise.resolve();
+      expect(fetchWithCache).toHaveBeenCalledTimes(1);
+
+      resolveFetch!({
+        data: mockResponse,
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      await expect(Promise.all([first, second])).resolves.toEqual([
+        expect.objectContaining({ output: 'Shared output' }),
+        expect.objectContaining({ output: 'Shared output' }),
+      ]);
+    });
+
     it('should avoid logging prompts and generated outputs in debug metadata', async () => {
       vi.mocked(fetchWithCache).mockResolvedValueOnce({
         data: {
@@ -657,11 +688,14 @@ describe('Mistral', () => {
           method: 'POST',
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
+            'x-promptfoo-silent': 'true',
             Authorization: expect.stringContaining('Bearer '),
           }),
           body: expect.stringContaining('"input":"Test text"'),
         }),
         expect.any(Number),
+        'json',
+        true,
       );
 
       expect(result).toEqual({
@@ -708,6 +742,8 @@ describe('Mistral', () => {
         expect.stringContaining('/embeddings'),
         expect.any(Object),
         expect.any(Number),
+        'json',
+        true,
       );
     });
 
@@ -743,7 +779,111 @@ describe('Mistral', () => {
         expect.stringContaining('/embeddings'),
         expect.any(Object),
         expect.any(Number),
+        'json',
+        true,
       );
+    });
+
+    it('should hash embedding cache keys and avoid logging inputs or embeddings', async () => {
+      const cacheGet = vi.fn().mockResolvedValue(null);
+      const cacheSet = vi.fn();
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(getCache).mockReturnValue({
+        get: cacheGet,
+        set: cacheSet,
+        wrap: vi.fn(),
+        del: vi.fn(),
+        clear: vi.fn(),
+        stores: [
+          {
+            get: vi.fn(),
+            set: vi.fn(),
+          },
+        ] as any,
+        mget: vi.fn(),
+        mset: vi.fn(),
+        mdel: vi.fn(),
+        reset: vi.fn(),
+        ttl: vi.fn(),
+        on: vi.fn(),
+        removeAllListeners: vi.fn(),
+      } as any);
+      const mockResponse = {
+        model: 'mistral-embed',
+        data: [{ embedding: [0.1, 0.2, 0.3] }],
+        usage: { total_tokens: 5, prompt_tokens: 5 },
+      };
+      vi.mocked(fetchWithCache).mockResolvedValue({
+        data: mockResponse,
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      await provider.callEmbeddingApi('Sensitive embedding input sk-mistral-secret');
+
+      const cacheKey = cacheGet.mock.calls[0]?.[0] as string;
+      expect(cacheKey).toMatch(/^mistral:embedding:mistral-embed:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKey).not.toContain('Sensitive embedding input');
+      expect(cacheKey).not.toContain('sk-mistral-secret');
+      expect(cacheSet).toHaveBeenCalledWith(cacheKey, mockResponse);
+      expect(vi.mocked(fetchWithCache).mock.calls[0][1]).toEqual(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'x-promptfoo-silent': 'true',
+          }),
+        }),
+      );
+
+      const debugLogs = JSON.stringify(vi.mocked(logger.debug).mock.calls);
+      expect(debugLogs).not.toContain('Sensitive embedding input');
+      expect(debugLogs).not.toContain('sk-mistral-secret');
+      expect(debugLogs).not.toContain('[0.1,0.2,0.3]');
+    });
+
+    it('should return cached embeddings from hashed provider cache keys', async () => {
+      const cacheGet = vi.fn().mockResolvedValue({
+        model: 'mistral-embed',
+        data: [{ embedding: [0.1, 0.2, 0.3] }],
+        usage: { total_tokens: 5, prompt_tokens: 5 },
+      });
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(getCache).mockReturnValue({
+        get: cacheGet,
+        set: vi.fn(),
+        wrap: vi.fn(),
+        del: vi.fn(),
+        clear: vi.fn(),
+        stores: [
+          {
+            get: vi.fn(),
+            set: vi.fn(),
+          },
+        ] as any,
+        mget: vi.fn(),
+        mset: vi.fn(),
+        mdel: vi.fn(),
+        reset: vi.fn(),
+        ttl: vi.fn(),
+        on: vi.fn(),
+        removeAllListeners: vi.fn(),
+      } as any);
+
+      const result = await provider.callEmbeddingApi('Cached sensitive input');
+
+      expect(fetchWithCache).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        embedding: [0.1, 0.2, 0.3],
+        tokenUsage: {
+          total: 5,
+          cached: 5,
+          completion: 0,
+          numRequests: 1,
+        },
+        cost: expect.closeTo(0.0000005, 0.0000001),
+      });
+      const cacheKey = cacheGet.mock.calls[0]?.[0] as string;
+      expect(cacheKey).not.toContain('Cached sensitive input');
     });
 
     it('should handle API errors', async () => {
@@ -781,6 +921,8 @@ describe('Mistral', () => {
         'https://custom.mistral.ai/v1/embeddings',
         expect.any(Object),
         expect.any(Number),
+        'json',
+        true,
       );
     });
   });
