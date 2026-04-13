@@ -1,11 +1,10 @@
-import { matchesGEval } from '../matchers/llmGrading';
+import { isGraderFailure, matchesGEval } from '../matchers/llmGrading';
 import invariant from '../util/invariant';
+import { accumulateTokenUsage, createEmptyTokenUsage } from '../util/tokenUsageUtils';
 
 import type { AssertionParams, GradingResult } from '../types/index';
 
 type MatcherResponse = Awaited<ReturnType<typeof matchesGEval>>;
-
-const isGEvalGraderFailure = (resp: MatcherResponse): boolean => resp.metadata?.gEvalError === true;
 
 export const handleGEval = async ({
   assertion,
@@ -33,43 +32,54 @@ export const handleGEval = async ({
       };
     }
 
+    // Evaluate criteria serially so we can short-circuit on the first grader
+    // failure — a grader transport/parse failure is propagated verbatim without
+    // inversion, and continuing to spend grader calls on the remaining criteria
+    // would be wasted API cost.
     const responses: MatcherResponse[] = [];
-    for (const value of renderedValue) {
-      responses.push(
-        await matchesGEval(
-          value,
-          prompt || '',
-          outputString,
-          threshold,
-          test.options,
-          providerCallContext,
-        ),
+    let failure: { index: number; resp: MatcherResponse } | undefined;
+    for (const [index, value] of renderedValue.entries()) {
+      const resp = await matchesGEval(
+        value,
+        prompt || '',
+        outputString,
+        threshold,
+        test.options,
+        providerCallContext,
       );
+      responses.push(resp);
+      if (isGraderFailure(resp)) {
+        failure = { index, resp };
+        break;
+      }
     }
 
-    // If any sub-evaluation is a grader failure, propagate it verbatim without
-    // inversion — a transport/parse failure is not evidence that the criterion
-    // was or was not met, and must not be flipped to a pass under not-g-eval.
-    const firstFailure = responses.find(isGEvalGraderFailure);
-    if (firstFailure) {
+    const tokensUsed = createEmptyTokenUsage();
+    for (const r of responses) {
+      accumulateTokenUsage(tokensUsed, r.tokensUsed);
+    }
+
+    if (failure) {
+      const criterion = renderedValue[failure.index];
       return {
         assertion,
         pass: false,
         score: 0,
-        reason: firstFailure.reason,
-        tokensUsed: firstFailure.tokensUsed,
+        reason: `G-Eval criterion ${failure.index + 1}/${renderedValue.length} (${JSON.stringify(criterion)}) failed: ${failure.resp.reason}`,
+        tokensUsed,
       };
     }
 
     const averageScore = responses.reduce((acc, r) => acc + r.score, 0) / responses.length;
     const combinedReason = responses.map((r) => r.reason).join('\n\n');
-    const passed = averageScore >= threshold !== !!inverse;
+    const passed = averageScore >= threshold !== inverse;
 
     return {
       assertion,
       pass: passed,
       score: inverse ? 1 - averageScore : averageScore,
       reason: combinedReason,
+      tokensUsed,
     };
   }
 
@@ -82,7 +92,7 @@ export const handleGEval = async ({
     providerCallContext,
   );
 
-  if (isGEvalGraderFailure(resp)) {
+  if (isGraderFailure(resp)) {
     return {
       assertion,
       pass: false,
@@ -92,7 +102,7 @@ export const handleGEval = async ({
     };
   }
 
-  const passed = resp.score >= threshold !== !!inverse;
+  const passed = resp.score >= threshold !== inverse;
 
   return {
     assertion,

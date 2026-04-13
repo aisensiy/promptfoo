@@ -30,7 +30,6 @@ import type {
   GradingConfig,
   GradingResult,
   ProviderResponse,
-  TokenUsage,
   VarValue,
 } from '../types/index';
 
@@ -365,6 +364,16 @@ export async function matchesClosedQa(
   }
 }
 
+/**
+ * Type guard: is this a grader transport/parse failure from a `matches*`
+ * helper that uses `metadata.graderError` to mark hard failures? Callers that
+ * support inverse semantics (e.g. `not-g-eval`) must propagate such results
+ * verbatim without flipping pass/score — a grader error is not evidence that
+ * the criterion was or was not met.
+ */
+export const isGraderFailure = (resp: Omit<GradingResult, 'assertion'>): boolean =>
+  resp.metadata?.graderError === true;
+
 export async function matchesGEval(
   criteria: string,
   input: string,
@@ -387,15 +396,11 @@ export async function matchesGEval(
 
   const tokensUsed = normalizeMatcherTokenUsage(undefined);
 
-  // Tag grader failures so handleGEval can propagate them without applying
-  // inverse semantics — a grader transport/parse failure is not "the criterion
-  // was not met" and should not flip to a pass under not-g-eval.
-  const gEvalFail = (
-    reason: string,
-    usage: Partial<TokenUsage> | undefined = tokensUsed,
-  ): Omit<GradingResult, 'assertion'> => ({
-    ...fail(reason, usage),
-    metadata: { gEvalError: true },
+  // Tag grader failures with metadata.graderError so handleGEval can propagate
+  // them without applying inverse semantics.
+  const graderFail = (reason: string): Omit<GradingResult, 'assertion'> => ({
+    ...fail(reason, tokensUsed),
+    metadata: { graderError: true },
   });
 
   // Step 1: Get evaluation steps using renderLlmRubricPrompt
@@ -417,13 +422,13 @@ export async function matchesGEval(
   );
   accumulateTokenUsage(tokensUsed, respSteps.tokenUsage);
   if (respSteps.error) {
-    return gEvalFail(respSteps.error);
+    return graderFail(respSteps.error);
   }
   if (!respSteps.output) {
-    return gEvalFail('No output');
+    return graderFail('No output');
   }
   if (typeof respSteps.output !== 'string') {
-    return gEvalFail('LLM-proposed evaluation steps response is not a string');
+    return graderFail('LLM-proposed evaluation steps response is not a string');
   }
   let steps;
 
@@ -431,15 +436,17 @@ export async function matchesGEval(
     // NOTE: use regexp for reliable, because sometimes LLM wraps response to markdown format ```json...```
     const stepsMatch = respSteps.output.match(/\{"steps".+\}/g);
     if (!stepsMatch) {
-      return gEvalFail(`LLM-proposed evaluation steps are not in JSON format: ${respSteps.output}`);
+      return graderFail(
+        `LLM-proposed evaluation steps are not in JSON format: ${respSteps.output}`,
+      );
     }
     steps = JSON.parse(stepsMatch[0]).steps;
 
     if (!steps.length) {
-      return gEvalFail('LLM does not propose any evaluation step');
+      return graderFail('LLM does not propose any evaluation step');
     }
   } catch (err) {
-    return gEvalFail(
+    return graderFail(
       `LLM-proposed evaluation steps are not in JSON format: ${(err as Error).message}\n\n${respSteps.output}`,
     );
   }
@@ -468,31 +475,33 @@ export async function matchesGEval(
   );
   accumulateTokenUsage(tokensUsed, resp.tokenUsage);
   if (resp.error) {
-    return gEvalFail(resp.error);
+    return graderFail(resp.error);
   }
   if (!resp.output) {
-    return gEvalFail('No output');
+    return graderFail('No output');
   }
   if (typeof resp.output !== 'string') {
-    return gEvalFail('LLM-proposed evaluation result response is not a string');
+    return graderFail('LLM-proposed evaluation result response is not a string');
   }
   let result;
 
   try {
     const resultMatch = resp.output.match(/\{.+\}/g);
     if (!resultMatch) {
-      return gEvalFail(`LLM-proposed evaluation result is not in JSON format: ${resp.output}`);
+      return graderFail(`LLM-proposed evaluation result is not in JSON format: ${resp.output}`);
     }
     result = JSON.parse(resultMatch[0]);
   } catch (err) {
-    return gEvalFail(
+    return graderFail(
       `LLM-proposed evaluation result is not in JSON format: ${(err as Error).message}\n\n${resp.output}`,
     );
   }
 
   const rawScore = typeof result.score === 'number' ? result.score : Number(result.score);
   if (!Number.isFinite(rawScore)) {
-    return gEvalFail(`G-Eval result has invalid or missing score: ${JSON.stringify(result.score)}`);
+    return graderFail(
+      `G-Eval result has invalid or missing score: ${JSON.stringify(result.score)}`,
+    );
   }
 
   return {
