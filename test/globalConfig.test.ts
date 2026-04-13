@@ -67,8 +67,8 @@ describe('Global Config', () => {
           'utf-8',
         );
         expect(result).toEqual(mockConfig);
-        expect(fs.chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
         expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('promptfoo.yaml'), 0o600);
+        expect(fs.chmodSync).not.toHaveBeenCalledWith(expect.any(String), 0o700);
       });
 
       it('should handle empty config file by returning config with generated ID', () => {
@@ -124,8 +124,8 @@ describe('Global Config', () => {
           expect.any(String),
           { mode: 0o600 },
         );
-        expect(fs.chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
         expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('promptfoo.yaml'), 0o600);
+        expect(fs.chmodSync).not.toHaveBeenCalledWith(expect.any(String), 0o700);
         expect(result).toEqual({ id: expect.any(String) });
         expect(result.id).toBeDefined();
         expect(typeof result.id).toBe('string');
@@ -144,6 +144,10 @@ describe('Global Config', () => {
   });
 
   describe('writeGlobalConfig', () => {
+    beforeEach(() => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+    });
+
     it('should write config to file in YAML format', () => {
       globalConfig.writeGlobalConfig({
         ...mockConfig,
@@ -154,8 +158,21 @@ describe('Global Config', () => {
         expect.stringContaining('account:'),
         { mode: 0o600 },
       );
-      expect(fs.chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
       expect(fs.chmodSync).toHaveBeenCalledWith(expect.stringContaining('promptfoo.yaml'), 0o600);
+      expect(fs.chmodSync).not.toHaveBeenCalledWith(expect.any(String), 0o700);
+    });
+
+    it('should create missing config directories with private permissions', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      globalConfig.writeGlobalConfig({
+        ...mockConfig,
+      });
+
+      expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), {
+        recursive: true,
+        mode: 0o700,
+      });
     });
 
     it('should tighten existing config file permissions before rewriting', () => {

@@ -27,9 +27,16 @@ function writeGlobalConfigFile(configFilePath: string, config: GlobalConfig): vo
   chmodBestEffort(configFilePath, GLOBAL_CONFIG_FILE_MODE);
 }
 
+function ensureGlobalConfigDirectory(): string {
+  const configDir = getConfigDirectoryPath();
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true, mode: GLOBAL_CONFIG_DIR_MODE });
+  }
+  return configDir;
+}
+
 export function writeGlobalConfig(config: GlobalConfig): void {
-  const configDir = getConfigDirectoryPath(true) /* createIfNotExists */;
-  chmodBestEffort(configDir, GLOBAL_CONFIG_DIR_MODE);
+  const configDir = ensureGlobalConfigDirectory();
   writeGlobalConfigFile(path.join(configDir, 'promptfoo.yaml'), config);
 }
 
@@ -38,7 +45,6 @@ export function readGlobalConfig(): GlobalConfig {
   const configFilePath = path.join(configDir, 'promptfoo.yaml');
   let globalConfig: GlobalConfig = { id: crypto.randomUUID() };
   if (fs.existsSync(configFilePath)) {
-    chmodBestEffort(configDir, GLOBAL_CONFIG_DIR_MODE);
     chmodBestEffort(configFilePath, GLOBAL_CONFIG_FILE_MODE);
     globalConfig = (yaml.load(fs.readFileSync(configFilePath, 'utf-8')) as GlobalConfig) || {};
     if (!globalConfig?.id) {
@@ -49,7 +55,6 @@ export function readGlobalConfig(): GlobalConfig {
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true, mode: GLOBAL_CONFIG_DIR_MODE });
     }
-    chmodBestEffort(configDir, GLOBAL_CONFIG_DIR_MODE);
     writeGlobalConfigFile(configFilePath, globalConfig);
   }
 
