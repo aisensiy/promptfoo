@@ -31,6 +31,20 @@ function indexRows<TData>(rows: TData[] = []) {
   return new Map(rows.map((row, index) => [index, row]));
 }
 
+function indexedRowsEqual<TData>(indexedRows: Map<number, TData>, rows: TData[] = []) {
+  if (indexedRows.size !== rows.length) {
+    return false;
+  }
+
+  for (let index = 0; index < rows.length; index += 1) {
+    if (indexedRows.get(index) !== rows[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function useServerVirtualizedRows<TData>({
   initialRows = [],
   rowCount,
@@ -68,7 +82,7 @@ export function useServerVirtualizedRows<TData>({
   }, [resetKey]);
 
   React.useLayoutEffect(() => {
-    setRowsByIndex(indexRows(initialRows));
+    setRowsByIndex((prev) => (indexedRowsEqual(prev, initialRows) ? prev : indexRows(initialRows)));
   }, [initialRows]);
 
   const loadRows = React.useCallback(

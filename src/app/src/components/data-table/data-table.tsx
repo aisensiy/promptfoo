@@ -258,6 +258,8 @@ export function DataTable<TData, TValue = unknown>({
     rowDisplayMode,
     serverVirtualization != null,
   );
+  const showColumnFilterControls = showFilter && (!isServerVirtualized || manualFiltering);
+  const showGlobalFilterControl = !isServerVirtualized;
 
   React.useEffect(() => {
     if (isInvalidServerVirtualizationConfig) {
@@ -886,7 +888,8 @@ export function DataTable<TData, TValue = unknown>({
               globalFilter={globalFilter}
               setGlobalFilter={setGlobalFilter}
               showColumnToggle={showColumnToggle}
-              showFilter={showFilter}
+              showFilter={showColumnFilterControls}
+              showGlobalFilter={showGlobalFilterControl}
               showExport={showExport}
               onExportCSV={onExportCSV}
               onExportJSON={onExportJSON}
@@ -914,7 +917,7 @@ export function DataTable<TData, TValue = unknown>({
                   className="border-b border-zinc-200 dark:border-zinc-800 print:border-gray-300"
                 >
                   {headerGroup.headers.map((header) =>
-                    renderDataTableHeaderCell(header, showFilter),
+                    renderDataTableHeaderCell(header, showColumnFilterControls),
                   )}
                 </tr>
               ))}
