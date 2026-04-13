@@ -563,6 +563,54 @@ describe('WatsonXProvider', () => {
       expect(bearerKeyB).not.toContain(bearerTokenB);
     });
 
+    it('should keep cache keys stable across provider instances with the same credentials', async () => {
+      const mockedWatsonXAIClient: Partial<any> = {
+        generateText: vi.fn().mockResolvedValue({
+          result: {
+            model_id: 'ibm/test-model',
+            model_version: '1.0.0',
+            created_at: '2023-10-10T00:00:00Z',
+            results: [
+              {
+                generated_text: 'Stable credential response',
+                generated_token_count: 1,
+                input_token_count: 1,
+                stop_reason: 'max_tokens',
+              },
+            ],
+          },
+        }),
+      };
+      vi.mocked(WatsonXAI.newInstance).mockImplementation(function () {
+        return mockedWatsonXAIClient as any;
+      });
+
+      const cache: Partial<any> = {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn(),
+      };
+
+      vi.mocked(getCache).mockImplementation(function () {
+        return cache as any;
+      });
+      vi.mocked(isCacheEnabled).mockImplementation(function () {
+        return true;
+      });
+
+      const sharedApiKey = 'watsonx-shared-stable-api-key';
+      await new WatsonXProvider(modelName, {
+        config: { ...config, apiKey: sharedApiKey },
+      }).callApi(prompt);
+      await new WatsonXProvider(modelName, {
+        config: { ...config, apiKey: sharedApiKey },
+      }).callApi(prompt);
+
+      const firstCacheKey = vi.mocked(cache.set).mock.calls[0][0] as string;
+      const secondCacheKey = vi.mocked(cache.set).mock.calls[1][0] as string;
+      expect(firstCacheKey).toEqual(secondCacheKey);
+      expect(firstCacheKey).not.toContain(sharedApiKey);
+    });
+
     it('should keep the cache auth hash tied to the memoized client credentials', async () => {
       const mockedWatsonXAIClient: Partial<any> = {
         generateText: vi.fn().mockResolvedValue({

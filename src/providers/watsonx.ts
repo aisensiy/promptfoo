@@ -207,16 +207,18 @@ type WatsonXAuthSelection =
   | { type: 'bearertoken'; bearerToken: string; forcedByAuthType: boolean }
   | { type: 'none' };
 
-function createWatsonXAuthCacheHash(authMetadata: {
-  type: WatsonXAuthSelection['type'];
-  forcedByAuthType?: boolean;
-  hasCredential: boolean;
-}): string {
+function createWatsonXAuthCacheHash(authSelection: WatsonXAuthSelection): string {
+  if (authSelection.type === 'none') {
+    return hashWatsonXCacheValue({ type: 'none' });
+  }
+
+  const credential =
+    authSelection.type === 'iam' ? authSelection.apiKey : authSelection.bearerToken;
+
   return hashWatsonXCacheValue({
-    ...authMetadata,
-    credentialNamespace: authMetadata.hasCredential
-      ? crypto.randomBytes(32).toString('hex')
-      : undefined,
+    type: authSelection.type,
+    forcedByAuthType: authSelection.forcedByAuthType,
+    credentialFingerprint: hashWatsonXCacheValue([authSelection.type, credential]),
   });
 }
 
@@ -388,12 +390,7 @@ export class WatsonXProvider implements ApiProvider {
 
     const authSelection = this.getAuthSelection();
     if (!this.client) {
-      this.authCacheHash = createWatsonXAuthCacheHash({
-        type: authSelection.type,
-        forcedByAuthType:
-          authSelection.type === 'none' ? undefined : authSelection.forcedByAuthType,
-        hasCredential: authSelection.type !== 'none',
-      });
+      this.authCacheHash = createWatsonXAuthCacheHash(authSelection);
     }
 
     if (authSelection.type === 'iam' && authSelection.forcedByAuthType) {
