@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID } from 'crypto';
 
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../envars';
@@ -62,7 +62,14 @@ interface ReplicatePrediction {
 }
 
 const REPLICATE_CACHE_KEY_HMAC_KEY = 'promptfoo:replicate:cache-key:v1';
-const REPLICATE_SECRET_FIELD_NAMES = new Set(['apiKey']);
+const REPLICATE_CACHE_KEY_OMITTED_FIELD_NAMES = new Set([
+  'apiKey',
+  'filters',
+  'getCache',
+  'logger',
+  'originalProvider',
+]);
+const REPLICATE_AUTH_CACHE_NAMESPACES = new Map<string, string>();
 
 function hashReplicateCacheValue(value: unknown) {
   return createHmac('sha256', REPLICATE_CACHE_KEY_HMAC_KEY)
@@ -70,13 +77,13 @@ function hashReplicateCacheValue(value: unknown) {
     .digest('hex');
 }
 
-function omitReplicateSecretFields(value: unknown, seen = new WeakSet<object>()): unknown {
+function omitReplicateCacheKeyFields(value: unknown, seen = new WeakSet<object>()): unknown {
   if (Array.isArray(value)) {
     if (seen.has(value)) {
       return '[Circular]';
     }
     seen.add(value);
-    return value.map((item) => omitReplicateSecretFields(item, seen));
+    return value.map((item) => omitReplicateCacheKeyFields(item, seen));
   }
   if (!value || typeof value !== 'object') {
     return value;
@@ -87,15 +94,22 @@ function omitReplicateSecretFields(value: unknown, seen = new WeakSet<object>())
   seen.add(value);
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => !REPLICATE_SECRET_FIELD_NAMES.has(key))
-      .map(([key, fieldValue]) => [key, omitReplicateSecretFields(fieldValue, seen)]),
+      .filter(([key]) => !REPLICATE_CACHE_KEY_OMITTED_FIELD_NAMES.has(key))
+      .map(([key, fieldValue]) => [key, omitReplicateCacheKeyFields(fieldValue, seen)]),
   );
 }
 
-function getReplicateAuthCacheHash(apiKey: string | undefined) {
-  return apiKey
-    ? createHmac('sha256', REPLICATE_CACHE_KEY_HMAC_KEY).update(apiKey).digest('hex')
-    : hashReplicateCacheValue({ hasApiKey: false });
+function getReplicateAuthCacheNamespace(apiKey: string | undefined) {
+  if (!apiKey) {
+    return 'no-api-key';
+  }
+
+  let namespace = REPLICATE_AUTH_CACHE_NAMESPACES.get(apiKey);
+  if (!namespace) {
+    namespace = randomUUID();
+    REPLICATE_AUTH_CACHE_NAMESPACES.set(apiKey, namespace);
+  }
+  return namespace;
 }
 
 function getReplicateValueSummary(prefix: string, value: unknown): Record<string, unknown> {
@@ -195,7 +209,7 @@ export class ReplicateProvider implements ApiProvider {
     let cacheKey;
     if (isCacheEnabled()) {
       cache = await getCache();
-      cacheKey = `replicate:${this.modelName}:${getReplicateAuthCacheHash(this.apiKey)}:${hashReplicateCacheValue(
+      cacheKey = `replicate:${this.modelName}:${getReplicateAuthCacheNamespace(this.apiKey)}:${hashReplicateCacheValue(
         {
           config: this.config,
           prompt,
@@ -454,10 +468,10 @@ export class ReplicateImageProvider extends ReplicateProvider {
     }
 
     const cache = getCache();
-    const cacheKey = `replicate:image:${this.modelName}:${getReplicateAuthCacheHash(this.apiKey)}:${hashReplicateCacheValue(
+    const cacheKey = `replicate:image:${this.modelName}:${getReplicateAuthCacheNamespace(this.apiKey)}:${hashReplicateCacheValue(
       {
         config: this.config,
-        context: omitReplicateSecretFields(context),
+        context: omitReplicateCacheKeyFields(context),
         prompt,
       },
     )}`;

@@ -330,7 +330,7 @@ describe('ReplicateProvider', () => {
     expect(result.output).toBe('test response');
     expect(mockCache.set).toHaveBeenCalledTimes(1);
     const cacheKey = mockCache.set.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKey).toMatch(/^replicate:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain(mockApiKey);
     expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
@@ -382,8 +382,8 @@ describe('ReplicateProvider', () => {
 
     const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
     const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
-    expect(cacheKeyA).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
-    expect(cacheKeyB).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKeyA).toMatch(/^replicate:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
+    expect(cacheKeyB).toMatch(/^replicate:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
     expect(cacheKeyA).not.toBe(cacheKeyB);
     expect(mockedFetchWithCache).toHaveBeenCalledTimes(2);
     for (const cacheKey of [cacheKeyA, cacheKeyB]) {
@@ -705,7 +705,7 @@ describe('ReplicateImageProvider', () => {
 
     expect(result.cached).toBe(false);
     const cacheKey = mockCache.set.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^replicate:image:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKey).toMatch(/^replicate:image:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain('PFQA_REPLICATE_IMAGE_CONFIG_SENTINEL');
     expect(cacheKey).not.toContain(mockApiKey);
@@ -737,6 +737,9 @@ describe('ReplicateImageProvider', () => {
     });
     const context: any = {
       vars: { apiKey: 'PFQA_REPLICATE_CONTEXT_API_KEY_SECRET' },
+      filters: { uppercase: () => 'SECRET_FILTER_RESULT' },
+      getCache: vi.fn(),
+      logger: { debug: vi.fn(), secret: 'PFQA_REPLICATE_LOGGER_SECRET' },
     };
     context.self = context;
     context.originalProvider = provider;
@@ -746,8 +749,9 @@ describe('ReplicateImageProvider', () => {
     ).resolves.toEqual(expect.objectContaining({ cached: false }));
 
     const cacheKey = mockCache.set.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^replicate:image:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKey).toMatch(/^replicate:image:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain('PFQA_REPLICATE_CONTEXT_API_KEY_SECRET');
     expect(cacheKey).not.toContain('PFQA_REPLICATE_CIRCULAR_CONTEXT_PROMPT');
+    expect(cacheKey).not.toContain('PFQA_REPLICATE_LOGGER_SECRET');
   });
 });
