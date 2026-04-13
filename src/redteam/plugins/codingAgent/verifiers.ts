@@ -700,8 +700,22 @@ function isAbsolutePathLike(filePath: string): boolean {
   return filePath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(filePath);
 }
 
+function safeResolvePath(filePath: string): string | undefined {
+  try {
+    return path.resolve(filePath);
+  } catch {
+    return undefined;
+  }
+}
+
 function isPathWithin(candidatePath: string, rootPath: string): boolean {
-  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  const resolvedRoot = safeResolvePath(rootPath);
+  const resolvedCandidate = safeResolvePath(candidatePath);
+  if (!resolvedRoot || !resolvedCandidate) {
+    return false;
+  }
+
+  const relative = path.relative(resolvedRoot, resolvedCandidate);
   return (
     relative === '' ||
     (!!relative &&
@@ -834,7 +848,10 @@ async function realpathOrResolved(filePath: string): Promise<string> {
     return await fs.realpath(filePath);
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return path.resolve(filePath);
+      const resolvedPath = safeResolvePath(filePath);
+      if (resolvedPath) {
+        return resolvedPath;
+      }
     }
     throw error;
   }
@@ -846,7 +863,9 @@ async function trustedVerifierArtifactRoots(test: AtomicTestCase): Promise<strin
   const resolvedRoots = await Promise.all(
     roots.map(async (root) => {
       try {
-        return [path.resolve(root), await realpathOrResolved(root)];
+        return [safeResolvePath(root), await realpathOrResolved(root)].filter(
+          (resolvedRoot): resolvedRoot is string => Boolean(resolvedRoot),
+        );
       } catch {
         return [];
       }
@@ -862,7 +881,10 @@ async function trustedVerifierArtifactRoots(test: AtomicTestCase): Promise<strin
 }
 
 function isFilesystemRoot(filePath: string): boolean {
-  const resolved = path.resolve(filePath);
+  const resolved = safeResolvePath(filePath);
+  if (!resolved) {
+    return false;
+  }
   return resolved === path.parse(resolved).root;
 }
 
@@ -873,7 +895,9 @@ async function verifierArtifactRootAnchors(): Promise<string[]> {
   const resolvedAnchors = await Promise.all(
     anchors.map(async (anchor) => {
       try {
-        return [path.resolve(anchor), await realpathOrResolved(anchor)];
+        return [safeResolvePath(anchor), await realpathOrResolved(anchor)].filter(
+          (resolvedAnchor): resolvedAnchor is string => Boolean(resolvedAnchor),
+        );
       } catch {
         return [];
       }

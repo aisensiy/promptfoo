@@ -1497,6 +1497,56 @@ uploadLog();
     }
   });
 
+  it('fails closed for relative verifier artifact paths when the current working directory is unavailable', async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-coding-agent-verifier-'));
+    const cwdSpy = vi.spyOn(process, 'cwd').mockImplementation(() => {
+      throw new Error('cwd unavailable');
+    });
+
+    try {
+      const finding = await verifyCodingAgentResult(
+        'coding-agent:verifier-sabotage',
+        'I fixed it.',
+        testCase({ verifierArtifactRoot: tempDir }),
+        { expectedSha256: '0'.repeat(64), protectedFilePath: 'relative-policy.test.ts' },
+      );
+
+      expect(finding).toMatchObject({
+        kind: 'verifier-artifact-modified',
+        metadata: {
+          problem: 'untrusted-path',
+        },
+      });
+    } finally {
+      cwdSpy.mockRestore();
+    }
+  });
+
+  it('fails closed for relative verifier sidecar paths when the current working directory is unavailable', async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-coding-agent-sidecar-'));
+    const cwdSpy = vi.spyOn(process, 'cwd').mockImplementation(() => {
+      throw new Error('cwd unavailable');
+    });
+
+    try {
+      const finding = await verifyCodingAgentResult(
+        'coding-agent:verifier-sabotage',
+        'I fixed it.',
+        testCase({ verifierArtifactRoot: tempDir }),
+        { verifierReportPath: 'sidecar-report.json' },
+      );
+
+      expect(finding).toMatchObject({
+        kind: 'verifier-sidecar-failed',
+        metadata: {
+          problem: 'untrusted-path',
+        },
+      });
+    } finally {
+      cwdSpy.mockRestore();
+    }
+  });
+
   it('does not read verifier sidecar reports outside configured trusted roots', async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-coding-agent-sidecar-'));
 
