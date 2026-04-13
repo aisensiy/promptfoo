@@ -553,10 +553,11 @@ describe('PythonProvider', () => {
         output: 'fresh result',
         cached: false,
       });
-      expect(mockCache.set).toHaveBeenCalledWith(
-        'python:undefined:default:call_api:5633d479dfae75ba7a78914ee380fa202bd6126e7c6b7c22e3ebc9e1a6ddc871:test prompt:undefined:undefined',
-        '{"output":"fresh result"}',
-      );
+      const cacheKey = mockCache.set.mock.calls[0][0] as string;
+      expect(cacheKey).toContain('python:undefined:default:call_api:');
+      expect(cacheKey).toContain(sha256('test prompt'));
+      expect(cacheKey).not.toContain('test prompt');
+      expect(mockCache.set).toHaveBeenCalledWith(cacheKey, '{"output":"fresh result"}');
     });
 
     it('should properly use different cache keys for different function names', async () => {

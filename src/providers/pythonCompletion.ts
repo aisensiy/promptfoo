@@ -9,7 +9,6 @@ import { PythonWorkerPool } from '../python/workerPool';
 import { sha256 } from '../util/createHash';
 import { processConfigFileReferences } from '../util/fileReference';
 import { parsePathOrGlob } from '../util/index';
-import { safeJsonStringify } from '../util/json';
 import { providerRegistry } from './providerRegistry';
 import { sanitizeScriptContext } from './scriptContext';
 
@@ -113,8 +112,8 @@ function hasPythonResultError(result: any): boolean {
 function validateCallApiResult(functionName: string, result: any): void {
   // Log result structure for debugging
   const resultType = result === null ? 'null' : typeof result;
-  const resultKeys = result && typeof result === 'object' ? Object.keys(result).join(',') : 'none';
-  logger.debug(`Python provider result structure: ${resultType}, keys: ${resultKeys}`);
+  const resultKeyCount = result && typeof result === 'object' ? Object.keys(result).length : 0;
+  logger.debug('Python provider result structure', { resultType, resultKeyCount });
   if (hasPythonResultProperty(result, 'output')) {
     logger.debug(
       `Python provider output type: ${typeof result.output}, isArray: ${Array.isArray(result.output)}`,
@@ -348,9 +347,11 @@ export class PythonProvider implements ApiProvider {
       logger.debug(`Returning cached ${apiType} result for script ${absPath}`);
       const parsedResult = JSON.parse(cachedResult as string);
 
-      logger.debug(
-        `PythonProvider parsed cached result type: ${typeof parsedResult}, keys: ${Object.keys(parsedResult).join(',')}`,
-      );
+      logger.debug('PythonProvider parsed cached result', {
+        resultType: typeof parsedResult,
+        resultKeyCount:
+          parsedResult && typeof parsedResult === 'object' ? Object.keys(parsedResult).length : 0,
+      });
 
       // IMPORTANT: Set cached flag to true so evaluator recognizes this as cached
       return applyCachedCallApiMetadata(apiType, parsedResult);
@@ -374,9 +375,12 @@ export class PythonProvider implements ApiProvider {
         sanitizedContext,
       );
 
-      logger.debug(
-        `Executing python script ${absPath} via worker pool with args: ${safeJsonStringify(args)}`,
-      );
+      logger.debug('Executing python script via worker pool', {
+        scriptPath: absPath,
+        apiType,
+        argCount: args.length,
+        hasContext: Boolean(sanitizedContext),
+      });
 
       const functionName = this.functionName || apiType;
       // Use worker pool instead of runPython

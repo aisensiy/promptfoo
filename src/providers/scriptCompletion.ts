@@ -83,7 +83,7 @@ export class ScriptCompletionProvider implements ApiProvider {
       cachedResult = await cache.get(cacheKey);
 
       if (cachedResult) {
-        logger.debug(`Returning cached result for script ${this.scriptPath}: ${cachedResult}`);
+        logger.debug('Returning cached result for script', { scriptPath: this.scriptPath });
         return { ...JSON.parse(cachedResult as string), cached: true };
       }
     } else if (fileHashes.length === 0 && isCacheEnabled()) {
@@ -110,20 +110,29 @@ export class ScriptCompletionProvider implements ApiProvider {
 
       execFile(command, scriptArgs, options, async (error, stdout, stderr) => {
         if (error) {
-          logger.debug(`Error running script ${this.scriptPath}: ${error.message}`);
+          logger.debug('Error running script', {
+            scriptPath: this.scriptPath,
+            hasErrorMessage: Boolean(error.message),
+          });
           reject(error);
           return;
         }
         const standardOutput = stripText(Buffer.from(stdout).toString('utf8').trim());
         const errorOutput = stripText(Buffer.from(stderr).toString('utf8').trim());
         if (errorOutput) {
-          logger.debug(`Error output from script ${this.scriptPath}: ${errorOutput}`);
+          logger.debug('Script produced stderr output', {
+            scriptPath: this.scriptPath,
+            stderrLength: errorOutput.length,
+          });
           if (!standardOutput) {
             reject(new Error(errorOutput));
             return;
           }
         }
-        logger.debug(`Output from script ${this.scriptPath}: ${standardOutput}`);
+        logger.debug('Script produced stdout output', {
+          scriptPath: this.scriptPath,
+          stdoutLength: standardOutput.length,
+        });
         const result = { output: standardOutput };
         if (fileHashes.length > 0 && isCacheEnabled()) {
           const cache = await getCache();

@@ -103,8 +103,8 @@ function hasRubyResultError(result: any): boolean {
 function validateRubyCallApiResult(functionName: string, result: any): void {
   // Log result structure for debugging
   const resultType = result === null ? 'null' : typeof result;
-  const resultKeys = result && typeof result === 'object' ? Object.keys(result).join(',') : 'none';
-  logger.debug(`Ruby provider result structure: ${resultType}, keys: ${resultKeys}`);
+  const resultKeyCount = result && typeof result === 'object' ? Object.keys(result).length : 0;
+  logger.debug('Ruby provider result structure', { resultType, resultKeyCount });
   if (hasRubyResultProperty(result, 'output')) {
     logger.debug(
       `Ruby provider output type: ${typeof result.output}, isArray: ${Array.isArray(result.output)}`,
@@ -267,9 +267,11 @@ export class RubyProvider implements ApiProvider {
       logger.debug(`Returning cached ${apiType} result for script ${absPath}`);
       const parsedResult = JSON.parse(cachedResult as string);
 
-      logger.debug(
-        `RubyProvider parsed cached result type: ${typeof parsedResult}, keys: ${Object.keys(parsedResult).join(',')}`,
-      );
+      logger.debug('RubyProvider parsed cached result', {
+        resultType: typeof parsedResult,
+        resultKeyCount:
+          parsedResult && typeof parsedResult === 'object' ? Object.keys(parsedResult).length : 0,
+      });
 
       // IMPORTANT: Set cached flag to true so evaluator recognizes this as cached
       return applyCachedRubyCallApiMetadata(apiType, parsedResult);
@@ -293,9 +295,13 @@ export class RubyProvider implements ApiProvider {
         sanitizedContext,
       );
 
-      logger.debug(
-        `Running ruby script ${absPath} with scriptPath ${this.scriptPath} and args: ${safeJsonStringify(args)}`,
-      );
+      logger.debug('Running ruby script', {
+        scriptPath: absPath,
+        providerPath: this.scriptPath,
+        apiType,
+        argCount: args.length,
+        hasContext: Boolean(sanitizedContext),
+      });
 
       const functionName = this.functionName || apiType;
       const result = await runRuby(absPath, functionName, args, {

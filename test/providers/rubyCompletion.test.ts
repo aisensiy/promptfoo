@@ -525,12 +525,11 @@ describe('RubyProvider', () => {
         output: 'fresh result',
         cached: false,
       });
-      expect(mockCache.set).toHaveBeenCalledWith(
-        expect.stringMatching(
-          /^ruby:script\.rb:default:call_api:[a-f0-9]{64}:test prompt:undefined:undefined$/,
-        ),
-        '{"output":"fresh result"}',
-      );
+      const cacheKey = mockCache.set.mock.calls[0][0] as string;
+      expect(cacheKey).toMatch(/^ruby:script\.rb:default:call_api:[a-f0-9]{64}:/);
+      expect(cacheKey).toContain(sha256('test prompt'));
+      expect(cacheKey).not.toContain('test prompt');
+      expect(mockCache.set).toHaveBeenCalledWith(cacheKey, '{"output":"fresh result"}');
     });
 
     it('should properly use different cache keys for different function names', async () => {

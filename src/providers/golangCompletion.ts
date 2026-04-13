@@ -98,9 +98,13 @@ export class GolangProvider implements ApiProvider {
 
       const args =
         apiType === 'call_api' ? [prompt, this.options, context] : [prompt, this.options];
-      logger.debug(
-        `Running Golang script ${absPath} with scriptPath ${this.scriptPath} and args: ${safeJsonStringify(args)}`,
-      );
+      logger.debug('Running Golang script', {
+        scriptPath: absPath,
+        providerPath: this.scriptPath,
+        apiType,
+        argCount: args.length,
+        hasContext: Boolean(context),
+      });
       const functionName = this.functionName || apiType;
 
       let tempDir: string | undefined;
@@ -155,9 +159,9 @@ export class GolangProvider implements ApiProvider {
           jsonArgs,
         ]);
         if (stderr) {
-          logger.error(`Golang script stderr: ${stderr}`);
+          logger.error('Golang script stderr output', { stderrLength: String(stderr).length });
         }
-        logger.debug(`Golang script stdout: ${stdout}`);
+        logger.debug('Golang script stdout output', { stdoutLength: String(stdout).length });
 
         const result = JSON.parse(stdout);
 
@@ -166,8 +170,9 @@ export class GolangProvider implements ApiProvider {
         }
         return result;
       } catch (error) {
-        logger.error(`Error running Golang script: ${(error as Error).message}`);
-        logger.error(`Full error object: ${JSON.stringify(error)}`);
+        logger.error('Error running Golang script', {
+          hasErrorMessage: Boolean((error as Error).message),
+        });
         throw new Error(`Error running Golang script: ${(error as Error).message}`);
       } finally {
         // Clean up temporary directory

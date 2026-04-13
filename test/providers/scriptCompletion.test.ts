@@ -2,8 +2,9 @@ import { execFile } from 'child_process';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as cacheModule from '../../src/cache';
+import logger from '../../src/logger';
 import {
   getFileHashes,
   parseScriptParts,
@@ -11,13 +12,10 @@ import {
 } from '../../src/providers/scriptCompletion';
 import type { MockedFunction } from 'vitest';
 
-function sha256(value: string) {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0').repeat(8);
+let createActualHash: typeof crypto.createHash;
+
+function realSha256(value: string) {
+  return createActualHash('sha256').update(value).digest('hex');
 }
 
 vi.mock('child_process', async (importOriginal) => {
@@ -34,6 +32,16 @@ vi.mock('../../src/cache', async () => {
     isCacheEnabled: vi.fn(),
   };
 });
+
+vi.mock('../../src/logger', () => ({
+  default: {
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
+
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
   const existsSync = vi.fn();
@@ -62,6 +70,11 @@ let existsSyncMock: MockedFunction<typeof fs.existsSync>;
 let statSyncMock: MockedFunction<typeof fs.statSync>;
 let readFileSyncMock: MockedFunction<typeof fs.readFileSync>;
 let createHashMock: MockedFunction<typeof crypto.createHash>;
+
+beforeAll(async () => {
+  const actualCrypto = await vi.importActual<typeof import('crypto')>('crypto');
+  createActualHash = actualCrypto.createHash;
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -217,7 +230,7 @@ describe('ScriptCompletionProvider', () => {
   });
 
   it('should use cache when available', async () => {
-    const cachedResult = { output: 'cached result' };
+    const cachedResult = { output: 'cached sk-test-cached-output-secret result' };
     const options = { config: { basePath: '/base', apiKey: 'sk-test-script-secret' } } as any;
     const provider = new ScriptCompletionProvider('node script.js', options);
     const context = { vars: { promptSecret: 'sk-test-context-secret' } } as any;
@@ -240,16 +253,16 @@ describe('ScriptCompletionProvider', () => {
           value += Buffer.isBuffer(input) ? input.toString('utf8') : String(input);
           return mockHash;
         }),
-        digest: vi.fn(() => sha256(value)),
+        digest: vi.fn(() => realSha256(value)),
       } as unknown as crypto.Hash;
       return mockHash;
     });
 
     const result = await provider.callApi('test prompt', context);
-    const fileHash = sha256('file content');
-    const expectedCacheKey = `exec:node script.js:${fileHash}:${fileHash}:${sha256('test prompt')}:${sha256(
+    const fileHash = realSha256('file content');
+    const expectedCacheKey = `exec:node script.js:${fileHash}:${fileHash}:${realSha256('test prompt')}:${realSha256(
       JSON.stringify(options) ?? 'undefined',
-    )}:${sha256(JSON.stringify(context.vars) ?? 'undefined')}`;
+    )}:${realSha256(JSON.stringify(context.vars) ?? 'undefined')}`;
 
     expect(result.cached).toBe(true);
     expect(result).toEqual({ ...cachedResult, cached: true });
@@ -257,6 +270,11 @@ describe('ScriptCompletionProvider', () => {
     expect(expectedCacheKey).not.toContain('test prompt');
     expect(expectedCacheKey).not.toContain('sk-test-script-secret');
     expect(expectedCacheKey).not.toContain('sk-test-context-secret');
+    const debugLogs = vi.mocked(logger.debug).mock.calls.map((call) => JSON.stringify(call));
+    expect(debugLogs.join('\n')).not.toContain('sk-test-cached-output-secret');
+    expect(logger.debug).toHaveBeenCalledWith('Returning cached result for script', {
+      scriptPath: 'node script.js',
+    });
     expect(execFile).not.toHaveBeenCalled();
   });
 
@@ -282,7 +300,7 @@ describe('ScriptCompletionProvider', () => {
           value += Buffer.isBuffer(input) ? input.toString('utf8') : String(input);
           return mockHash;
         }),
-        digest: vi.fn(() => sha256(value)),
+        digest: vi.fn(() => realSha256(value)),
       } as unknown as crypto.Hash;
       return mockHash;
     });
@@ -295,10 +313,10 @@ describe('ScriptCompletionProvider', () => {
     });
 
     const result = await provider.callApi('test prompt', context);
-    const fileHash = sha256('file content');
-    const expectedCacheKey = `exec:node script.js:${fileHash}:${fileHash}:${sha256('test prompt')}:${sha256(
+    const fileHash = realSha256('file content');
+    const expectedCacheKey = `exec:node script.js:${fileHash}:${fileHash}:${realSha256('test prompt')}:${realSha256(
       JSON.stringify(options) ?? 'undefined',
-    )}:${sha256(JSON.stringify(context.vars) ?? 'undefined')}`;
+    )}:${realSha256(JSON.stringify(context.vars) ?? 'undefined')}`;
 
     expect(result.output).toBe('fresh result');
     expect(mockCache.set).toHaveBeenCalledWith(
@@ -329,7 +347,7 @@ describe('ScriptCompletionProvider', () => {
           value += Buffer.isBuffer(input) ? input.toString('utf8') : String(input);
           return mockHash;
         }),
-        digest: vi.fn(() => sha256(value)),
+        digest: vi.fn(() => realSha256(value)),
       } as unknown as crypto.Hash;
       return mockHash;
     });
