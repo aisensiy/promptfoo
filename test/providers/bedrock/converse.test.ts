@@ -32,6 +32,27 @@ interface MockConverseCommandOutput {
 }
 
 const mockSend = vi.hoisted(() => vi.fn<any>());
+const ORIGINAL_HTTP_PROXY = process.env.HTTP_PROXY;
+const ORIGINAL_HTTPS_PROXY = process.env.HTTPS_PROXY;
+
+function clearProxyEnv() {
+  delete process.env.HTTP_PROXY;
+  delete process.env.HTTPS_PROXY;
+}
+
+function restoreProxyEnv() {
+  if (ORIGINAL_HTTP_PROXY === undefined) {
+    delete process.env.HTTP_PROXY;
+  } else {
+    process.env.HTTP_PROXY = ORIGINAL_HTTP_PROXY;
+  }
+  if (ORIGINAL_HTTPS_PROXY === undefined) {
+    delete process.env.HTTPS_PROXY;
+  } else {
+    process.env.HTTPS_PROXY = ORIGINAL_HTTPS_PROXY;
+  }
+}
+
 vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
   return {
     ...(await importOriginal()),
@@ -168,13 +189,13 @@ describe('AwsBedrockConverseProvider', () => {
     delete process.env.AWS_BEDROCK_TEMPERATURE;
     delete process.env.AWS_BEDROCK_TOP_P;
     delete process.env.AWS_BEDROCK_STOP;
-    delete process.env.HTTP_PROXY;
-    delete process.env.HTTPS_PROXY;
+    clearProxyEnv();
   });
 
   afterEach(() => {
     // Ensure mock is reset after each test to prevent pollution
     mockSend.mockReset();
+    restoreProxyEnv();
   });
 
   describe('constructor', () => {
@@ -2120,13 +2141,13 @@ describe('Model coverage parity', () => {
     beforeEach(() => {
       // Only reset mockSend, not all mocks (which would break the mock implementations)
       mockSend.mockReset();
-      delete process.env.HTTP_PROXY;
-      delete process.env.HTTPS_PROXY;
+      clearProxyEnv();
     });
 
     afterEach(() => {
       // Ensure mock is reset after each test to prevent pollution
       mockSend.mockReset();
+      restoreProxyEnv();
     });
 
     it('should create provider with correct ID', () => {

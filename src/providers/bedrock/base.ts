@@ -5,7 +5,7 @@
  * This is extracted to avoid circular dependency issues.
  */
 
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 
 import { getEnvInt, getEnvString } from '../../envars';
 import logger from '../../logger';
@@ -30,59 +30,56 @@ export interface BedrockOptions {
   endpoint?: string;
 }
 
-const BEDROCK_CREDENTIAL_FIELD_NAMES = new Set([
-  'accessKeyId',
-  'apiKey',
-  'secretAccessKey',
-  'sessionToken',
-]);
+const BEDROCK_CACHE_KEY_HMAC_KEY = 'promptfoo:bedrock:cache-key:v1';
 
 function hashBedrockCacheValue(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  return createHmac('sha256', BEDROCK_CACHE_KEY_HMAC_KEY)
+    .update(JSON.stringify(value) ?? '')
+    .digest('hex');
 }
 
-function omitBedrockCredentialFields(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(omitBedrockCredentialFields);
-  }
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => !BEDROCK_CREDENTIAL_FIELD_NAMES.has(key))
-      .map(([key, fieldValue]) => [key, omitBedrockCredentialFields(fieldValue)]),
-  );
+function getNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function hasBedrockOption(config: BedrockOptions, key: keyof BedrockOptions): boolean {
-  return Object.prototype.hasOwnProperty.call(config, key);
+function hashBedrockSecret(value: string) {
+  return createHmac('sha256', BEDROCK_CACHE_KEY_HMAC_KEY).update(value).digest('hex');
 }
 
 function createBedrockAuthCacheMetadata({ config }: { config: BedrockOptions }) {
-  const hasBearerConfig = hasBedrockOption(config, 'apiKey');
-  const hasBearerEnv = Object.prototype.hasOwnProperty.call(
-    process.env,
-    'AWS_BEARER_TOKEN_BEDROCK',
-  );
-  const hasExplicitCredentials =
-    hasBedrockOption(config, 'accessKeyId') && hasBedrockOption(config, 'secretAccessKey');
-  const authSource = hasBearerConfig
+  const bearerConfig = getNonEmptyString(config.apiKey);
+  const bearerEnv = getNonEmptyString(process.env.AWS_BEARER_TOKEN_BEDROCK);
+  const accessKeyId = getNonEmptyString(config.accessKeyId);
+  const secretAccessKey = getNonEmptyString(config.secretAccessKey);
+  const sessionToken = getNonEmptyString(config.sessionToken);
+  const profile = getNonEmptyString(config.profile);
+  const hasExplicitCredentials = Boolean(accessKeyId && secretAccessKey);
+  const authSource = bearerConfig
     ? 'bearer-config'
-    : hasBearerEnv
+    : bearerEnv
       ? 'bearer-env'
       : hasExplicitCredentials
         ? 'explicit-credentials'
-        : hasBedrockOption(config, 'profile')
+        : profile
           ? 'profile'
           : 'default';
+  const credentialFingerprint =
+    authSource === 'bearer-config'
+      ? hashBedrockSecret(bearerConfig!)
+      : authSource === 'bearer-env'
+        ? hashBedrockSecret(bearerEnv!)
+        : authSource === 'explicit-credentials'
+          ? hashBedrockCacheValue({ accessKeyId, secretAccessKey, sessionToken })
+          : authSource === 'profile'
+            ? hashBedrockSecret(profile!)
+            : undefined;
 
   return {
     authSource,
+    credentialFingerprint,
     endpoint: config.endpoint,
     hasExplicitCredentials,
-    hasSessionToken: hasExplicitCredentials && hasBedrockOption(config, 'sessionToken'),
-    profile: authSource === 'profile' ? config.profile : undefined,
+    hasSessionToken: hasExplicitCredentials && Boolean(sessionToken),
   };
 }
 
@@ -98,7 +95,7 @@ export function createBedrockCacheKeyHash({
   const authFingerprint = hashBedrockCacheValue(createBedrockAuthCacheMetadata({ config }));
 
   return `${authFingerprint}:${hashBedrockCacheValue({
-    params: omitBedrockCredentialFields(params),
+    params,
     region,
   })}`;
 }

@@ -3168,9 +3168,9 @@ describe('AwsBedrockCompletionProvider', () => {
     expect(mockCache.get).toHaveBeenCalledTimes(1);
 
     const cacheKey = mockCache.get.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(
-      new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}:[a-f0-9]{64}$`),
-    );
+    const cacheKeyPrefix = `bedrock:${modelName}:us-east-1:`;
+    expect(cacheKey.startsWith(cacheKeyPrefix)).toBe(true);
+    expect(cacheKey.slice(cacheKeyPrefix.length)).toMatch(/^[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain(apiKey);
     expect(cacheKey).not.toContain(otherApiKey);
@@ -3185,9 +3185,9 @@ describe('AwsBedrockCompletionProvider', () => {
     await otherProvider.callApi(prompt);
 
     const otherCacheKey = mockCache.get.mock.calls[1][0] as string;
-    expect(otherCacheKey).toMatch(
-      new RegExp(`^bedrock:${modelName}:us-east-1:[a-f0-9]{64}:[a-f0-9]{64}$`),
-    );
+    expect(otherCacheKey.startsWith(cacheKeyPrefix)).toBe(true);
+    expect(otherCacheKey.slice(cacheKeyPrefix.length)).toMatch(/^[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(otherCacheKey).not.toBe(cacheKey);
     expect(otherCacheKey).not.toContain(prompt);
     expect(otherCacheKey).not.toContain(apiKey);
     expect(otherCacheKey).not.toContain(otherApiKey);
@@ -3253,6 +3253,86 @@ describe('AwsBedrockCompletionProvider', () => {
       expect(cacheKey).not.toContain('promptfoo-profile');
       expect(cacheKey).not.toContain('bedrock-runtime');
     }
+  });
+
+  it('should ignore undefined auth config values in cache auth metadata', () => {
+    const originalBearerToken = process.env.AWS_BEARER_TOKEN_BEDROCK;
+    delete process.env.AWS_BEARER_TOKEN_BEDROCK;
+
+    try {
+      const params = { prompt: 'PFQA_BEDROCK_PROMPT_SENTINEL' };
+      const region = 'us-east-1';
+      const baseConfig = {
+        region,
+      } as BedrockClaudeMessagesCompletionOptions;
+
+      const defaultCacheKey = createBedrockCacheKeyHash({ config: baseConfig, params, region });
+      const undefinedBearerCacheKey = createBedrockCacheKeyHash({
+        config: {
+          ...baseConfig,
+          apiKey: undefined,
+        } as BedrockClaudeMessagesCompletionOptions,
+        params,
+        region,
+      });
+      const incompleteExplicitCacheKey = createBedrockCacheKeyHash({
+        config: {
+          ...baseConfig,
+          accessKeyId: 'PFQA_BEDROCK_ACCESS_KEY_ONLY',
+          secretAccessKey: undefined,
+        } as BedrockClaudeMessagesCompletionOptions,
+        params,
+        region,
+      });
+
+      expect(undefinedBearerCacheKey).toBe(defaultCacheKey);
+      expect(incompleteExplicitCacheKey).toBe(defaultCacheKey);
+    } finally {
+      if (originalBearerToken === undefined) {
+        delete process.env.AWS_BEARER_TOKEN_BEDROCK;
+      } else {
+        process.env.AWS_BEARER_TOKEN_BEDROCK = originalBearerToken;
+      }
+    }
+  });
+
+  it('should preserve non-auth request fields named like credentials in request hashes', () => {
+    const region = 'us-east-1';
+    const config = {
+      region,
+      apiKey: 'PFQA_BEDROCK_AUTH_SECRET',
+    } as BedrockClaudeMessagesCompletionOptions;
+
+    const requestA = createBedrockCacheKeyHash({
+      config,
+      params: {
+        prompt: 'Shared prompt',
+        additionalModelRequestFields: {
+          toolSchema: {
+            apiKey: 'request-visible-api-key-a',
+          },
+        },
+      },
+      region,
+    });
+    const requestB = createBedrockCacheKeyHash({
+      config,
+      params: {
+        prompt: 'Shared prompt',
+        additionalModelRequestFields: {
+          toolSchema: {
+            apiKey: 'request-visible-api-key-b',
+          },
+        },
+      },
+      region,
+    });
+
+    expect(requestA).not.toBe(requestB);
+    expect(requestA).toMatch(/^[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(requestB).toMatch(/^[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(requestA).not.toContain('request-visible-api-key-a');
+    expect(requestB).not.toContain('request-visible-api-key-b');
   });
 });
 
