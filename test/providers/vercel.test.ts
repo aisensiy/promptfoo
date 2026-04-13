@@ -537,6 +537,35 @@ describe('VercelAiProvider', () => {
       expect(firstKey).not.toContain('PFQA_VERCEL_ENV_API_KEY');
     });
 
+    it('should separate cache keys for custom env var API key values without leaking them', async () => {
+      const { generateText } = await import('ai');
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(generateText).mockResolvedValue({
+        text: 'Fresh response',
+        usage: { promptTokens: 10, completionTokens: 20 },
+        finishReason: 'stop',
+      } as any);
+
+      const firstProvider = new VercelAiProvider('openai/gpt-4o-mini', {
+        config: { apiKeyEnvar: 'PFQA_VERCEL_CUSTOM_KEY' },
+        env: { PFQA_VERCEL_CUSTOM_KEY: 'PFQA_VERCEL_CUSTOM_KEY_A' } as any,
+      });
+      const secondProvider = new VercelAiProvider('openai/gpt-4o-mini', {
+        config: { apiKeyEnvar: 'PFQA_VERCEL_CUSTOM_KEY' },
+        env: { PFQA_VERCEL_CUSTOM_KEY: 'PFQA_VERCEL_CUSTOM_KEY_B' } as any,
+      });
+
+      await firstProvider.callApi('PFQA_VERCEL_PROMPT_SENTINEL');
+      await secondProvider.callApi('PFQA_VERCEL_PROMPT_SENTINEL');
+
+      const firstKey = mockCache.get.mock.calls[0][0] as string;
+      const secondKey = mockCache.get.mock.calls[1][0] as string;
+
+      expect(firstKey).not.toBe(secondKey);
+      expect(firstKey).not.toContain('PFQA_VERCEL_CUSTOM_KEY_A');
+      expect(secondKey).not.toContain('PFQA_VERCEL_CUSTOM_KEY_B');
+    });
+
     it('should not cache error responses', async () => {
       const { generateText } = await import('ai');
       vi.mocked(isCacheEnabled).mockReturnValue(true);
