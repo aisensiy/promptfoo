@@ -411,7 +411,7 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
           body: JSON.stringify(body),
         },
         REQUEST_TIMEOUT_MS,
-        'json',
+        'text',
         context?.bustCache ?? context?.debug,
       );
 
