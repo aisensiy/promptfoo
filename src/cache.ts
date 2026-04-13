@@ -217,6 +217,8 @@ type PreparedFetchResponse = {
 
 const inflightFetchResponses = new Map<string, Promise<SerializedFetchResponse>>();
 const IGNORED_FETCH_CACHE_OPTION_KEYS = new Set(['method', 'signal']);
+const abortSignalIds = new WeakMap<AbortSignal, number>();
+let nextAbortSignalId = 0;
 
 function getHeadersForCacheKey(url: RequestInfo, options: RequestInit) {
   const headers = new Headers(url instanceof Request ? url.headers : undefined);
@@ -330,6 +332,20 @@ function getFetchCacheKey(
       url: url instanceof Request ? url.url : String(url),
     })}`,
   );
+}
+
+function getAbortSignalId(signal: AbortSignal) {
+  let signalId = abortSignalIds.get(signal);
+  if (signalId === undefined) {
+    signalId = ++nextAbortSignalId;
+    abortSignalIds.set(signal, signalId);
+  }
+  return signalId;
+}
+
+function getInflightFetchCacheKey(cacheKey: string, url: RequestInfo, options: RequestInit) {
+  const signal = options.signal ?? (url instanceof Request ? url.signal : undefined);
+  return signal ? `${cacheKey}:signal:${getAbortSignalId(signal)}` : cacheKey;
 }
 
 function serializeFetchResponse(
@@ -518,7 +534,8 @@ export async function fetchWithCache<T = unknown>(
     return deserializeFetchResponse<T>(cachedResponse, true, cache, cacheKey);
   }
 
-  let inflightResponse = inflightFetchResponses.get(cacheKey);
+  const inflightCacheKey = getInflightFetchCacheKey(cacheKey, url, options);
+  let inflightResponse = inflightFetchResponses.get(inflightCacheKey);
   if (!inflightResponse) {
     inflightResponse = (async () => {
       const preparedResponse = await prepareFetchResponse(
@@ -534,9 +551,9 @@ export async function fetchWithCache<T = unknown>(
       }
       return preparedResponse.response;
     })().finally(() => {
-      inflightFetchResponses.delete(cacheKey);
+      inflightFetchResponses.delete(inflightCacheKey);
     });
-    inflightFetchResponses.set(cacheKey, inflightResponse);
+    inflightFetchResponses.set(inflightCacheKey, inflightResponse);
   }
 
   const response = await inflightResponse;

@@ -597,6 +597,93 @@ describe('fetchWithCache', () => {
       expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
     });
 
+    it('should isolate signaled in-flight failures from unsignaled callers', async () => {
+      const controller = new AbortController();
+      let resolveSignaledStarted: () => void = () => {};
+      const signaledStarted = new Promise<void>((resolve) => {
+        resolveSignaledStarted = resolve;
+      });
+
+      mockFetchWithRetries.mockImplementation((_requestUrl, requestOptions) => {
+        const signal = requestOptions?.signal;
+        if (signal === controller.signal) {
+          resolveSignaledStarted();
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+          });
+        }
+        return Promise.resolve(mockFetchWithRetriesResponse(true, { data: 'unsignaled' }));
+      });
+
+      const signaledPromise = fetchWithCache(url, { signal: controller.signal }, 1000);
+      await signaledStarted;
+      const unsignaledPromise = fetchWithCache(url, {}, 1000);
+
+      controller.abort();
+      const [signaledResult, unsignaledResult] = await Promise.allSettled([
+        signaledPromise,
+        unsignaledPromise,
+      ]);
+
+      expect(signaledResult).toMatchObject({ status: 'rejected' });
+      if (signaledResult.status === 'rejected') {
+        expect(signaledResult.reason.message).toBe('Aborted');
+      }
+      expect(unsignaledResult).toMatchObject({ status: 'fulfilled' });
+      if (unsignaledResult.status === 'fulfilled') {
+        expect(unsignaledResult.value).toMatchObject({
+          cached: false,
+          data: { data: 'unsignaled' },
+        });
+      }
+      expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not let aborted signaled callers join unsignaled in-flight responses', async () => {
+      const controller = new AbortController();
+      let resolveUnsignaledFetch: (value: Response) => void = () => {};
+      const unsignaledFetch = new Promise<Response>((resolve) => {
+        resolveUnsignaledFetch = resolve;
+      });
+
+      mockFetchWithRetries.mockImplementation((_requestUrl, requestOptions) => {
+        const signal = requestOptions?.signal;
+        if (signal === controller.signal) {
+          if (signal.aborted) {
+            return Promise.reject(new Error('Aborted'));
+          }
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+          });
+        }
+        return unsignaledFetch;
+      });
+
+      const unsignaledPromise = fetchWithCache(url, {}, 1000);
+      const signaledPromise = fetchWithCache(url, { signal: controller.signal }, 1000);
+
+      await Promise.resolve();
+      controller.abort();
+      resolveUnsignaledFetch(mockFetchWithRetriesResponse(true, { data: 'unsignaled' }));
+      const [unsignaledResult, signaledResult] = await Promise.allSettled([
+        unsignaledPromise,
+        signaledPromise,
+      ]);
+
+      expect(unsignaledResult).toMatchObject({ status: 'fulfilled' });
+      if (unsignaledResult.status === 'fulfilled') {
+        expect(unsignaledResult.value).toMatchObject({
+          cached: false,
+          data: { data: 'unsignaled' },
+        });
+      }
+      expect(signaledResult).toMatchObject({ status: 'rejected' });
+      if (signaledResult.status === 'rejected') {
+        expect(signaledResult.reason.message).toBe('Aborted');
+      }
+      expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
+    });
+
     it('should handle request options in cache key', async () => {
       const options = { method: 'POST', body: JSON.stringify({ test: true }) };
       const mockResponse = mockFetchWithRetriesResponse(true, response);
@@ -637,6 +724,29 @@ describe('fetchWithCache', () => {
       expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
       expect(firstResult.data).toEqual({ data: 'first audio' });
       expect(secondResult.data).toEqual({ data: 'second audio' });
+      expect(vi.mocked(cache.set)).not.toHaveBeenCalled();
+    });
+
+    it('should not treat null init body as overriding a Request body when caching', async () => {
+      const cache = getCache();
+      mockFetchWithRetries
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'first request body' }))
+        .mockResolvedValueOnce(mockFetchWithRetriesResponse(true, { data: 'second request body' }));
+
+      const firstResult = await fetchWithCache(
+        new Request(url, { method: 'POST', body: 'request-body-one' }),
+        { method: 'POST', body: null },
+        1000,
+      );
+      const secondResult = await fetchWithCache(
+        new Request(url, { method: 'POST', body: 'request-body-two' }),
+        { method: 'POST', body: null },
+        1000,
+      );
+
+      expect(mockFetchWithRetries).toHaveBeenCalledTimes(2);
+      expect(firstResult.data).toEqual({ data: 'first request body' });
+      expect(secondResult.data).toEqual({ data: 'second request body' });
       expect(vi.mocked(cache.set)).not.toHaveBeenCalled();
     });
 
