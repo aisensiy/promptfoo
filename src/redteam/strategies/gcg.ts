@@ -56,16 +56,19 @@ async function generateGcgPrompts(
         responses?: string[];
       }
 
-      const { data } = await fetchWithCache<GCGGenerationResponse>(
+      const { data, status, statusText } = await fetchWithCache<GCGGenerationResponse>(
         getRemoteGenerationUrl(),
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-promptfoo-silent': 'true',
           },
           body: JSON.stringify(payload),
         },
         REQUEST_TIMEOUT_MS,
+        'json',
+        true,
       );
 
       logger.debug('[GCG] Got generation result', {
@@ -75,7 +78,11 @@ async function generateGcgPrompts(
       });
 
       if (data.error) {
-        logger.error(`[GCG] Error in GCG generation for case ${caseNumber}`);
+        logger.error('[GCG] Error in GCG generation', {
+          caseNumber,
+          status,
+          statusText,
+        });
         logger.debug('[GCG] Error response metadata', {
           caseNumber,
           hasError: true,
@@ -109,7 +116,10 @@ async function generateGcgPrompts(
       if (progressBar) {
         progressBar.increment(1);
       } else {
-        logger.debug(`Processed case ${caseNumber} of ${testCases.length}`);
+        logger.debug('[GCG] Processed test case', {
+          caseNumber,
+          totalCases: testCases.length,
+        });
       }
     });
 

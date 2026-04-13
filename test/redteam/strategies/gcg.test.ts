@@ -78,6 +78,7 @@ describe('gcg strategy', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-promptfoo-silent': 'true',
         },
         body: JSON.stringify({
           task: 'gcg',
@@ -86,6 +87,8 @@ describe('gcg strategy', () => {
         }),
       },
       expect.any(Number),
+      'json',
+      true,
     );
   });
 
@@ -158,6 +161,17 @@ describe('gcg strategy', () => {
     );
 
     expect(result[0].vars?.prompt).toBe(generatedResponse);
+    expect(mockFetchWithCache).toHaveBeenCalledWith(
+      'http://test-url',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-promptfoo-silent': 'true',
+        }),
+      }),
+      expect.any(Number),
+      'json',
+      true,
+    );
 
     const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
     expect(logs).not.toContain(originalPrompt);
@@ -179,7 +193,11 @@ describe('gcg strategy', () => {
     const result = await addGcgTestCases(testCases, 'prompt', {});
 
     expect(result).toHaveLength(0);
-    expect(logger.error).toHaveBeenCalledWith('[GCG] Error in GCG generation for case 1');
+    expect(logger.error).toHaveBeenCalledWith('[GCG] Error in GCG generation', {
+      caseNumber: 1,
+      status: 500,
+      statusText: 'Error',
+    });
 
     const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
     expect(logs).not.toContain(remoteError);
@@ -220,6 +238,7 @@ describe('gcg strategy', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-promptfoo-silent': 'true',
         },
         body: JSON.stringify({
           task: 'gcg',
@@ -229,6 +248,8 @@ describe('gcg strategy', () => {
         }),
       },
       expect.any(Number),
+      'json',
+      true,
     );
   });
 
