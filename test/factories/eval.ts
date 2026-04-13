@@ -35,23 +35,24 @@ export function createCompletedPrompt(
   raw = 'Test prompt',
   overrides: Partial<CompletedPrompt> = {},
 ): CompletedPrompt {
+  const prompt = createPrompt(raw, overrides);
   return {
-    ...createPrompt(raw),
+    ...prompt,
     provider: 'test-provider',
     metrics: createPromptMetrics(),
     ...overrides,
+    raw: prompt.raw,
+    label: prompt.label,
   };
 }
 
 export function createEvaluateResult(overrides: Partial<EvaluateResult> = {}): EvaluateResult {
-  const prompt = createPrompt();
+  const prompt = overrides.prompt ?? createPrompt();
   return {
     promptIdx: 0,
     testIdx: 0,
     testCase: createAtomicTestCase(),
-    promptId: prompt.raw,
     provider: { id: 'test-provider' },
-    prompt,
     vars: {},
     response: createProviderResponse(),
     failureReason: ResultFailureReason.NONE,
@@ -63,6 +64,8 @@ export function createEvaluateResult(overrides: Partial<EvaluateResult> = {}): E
     cost: 0,
     tokenUsage: createRequiredTokenUsage(),
     ...overrides,
+    prompt,
+    promptId: overrides.promptId ?? prompt.raw,
   };
 }
 

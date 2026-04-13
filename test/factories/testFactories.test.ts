@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createCompletedPrompt, createEvaluateResult } from './eval';
 import { createFailingGradingResult, createPassingGradingResult } from './gradingResult';
 import { createRequiredTokenUsage } from './provider';
 import { createPrompt } from './testSuite';
@@ -15,6 +16,39 @@ describe('test factories', () => {
     ).toMatchObject({
       raw: 'overridden prompt',
       label: 'custom label',
+    });
+  });
+
+  it('keeps completed prompt labels aligned with overridden raw values', () => {
+    expect(createCompletedPrompt('base prompt', { raw: 'overridden prompt' })).toMatchObject({
+      raw: 'overridden prompt',
+      label: 'overridden prompt',
+    });
+
+    expect(
+      createCompletedPrompt('base prompt', { raw: 'overridden prompt', label: 'custom label' }),
+    ).toMatchObject({
+      raw: 'overridden prompt',
+      label: 'custom label',
+    });
+  });
+
+  it('uses the effective prompt raw value as the default evaluate result prompt id', () => {
+    expect(createEvaluateResult({ prompt: createPrompt('overridden prompt') })).toMatchObject({
+      prompt: {
+        raw: 'overridden prompt',
+        label: 'overridden prompt',
+      },
+      promptId: 'overridden prompt',
+    });
+
+    expect(
+      createEvaluateResult({
+        prompt: createPrompt('overridden prompt'),
+        promptId: 'custom prompt id',
+      }),
+    ).toMatchObject({
+      promptId: 'custom prompt id',
     });
   });
 
