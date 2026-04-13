@@ -82,7 +82,13 @@ function hasPathLikeSeparator(value: string): boolean {
 }
 
 function hasFileLikeExtension(value: string): boolean {
-  return /^[^\s{}[\]]+\.[a-z0-9]{1,8}(?::[a-z_$][\w$]*)?$/i.test(value);
+  const pathOrFunctionToken = value.split(':')[0].trim();
+  if (!pathOrFunctionToken || /[\n{}[\]]/.test(pathOrFunctionToken)) {
+    return false;
+  }
+
+  const candidate = pathOrFunctionToken.split(/\s+/).at(-1) ?? '';
+  return isPathLikeSegment(candidate) && /\.[a-z][a-z0-9]{0,7}$/i.test(candidate);
 }
 
 function hasGlobLikeWildcard(value: string): boolean {

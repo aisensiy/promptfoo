@@ -148,6 +148,28 @@ describe('Eval Routes - Sharing behavior', () => {
     expect(mockedEvaluate).not.toHaveBeenCalled();
   });
 
+  it('rejects local prompt file names that contain spaces', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['my prompt.txt'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
+  it('rejects local executable prompt files that contain spaces', async () => {
+    const response = await postJob({
+      ...minimalTestSuite,
+      prompts: ['my script.py:run'],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Server-side prompt sources are disabled');
+    expect(mockedEvaluate).not.toHaveBeenCalled();
+  });
+
   it('rejects executable prompt files from web job creation', async () => {
     const response = await postJob({
       ...minimalTestSuite,
@@ -200,6 +222,7 @@ describe('Eval Routes - Sharing behavior', () => {
         '{"role":"user","content":"hello"}',
         '["hello","world"]',
         'Explain A/B testing and calculate 2 * 2.',
+        'Use version 1.2 in the answer.',
       ],
     });
 
