@@ -1740,7 +1740,10 @@ describe('VertexChatProvider.callPalm2Api', () => {
 
     await provider.callPalm2Api(prompt);
 
-    expectHashedBodyCacheKeys(/^vertex:palm2:[a-f0-9]{64}$/, [prompt, 'palm2-secret-context']);
+    expectHashedBodyCacheKeys(/^vertex:palm2:chat-bison:[a-f0-9]{64}$/, [
+      prompt,
+      'palm2-secret-context',
+    ]);
   });
 });
 

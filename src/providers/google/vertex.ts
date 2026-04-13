@@ -841,7 +841,7 @@ export class VertexChatProvider extends GoogleGenericProvider {
     };
 
     const cache = await getCache();
-    const cacheKey = getVertexBodyCacheKey('vertex:palm2', body);
+    const cacheKey = getVertexBodyCacheKey(`vertex:palm2:${this.modelName}`, body);
 
     let cachedResponse;
     if (isCacheEnabled()) {

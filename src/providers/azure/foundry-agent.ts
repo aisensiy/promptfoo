@@ -480,9 +480,8 @@ export class AzureFoundryAgentProvider extends AzureGenericProvider {
     _callApiOptions?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
     const { body, effectiveConfig } = await this.buildResponsesBody(prompt, context);
-    const cacheKey = `azure_foundry_agent:${this.deploymentName}:${hashFoundryAgentCacheValue(
-      body,
-    )}`;
+    const projectScope = hashFoundryAgentCacheValue(this.projectUrl);
+    const cacheKey = `azure_foundry_agent:${this.deploymentName}:${projectScope}:${hashFoundryAgentCacheValue(body)}`;
 
     if (isCacheEnabled()) {
       try {
