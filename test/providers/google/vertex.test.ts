@@ -1745,6 +1745,30 @@ describe('VertexChatProvider.callPalm2Api', () => {
       'palm2-secret-context',
     ]);
   });
+
+  it('scopes Palm2 request body cache keys by model name', async () => {
+    const prompt = 'same palm2 prompt';
+    const providerA = new VertexChatProvider('chat-bison', {
+      config: { context: 'same palm2 context' },
+    });
+    const providerB = new VertexChatProvider('text-bison', {
+      config: { context: 'same palm2 context' },
+    });
+
+    mockVertexRequest({
+      predictions: [{ candidates: [{ content: 'Palm2 response content' }] }],
+    });
+
+    await providerA.callPalm2Api(prompt);
+    await providerB.callPalm2Api(prompt);
+
+    const [cacheKeyA, cacheKeyB] = mockCacheGet.mock.calls.map(([key]) => key as string);
+    expect(cacheKeyA).toMatch(/^vertex:palm2:chat-bison:[a-f0-9]{64}$/);
+    expect(cacheKeyB).toMatch(/^vertex:palm2:text-bison:[a-f0-9]{64}$/);
+    expect(cacheKeyA).not.toBe(cacheKeyB);
+    expect(cacheKeyA).not.toContain(prompt);
+    expect(cacheKeyB).not.toContain(prompt);
+  });
 });
 
 describe('VertexChatProvider.callLlamaApi', () => {

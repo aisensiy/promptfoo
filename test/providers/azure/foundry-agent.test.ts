@@ -449,6 +449,39 @@ describe('AzureFoundryAgentProvider', () => {
       expect(mockCache.set).toHaveBeenCalledWith(cacheKey, expect.any(Object));
     });
 
+    it('should scope cache keys by project URL', async () => {
+      mockGetAgent.mockResolvedValue(mockAgent);
+      mockResponsesCreate.mockResolvedValue(createMessageResponse('Test response'));
+
+      const mockCache = {
+        get: vi.fn().mockResolvedValue(undefined),
+        set: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.mocked(isCacheEnabled).mockReturnValue(true);
+      vi.mocked(getCache).mockResolvedValue(mockCache as any);
+
+      const prompt = 'same weather prompt';
+      const otherProjectUrl = 'https://test.services.ai.azure.com/api/projects/other-project';
+      const providerA = new AzureFoundryAgentProvider('weather-agent', {
+        config: { projectUrl },
+      });
+      const providerB = new AzureFoundryAgentProvider('weather-agent', {
+        config: { projectUrl: otherProjectUrl },
+      });
+
+      await providerA.callApi(prompt);
+      await providerB.callApi(prompt);
+
+      const [cacheKeyA, cacheKeyB] = mockCache.get.mock.calls.map(([key]) => key as string);
+      expect(cacheKeyA).toMatch(/^azure_foundry_agent:weather-agent:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKeyB).toMatch(/^azure_foundry_agent:weather-agent:[a-f0-9]{64}:[a-f0-9]{64}$/);
+      expect(cacheKeyA).not.toBe(cacheKeyB);
+      expect(cacheKeyA).not.toContain(projectUrl);
+      expect(cacheKeyB).not.toContain(otherProjectUrl);
+      expect(cacheKeyA).not.toContain(prompt);
+      expect(cacheKeyB).not.toContain(prompt);
+    });
+
     it('should not log raw prompts on cache hits', async () => {
       const secret = 'cached-foundry-secret-prompt';
       const mockCache = {
