@@ -63,7 +63,13 @@ function mockFetchResponse(result: any[]): FetchWithCacheResult<unknown> {
 }
 
 function stringifyLoggerCalls(...mocks: ReturnType<typeof vi.fn>[]) {
-  return JSON.stringify(mocks.flatMap((mock) => mock.mock.calls));
+  return JSON.stringify(
+    mocks.flatMap((mock) => mock.mock.calls),
+    (_key, value) =>
+      value instanceof Error
+        ? { ...value, name: value.name, message: value.message, stack: value.stack }
+        : value,
+  );
 }
 
 describe('Plugins', () => {
@@ -494,6 +500,13 @@ describe('Plugins', () => {
 
       const logs = stringifyLoggerCalls(vi.mocked(logger.debug), vi.mocked(logger.error));
       expect(logs).not.toContain('SECRET_REMOTE_THROWN_ERROR');
+    });
+
+    it('should serialize Error objects in logger redaction assertions', () => {
+      const mockLogger = vi.fn();
+      mockLogger(new Error('SECRET_SERIALIZED_ERROR_MESSAGE'));
+
+      expect(stringifyLoggerCalls(mockLogger)).toContain('SECRET_SERIALIZED_ERROR_MESSAGE');
     });
 
     it('should redact successful remote generation logs', async () => {
