@@ -129,14 +129,14 @@ describe('RedteamGoatProvider', () => {
 
     try {
       new RedteamGoatProvider({
-        injectVar: 'goal',
+        injectVar: 'secret-inject-var-sentinel',
         maxTurns: 1,
         inputs: {
           'secret-input-key-sentinel': 'secret input description sentinel',
         },
         _perTurnLayers: [
           {
-            id: 'audio',
+            id: 'secret-layer-id-sentinel',
             config: {
               voice: 'secret-layer-config-sentinel',
             },
@@ -148,8 +148,12 @@ describe('RedteamGoatProvider', () => {
         debugSpy.mock.calls.filter(([message]) => String(message).includes('[GOAT]')),
       );
       expect(goatLogs).toContain('inputKeyCount');
+      expect(goatLogs).toContain('injectVarLength');
+      expect(goatLogs).toContain('perTurnLayerCount');
+      expect(goatLogs).not.toContain('secret-inject-var-sentinel');
       expect(goatLogs).not.toContain('secret-input-key-sentinel');
       expect(goatLogs).not.toContain('secret input description sentinel');
+      expect(goatLogs).not.toContain('secret-layer-id-sentinel');
       expect(goatLogs).not.toContain('secret-layer-config-sentinel');
     } finally {
       debugSpy.mockRestore();

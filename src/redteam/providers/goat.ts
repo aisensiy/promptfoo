@@ -144,6 +144,13 @@ function getMessageSummary(messages: Message[]) {
   };
 }
 
+function getLayerSummary(layers: LayerConfig[]) {
+  return {
+    perTurnLayerCount: layers.length,
+    perTurnLayerObjectCount: layers.filter((layer) => typeof layer !== 'string').length,
+  };
+}
+
 function getRemoteGenerationUrlLogMetadata(remoteGenerationUrl: string) {
   try {
     const url = new URL(remoteGenerationUrl);
@@ -303,12 +310,13 @@ export default class GoatProvider implements ApiProvider {
     this.perTurnLayers = options._perTurnLayers ?? [];
     this.nunjucks = getNunjucksEngine();
     logger.debug('[GOAT] Constructor options', {
-      injectVar: options.injectVar,
+      hasInjectVar: Boolean(options.injectVar),
+      injectVarLength: getStringLength(options.injectVar),
       maxTurns: options.maxTurns,
       maxCharsPerMessage: options.maxCharsPerMessage,
       stateful: options.stateful,
       continueAfterSuccess: options.continueAfterSuccess,
-      perTurnLayers: this.perTurnLayers.map((l) => (typeof l === 'string' ? l : l.id)),
+      ...getLayerSummary(this.perTurnLayers),
       inputKeyCount: getObjectKeyCount(options.inputs) ?? 0,
     });
   }
@@ -631,7 +639,7 @@ export default class GoatProvider implements ApiProvider {
         if (this.perTurnLayers.length > 0) {
           logger.debug('[GOAT] Applying per-turn transforms', {
             turn,
-            layers: this.perTurnLayers.map((l) => (typeof l === 'string' ? l : l.id)),
+            ...getLayerSummary(this.perTurnLayers),
           });
           // Transform the actual message content, not the full targetPrompt (which may be JSON)
           // This ensures we convert just the text to audio, not the JSON structure
