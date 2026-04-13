@@ -707,7 +707,7 @@ export async function materializeInputValueWithMetadata(
     !context.provider
   ) {
     const shouldIncludeMetadata =
-      (normalizedInput.type === 'pdf' || normalizedInput.type === 'image') &&
+      normalizedInput.type !== 'text' &&
       Boolean(normalizedInput.config?.injectionPlacements?.length);
 
     return {
@@ -768,6 +768,14 @@ export function materializeInputValue(
     case 'pdf':
       return toDataUri('application/pdf', buildPdfData(value, injectionPlacement));
     case 'docx':
+      if (injectionPlacement !== DEFAULT_DOCX_INJECTION_PLACEMENT) {
+        return toDataUri(
+          DOCX_MIME_TYPE,
+          buildDocxDataFromRenderPlan(
+            createFallbackDocxRenderPlan(value, definition, injectionPlacement),
+          ),
+        );
+      }
       return toDataUri(DOCX_MIME_TYPE, buildDocxData(value));
     case 'image':
       return toDataUri('image/svg+xml', buildSvgImage(value, injectionPlacement));

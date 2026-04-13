@@ -32,8 +32,10 @@ import {
 } from '../../util';
 import { getGoalRubric } from '../prompts';
 import {
+  buildGraderResultAssertion,
   externalizeResponseForRedteamHistory,
   formatRedteamHistoryAsTranscript,
+  getGraderAssertionValue,
   getLastMessageContent,
   getTargetResponse,
   isConversationEndedResponse,
@@ -630,7 +632,7 @@ export class CrescendoProvider implements ApiProvider {
               lastResponse.output,
               test,
               provider,
-              assertToUse && 'value' in assertToUse ? assertToUse.value : undefined,
+              getGraderAssertionValue(assertToUse),
               additionalRubric,
               undefined,
               gradingContext,
@@ -639,11 +641,7 @@ export class CrescendoProvider implements ApiProvider {
             graderPassed = grade.pass;
             storedGraderResult = {
               ...grade,
-              assertion: grade.assertion
-                ? { ...grade.assertion, value: rubric }
-                : assertToUse && 'type' in assertToUse && assertToUse.type !== 'assert-set'
-                  ? { ...assertToUse, value: rubric }
-                  : undefined,
+              assertion: buildGraderResultAssertion(grade.assertion, assertToUse, rubric),
             };
           }
         }

@@ -199,6 +199,32 @@ describe('inputVariables', () => {
     expect(wrapperPrompts[1]).toContain('"injectionPlacement": "comment"');
   });
 
+  it('honors configured DOCX placements without a wrapper provider', async () => {
+    const result = await materializeInputVariablesWithMetadata(
+      {
+        document: 'Reviewer note payload',
+      },
+      {
+        document: {
+          description: 'Uploaded workflow document',
+          type: 'docx',
+          config: {
+            inputPurpose: 'A neutral operations workflow draft with reviewer notes.',
+            injectionPlacements: ['comment'],
+          },
+        },
+      },
+      {
+        materializationIndex: 0,
+      },
+    );
+
+    expect(result.metadata?.document.injectionPlacement).toBe('comment');
+    const decoded = Buffer.from(result.vars.document.split(',')[1], 'base64').toString('utf-8');
+    expect(decoded).toContain('word/comments.xml');
+    expect(decoded).toContain('Reviewer note payload');
+  });
+
   it('keeps the default DOCX injection placement as body when no placement subset is configured', async () => {
     const provider = {
       callApi: async () => ({

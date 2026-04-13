@@ -218,14 +218,14 @@ export function parseGeneratedInputs(
           if (item && typeof item === 'object') {
             const hasAllKeys = inputKeys.every((key) => key in item);
             if (hasAllKeys) {
-              results.push({ __prompt: `<Prompt>${JSON.stringify(item)}</Prompt>` });
+              results.push({ __prompt: JSON.stringify(item) });
             }
           }
         });
       } else if (parsed && typeof parsed === 'object') {
         const hasAllKeys = inputKeys.every((key) => key in parsed);
         if (hasAllKeys) {
-          results.push({ __prompt: `<Prompt>${JSON.stringify(parsed)}</Prompt>` });
+          results.push({ __prompt: JSON.stringify(parsed) });
         }
       }
     } catch {

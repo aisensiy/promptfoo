@@ -53,7 +53,7 @@ const INPUT_TYPE_OPTIONS: Array<{ value: InputType; label: string }> = [
 ];
 
 function toStoredInputDefinition(variable: Variable): InputDefinition {
-  if (variable.type === 'text') {
+  if (variable.type === 'text' && !variable.config) {
     return variable.description;
   }
 
