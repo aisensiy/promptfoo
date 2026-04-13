@@ -926,6 +926,25 @@ describe('EvalOutputCell', () => {
     expect(screen.getByText('Test output text')).toBeInTheDocument();
   });
 
+  it('preserves media rendering while search highlighting is active', () => {
+    mockTableStoreState.shouldHighlightSearchText = true;
+    const dataUri = 'data:image/png;base64,primary-image-data';
+
+    const { container } = renderWithProviders(
+      <EvalOutputCell
+        {...defaultProps}
+        output={{
+          ...defaultProps.output,
+          text: dataUri,
+        }}
+        searchText="primary"
+      />,
+    );
+
+    expect(screen.getByRole('img')).toHaveAttribute('src', dataUri);
+    expect(container.querySelector('.search-highlight')).toBeNull();
+  });
+
   it('ignores zero-length regex matches without hanging', () => {
     mockTableStoreState.shouldHighlightSearchText = true;
 

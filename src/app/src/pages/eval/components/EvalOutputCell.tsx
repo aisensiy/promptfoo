@@ -105,17 +105,25 @@ export function isVideoProvider(provider: string | undefined): boolean {
 }
 
 function getImageDataUriComparisonKey(src: string): string | undefined {
-  const match = /^data:([^;,]+)?((?:;[^,]*)*),(.*)$/i.exec(src.trim());
-  if (!match) {
+  const trimmed = src.trim();
+  if (!trimmed.toLowerCase().startsWith('data:')) {
     return undefined;
   }
 
-  const mimeType = (match[1] || '').toLowerCase();
-  const params = match[2] || '';
-  const payload = match[3] || '';
+  const commaIndex = trimmed.indexOf(',');
+  if (commaIndex === -1) {
+    return undefined;
+  }
+
+  const metadata = trimmed.slice('data:'.length, commaIndex);
+  const payload = trimmed.slice(commaIndex + 1);
+  const [mimeType = '', ...params] = metadata.split(';').filter(Boolean);
+  const normalizedMimeType = mimeType.toLowerCase();
+  const hasBase64Param = params.some((param) => param.toLowerCase() === 'base64');
+
   if (
-    /(?:^|;)base64(?:;|$)/i.test(params) &&
-    (mimeType.startsWith('image/') || mimeType === 'application/octet-stream')
+    hasBase64Param &&
+    (normalizedMimeType.startsWith('image/') || normalizedMimeType === 'application/octet-stream')
   ) {
     return `data:image-content;base64,${payload.replace(/\s+/g, '')}`;
   }
@@ -301,7 +309,10 @@ function renderHighlightedTextNode(text: string, searchText: string): React.Reac
       </>
     );
   } catch (error) {
-    console.error('Invalid regular expression:', (error as Error).message);
+    logger.warn('[EvalOutputCell] Invalid search regex', {
+      searchText,
+      error: getErrorMessage(error),
+    });
     return undefined;
   }
 }
@@ -471,6 +482,7 @@ function renderStructuredImages({
       if (!src || hasImageSrcComparisonKey(renderedImageSrcs, src)) {
         return null;
       }
+      addImageSrcComparisonKeys(renderedImageSrcs, src);
       return (
         <img
           key={`img-${idx}`}
@@ -535,9 +547,7 @@ function renderOutputNode({
     node = renderDiffNode(firstOutputText, text);
   }
 
-  if (searchText && shouldHighlightSearchText) {
-    node = renderHighlightedTextNode(text, searchText) ?? node;
-  } else {
+  if (!node) {
     node =
       renderMediaNode({
         output,
@@ -545,18 +555,25 @@ function renderOutputNode({
         primaryRenderedImageSrc,
         toggleLightbox,
       }) || node;
+  }
 
-    if (!node && !showDiffs) {
-      const formattedNode = renderMarkdownOrJsonNode({
-        text,
-        normalizedText,
-        renderMarkdown,
-        prettifyJson,
-        markdownComponents,
-      });
-      node = formattedNode.node;
-      renderedMarkdownOutput = formattedNode.renderedMarkdownOutput;
+  if (!node) {
+    const shouldPreserveFormattedRendering = extractMarkdownImageSources(normalizedText).length > 0;
+    if (searchText && shouldHighlightSearchText && !shouldPreserveFormattedRendering) {
+      node = renderHighlightedTextNode(text, searchText) ?? node;
     }
+  }
+
+  if (!node && !showDiffs) {
+    const formattedNode = renderMarkdownOrJsonNode({
+      text,
+      normalizedText,
+      renderMarkdown,
+      prettifyJson,
+      markdownComponents,
+    });
+    node = formattedNode.node;
+    renderedMarkdownOutput = formattedNode.renderedMarkdownOutput;
   }
 
   return renderStructuredImages({

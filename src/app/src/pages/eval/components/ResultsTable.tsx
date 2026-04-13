@@ -244,11 +244,17 @@ function renderMediaVariableCell({
   output,
   mediaMetadata,
   value,
+  lightboxOpen,
+  lightboxImage,
+  maxTextLength,
   toggleLightbox,
 }: {
   output: EvaluateTableOutput | null;
   mediaMetadata?: { path: string; type: string; format?: string };
   value: string | object;
+  lightboxOpen: boolean;
+  lightboxImage: string | null;
+  maxTextLength: number;
   toggleLightbox?: (url?: string) => void;
 }): React.ReactNode | null {
   if (!output || !mediaMetadata || typeof value !== 'string') {
@@ -282,13 +288,15 @@ function renderMediaVariableCell({
         />
         Your browser does not support the video element.
       </video>
-    ) : mediaType === 'image' && imageSrc ? (
-      <img
-        src={imageSrc}
-        alt="Input image"
-        style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain' }}
-        onClick={() => toggleLightbox?.(imageSrc)}
-      />
+    ) : mediaType === 'image' && imageSrc && toggleLightbox ? (
+      renderImageCellContent({
+        imgSrc: imageSrc,
+        lightboxOpen,
+        lightboxImage,
+        maxTextLength,
+        toggleLightbox,
+        alt: 'Input image',
+      })
     ) : null;
 
   if (!mediaElement) {
@@ -390,6 +398,8 @@ function renderVariableCell({
   injectVarName,
   maxTextLength,
   renderMarkdown,
+  lightboxOpen,
+  lightboxImage,
   toggleLightbox,
 }: {
   info: CellContext<EvaluateTableRow, string>;
@@ -397,6 +407,8 @@ function renderVariableCell({
   injectVarName: string;
   maxTextLength: number;
   renderMarkdown: boolean;
+  lightboxOpen: boolean;
+  lightboxImage: string | null;
   toggleLightbox: (url?: string) => void;
 }): React.ReactNode {
   const row = info.row.original;
@@ -415,6 +427,9 @@ function renderVariableCell({
     output,
     mediaMetadata: fileMetadata?.[varName],
     value,
+    lightboxOpen,
+    lightboxImage,
+    maxTextLength,
     toggleLightbox,
   });
 
@@ -760,7 +775,16 @@ function buildManualGradingResult({
     comment,
   };
 
-  if (typeof isPass !== 'undefined' || typeof score !== 'undefined') {
+  if (isPass === null) {
+    gradingResult.pass = ratingUpdate.pass;
+    gradingResult.score = ratingUpdate.score;
+    if (gradingResult.reason === 'Manual result (overrides all other grading results)') {
+      gradingResult.reason = ratingUpdate.componentResults?.[0]?.reason || 'Manual rating cleared';
+    }
+    if (gradingResult.assertion?.type === HUMAN_ASSERTION_TYPE) {
+      delete gradingResult.assertion;
+    }
+  } else if (typeof isPass !== 'undefined' || typeof score !== 'undefined') {
     gradingResult.pass = ratingUpdate.pass;
     gradingResult.score = ratingUpdate.score;
     gradingResult.reason = 'Manual result (overrides all other grading results)';
@@ -1141,6 +1165,7 @@ function getImageSourceForCell({
 function renderImageCellContent({
   imgSrc,
   originalImageText,
+  alt = 'Base64 encoded image',
   lightboxOpen,
   lightboxImage,
   maxTextLength,
@@ -1148,6 +1173,7 @@ function renderImageCellContent({
 }: {
   imgSrc: string;
   originalImageText?: string;
+  alt?: string;
   lightboxOpen: boolean;
   lightboxImage: string | null;
   maxTextLength: number;
@@ -1157,7 +1183,7 @@ function renderImageCellContent({
     <>
       <img
         src={imgSrc}
-        alt="Base64 encoded image"
+        alt={alt}
         style={{
           maxWidth: '100%',
           maxHeight: '200px',
@@ -1705,6 +1731,8 @@ function ResultsTable({
                   injectVarName,
                   maxTextLength,
                   renderMarkdown,
+                  lightboxOpen,
+                  lightboxImage,
                   toggleLightbox,
                 }),
               size: VARIABLE_COLUMN_SIZE_PX,
@@ -1714,7 +1742,16 @@ function ResultsTable({
       ];
     }
     return [];
-  }, [columnHelper, head, head.vars, maxTextLength, renderMarkdown, config]);
+  }, [
+    columnHelper,
+    head,
+    head.vars,
+    maxTextLength,
+    renderMarkdown,
+    lightboxOpen,
+    lightboxImage,
+    config,
+  ]);
 
   // Extract transformDisplayVars from output metadata (used by per-turn layer transforms like indirect-web-pwn)
   const transformDisplayVarsColumns = React.useMemo(() => {

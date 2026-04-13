@@ -1052,8 +1052,8 @@ export default function StrategyConfigDialog({
           </AlertContent>
         </Alert>
 
-        {orderingWarnings.map((warning, idx) => (
-          <Alert key={idx} variant="warning" className="py-2">
+        {orderingWarnings.map((warning) => (
+          <Alert key={warning} variant="warning" className="py-2">
             <AlertTriangle className="size-4" />
             <AlertContent>
               <AlertDescription className="text-sm">{warning}</AlertDescription>
@@ -1285,7 +1285,9 @@ export default function StrategyConfigDialog({
       </p>
 
       {steps.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1">{steps.map(renderLayerStepCard)}</div>
+        <div className="mt-2 flex flex-col gap-1">
+          {steps.map((step, index) => renderLayerStepCard(step, index))}
+        </div>
       )}
     </div>
   );

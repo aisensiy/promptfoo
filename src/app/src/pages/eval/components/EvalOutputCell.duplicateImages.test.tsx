@@ -509,6 +509,27 @@ describe('EvalOutputCell duplicate image prevention', () => {
       expect(images).toHaveLength(2);
     });
 
+    it('deduplicates repeated structured images when no primary image is rendered', () => {
+      const imageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const props = createBaseProps({
+        text: '',
+        images: [
+          {
+            data: imageData,
+          },
+          {
+            data: `data:image/png;base64,${imageData}`,
+          },
+        ],
+      });
+
+      const { container } = renderWithProviders(<EvalOutputCell {...props} />);
+
+      const images = container.querySelectorAll('img');
+      expect(images).toHaveLength(1);
+    });
+
     it('should handle images with null data gracefully', () => {
       const dataUri = 'data:image/png;base64,primary-image-data';
       const props = createBaseProps({

@@ -62,6 +62,13 @@ vi.mock('./EvalOutputCell', () => {
           <button onClick={() => onRating(true, 0.75, 'test comment')} className="action">
             Rate
           </button>
+          <button
+            onClick={() => onRating(null, undefined, 'test comment')}
+            className="clear"
+            tabIndex={-1}
+          >
+            Clear rating
+          </button>
         </div>
       );
     },
@@ -620,7 +627,8 @@ describe('ResultsTable Metrics Display', () => {
       expect(screen.getByText('/path/to/input.wav (audio/wav)')).toBeInTheDocument();
     });
 
-    it('renders variable images from file metadata and shows the original path', () => {
+    it('renders variable images from file metadata with lightbox support', async () => {
+      const user = userEvent.setup();
       vi.mocked(useTableStore).mockImplementation(() => ({
         config: {},
         evalId: '123',
@@ -669,6 +677,13 @@ describe('ResultsTable Metrics Display', () => {
       const imageElement = screen.getByRole('img', { name: 'Input image' });
       expect(imageElement).toHaveAttribute('src', 'data:image/png;base64,encodedImage');
       expect(screen.getByText('/path/to/input.png (image/png)')).toBeInTheDocument();
+
+      await user.click(imageElement);
+
+      expect(screen.getByRole('img', { name: 'Lightbox' })).toHaveAttribute(
+        'src',
+        'data:image/png;base64,encodedImage',
+      );
     });
 
     it('renders variable video from file metadata', () => {
@@ -3551,6 +3566,52 @@ describe('ResultsTable handleRating - Toggle off (null isPass) behavior', () => 
     expect(componentResults[0].assertion?.type).toBe('contains');
     expect(finalPass).toBe(false);
     expect(finalScore).toBe(0.5);
+  });
+
+  it('persists a cleared human rating without manual override fields', async () => {
+    const user = userEvent.setup();
+    const mockTable = createMockTableWithHumanAssertion();
+
+    vi.mocked(useTableStore).mockImplementation(() => ({
+      config: {},
+      evalId: '123',
+      inComparisonMode: false,
+      setTable: mockSetTable,
+      table: mockTable,
+      version: 4,
+      renderMarkdown: true,
+      fetchEvalData: vi.fn(),
+      isFetching: false,
+      filteredResultsCount: 1,
+      filters: {
+        values: {},
+        appliedCount: 0,
+        options: {
+          metric: [],
+        },
+      },
+    }));
+
+    renderWithProviders(<ResultsTable {...defaultProps} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear rating' }));
+
+    await waitFor(() => {
+      expect(mockCallApi).toHaveBeenCalledWith(
+        '/eval/123/results/test-output-1/rating',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    const [, request] = mockCallApi.mock.calls[0];
+    const payload = JSON.parse(request.body);
+
+    expect(payload.pass).toBe(false);
+    expect(payload.score).toBe(0.5);
+    expect(payload.reason).toBe('Automated assertion');
+    expect(payload.assertion?.type).not.toBe('human');
+    expect(payload.componentResults).toHaveLength(1);
+    expect(payload.componentResults[0].assertion.type).toBe('contains');
   });
 
   it('should recalculate pass as true when all remaining assertions pass', () => {
