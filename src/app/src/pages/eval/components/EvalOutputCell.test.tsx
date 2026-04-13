@@ -6,7 +6,7 @@ import {
   type EvaluateTableOutput,
   ResultFailureReason,
 } from '@promptfoo/types';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShiftKeyProvider } from '../../../contexts/ShiftKeyContext';
@@ -301,7 +301,7 @@ describe('EvalOutputCell', () => {
 
     expect(screen.getByText('PASS')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /edit comment/i }));
+    await userEvent.click(screen.getByRole('button', { name: /edit comment/i }));
     expect(screen.getByTestId('context-text')).toHaveTextContent('Test output text');
   });
 
@@ -1498,7 +1498,7 @@ describe('EvalOutputCell highlight toggle functionality', () => {
     const props = createPropsWithComment('Original comment');
     renderWithProviders(<EvalOutputCell {...props} />);
 
-    fireEvent.click(screen.getByLabelText('Toggle test highlight'));
+    await userEvent.click(screen.getByLabelText('Toggle test highlight'));
     mockOnRating.mockClear();
 
     await userEvent.click(screen.getByLabelText('Mark test failed'));

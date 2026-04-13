@@ -104,9 +104,44 @@ export function isVideoProvider(provider: string | undefined): boolean {
   return provider.includes(':video:');
 }
 
+function getImageDataUriComparisonKey(src: string): string | undefined {
+  const match = /^data:([^;,]+)?((?:;[^,]*)*),(.*)$/i.exec(src.trim());
+  if (!match) {
+    return undefined;
+  }
+
+  const mimeType = (match[1] || '').toLowerCase();
+  const params = match[2] || '';
+  const payload = match[3] || '';
+  if (
+    /(?:^|;)base64(?:;|$)/i.test(params) &&
+    (mimeType.startsWith('image/') || mimeType === 'application/octet-stream')
+  ) {
+    return `data:image-content;base64,${payload.replace(/\s+/g, '')}`;
+  }
+
+  return undefined;
+}
+
 export function normalizeImageSrcForComparison(src: string): string {
   const normalized = normalizeMediaText(src.trim());
   return resolveImageSource(normalized) || normalized;
+}
+
+function getImageSrcComparisonKeys(src: string): string[] {
+  const normalized = normalizeImageSrcForComparison(src);
+  const dataUriKey = getImageDataUriComparisonKey(normalized);
+  return dataUriKey && dataUriKey !== normalized ? [normalized, dataUriKey] : [normalized];
+}
+
+function addImageSrcComparisonKeys(keys: Set<string>, src: string) {
+  for (const key of getImageSrcComparisonKeys(src)) {
+    keys.add(key);
+  }
+}
+
+function hasImageSrcComparisonKey(keys: Set<string>, src: string): boolean {
+  return getImageSrcComparisonKeys(src).some((key) => keys.has(key));
 }
 
 export function extractMarkdownImageSources(markdown: string): string[] {
@@ -422,18 +457,18 @@ function renderStructuredImages({
 
   const renderedImageSrcs = new Set<string>();
   if (primaryRenderedImageSrc) {
-    renderedImageSrcs.add(normalizeImageSrcForComparison(primaryRenderedImageSrc));
+    addImageSrcComparisonKeys(renderedImageSrcs, primaryRenderedImageSrc);
   }
   if (renderedMarkdownOutput) {
     for (const source of extractMarkdownImageSources(normalizedText)) {
-      renderedImageSrcs.add(source);
+      addImageSrcComparisonKeys(renderedImageSrcs, source);
     }
   }
 
   const imageElements = output.images
     .map((img: ImageOutput, idx: number) => {
       const src = resolveEvalImageOutputSource(img);
-      if (!src || renderedImageSrcs.has(normalizeImageSrcForComparison(src))) {
+      if (!src || hasImageSrcComparisonKey(renderedImageSrcs, src)) {
         return null;
       }
       return (

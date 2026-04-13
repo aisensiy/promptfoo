@@ -158,6 +158,23 @@ describe('EvalOutputCell duplicate image prevention', () => {
       expect(images).toHaveLength(1);
     });
 
+    it('should deduplicate mixed MIME data URIs that contain the same image bytes', () => {
+      const base64 = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      const props = createBaseProps({
+        text: `data:application/octet-stream;base64,${base64}`,
+        images: [
+          {
+            data: `data:image/png;base64,${base64}`,
+          },
+        ],
+      });
+
+      const { container } = renderWithProviders(<EvalOutputCell {...props} />);
+
+      const images = container.querySelectorAll('img');
+      expect(images).toHaveLength(1);
+    });
+
     it('should detect data URI with image/svg+xml as primary rendered image', () => {
       const dataUri = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCI+PC9zdmc+';
       const props = createBaseProps({
