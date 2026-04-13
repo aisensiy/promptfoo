@@ -767,7 +767,6 @@ function getCellStyles({
 }): {
   cellStyle: CSSPropertiesWithCustomVars;
   contentStyle: React.CSSProperties;
-  isHighlighted: boolean;
 } {
   return {
     cellStyle: {
@@ -776,7 +775,6 @@ function getCellStyles({
       '--max-image-height': `${maxImageHeight}px`,
     },
     contentStyle: isHighlighted ? { color: 'var(--cell-highlight-text-color)' } : {},
-    isHighlighted,
   };
 }
 
