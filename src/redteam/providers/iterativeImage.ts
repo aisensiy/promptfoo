@@ -8,7 +8,10 @@ import { extractVariablesFromTemplates, getNunjucksEngine } from '../../util/tem
 import { sleep } from '../../util/time';
 import { TokenUsageTracker } from '../../util/tokenUsage';
 import { accumulateResponseTokenUsage, createEmptyTokenUsage } from '../../util/tokenUsageUtils';
-import { buildPromptInputDescriptions } from '../inputVariables';
+import {
+  buildPromptInputDescriptions,
+  materializeInputVariablesWithMetadata,
+} from '../inputVariables';
 import {
   createIterationContext,
   externalizeResponseForRedteamHistory,
@@ -32,6 +35,10 @@ import type {
 } from '../../types/index';
 
 interface ImageGenerationOutput {
+  inputVars?: Record<string, string>;
+  metadata?: {
+    inputMaterialization?: Record<string, unknown>;
+  };
   prompt: string;
   output: string;
   imageUrl?: string;
@@ -336,12 +343,22 @@ async function runRedteamConversation({
         logger.warn(`Iteration ${i + 1}: Failed to parse redteam response: ${err}`);
         continue;
       }
+      const materializedPromptVars =
+        parsedPromptVars && inputs
+          ? await materializeInputVariablesWithMetadata(parsedPromptVars, inputs, {
+              materializationIndex: i,
+              pluginId: String(test?.metadata?.pluginId || 'iterative:image'),
+              provider: redteamProvider,
+              purpose: test?.metadata?.purpose as string | undefined,
+            })
+          : undefined;
+      const currentRenderInputVars = materializedPromptVars?.vars ?? parsedPromptVars;
 
       targetPrompt = await renderPrompt(
         prompt,
         {
           ...iterationVars,
-          ...(parsedPromptVars ?? {}),
+          ...(currentRenderInputVars ?? {}),
           [injectVar]: newInjectVar,
         },
         filters,
@@ -349,10 +366,20 @@ async function runRedteamConversation({
         [injectVar], // Skip template rendering for injection variable to prevent double-evaluation
       );
 
+      const targetContext = iterationContext
+        ? {
+            ...iterationContext,
+            vars: {
+              ...iterationVars,
+              ...(currentRenderInputVars ?? {}),
+              [injectVar]: newInjectVar,
+            },
+          }
+        : iterationContext;
       let targetResponse = await getTargetResponse(
         targetProvider,
         targetPrompt,
-        iterationContext,
+        targetContext,
         options,
       );
       targetResponse = await externalizeResponseForRedteamHistory(targetResponse, {
@@ -498,6 +525,10 @@ async function runRedteamConversation({
           score,
           scoreComponents,
           improvements,
+          ...(currentRenderInputVars ? { inputVars: currentRenderInputVars } : {}),
+          ...(materializedPromptVars?.metadata
+            ? { metadata: { inputMaterialization: materializedPromptVars.metadata } }
+            : {}),
         });
 
         if (score > highestScore) {

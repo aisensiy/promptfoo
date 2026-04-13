@@ -110,7 +110,7 @@ interface HydraConfig {
   /**
    * Multi-input schema for generating multiple vars at each turn.
    * Keys are variable names, values are Inputs definitions: plain descriptions
-   * or structured typed configs with fields like description, type, and default.
+   * or structured typed configs with fields like description, type, and config.
    */
   inputs?: Inputs;
 }
@@ -413,6 +413,8 @@ export class HydraProvider implements ApiProvider {
           ? await materializeInputVariablesWithMetadata(currentInputVars, this.config.inputs, {
               materializationIndex: turn,
               pluginId: 'hydra',
+              provider: this.agentProvider,
+              purpose: test?.metadata?.purpose as string | undefined,
             })
           : undefined;
       const currentRenderInputVars = materializedInputVars?.vars ?? currentInputVars;
@@ -574,10 +576,21 @@ export class HydraProvider implements ApiProvider {
 
       // Get target response
       const iterationStart = Date.now();
+      const targetContext = context
+        ? {
+            ...context,
+            vars: {
+              ...vars,
+              ...(this.sessionId ? { sessionId: this.sessionId } : {}),
+              ...(currentRenderInputVars || {}),
+              [this.injectVar]: finalTargetPrompt,
+            },
+          }
+        : context;
       let targetResponse = await getTargetResponse(
         targetProvider,
         finalTargetPrompt,
-        context,
+        targetContext,
         options,
       );
       lastTargetResponse = targetResponse;

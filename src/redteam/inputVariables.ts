@@ -810,15 +810,15 @@ export async function materializeInputVariablesWithMetadata(
 ): Promise<MaterializedInputVariablesResult> {
   const metadata: Record<string, MaterializedInputMetadata> = {};
   const vars: Record<string, string> = {};
+  const materializedKeys = new Set<string>();
   let inputIndex = 0;
 
-  for (const [key, value] of Object.entries(variables)) {
-    const definition = inputs[key];
-    if (!definition) {
-      vars[key] = value;
+  for (const [key, definition] of Object.entries(inputs)) {
+    if (!Object.prototype.hasOwnProperty.call(variables, key)) {
       continue;
     }
 
+    const value = variables[key];
     const normalizedInput = normalizeInputDefinition(definition);
     const shouldRotatePlacement =
       normalizedInput.type !== 'text' &&
@@ -831,9 +831,16 @@ export async function materializeInputVariablesWithMetadata(
       inputIndex += 1;
     }
     vars[key] = materializedValue.value;
+    materializedKeys.add(key);
 
     if (materializedValue.metadata) {
       metadata[key] = materializedValue.metadata;
+    }
+  }
+
+  for (const [key, value] of Object.entries(variables)) {
+    if (!materializedKeys.has(key)) {
+      vars[key] = value;
     }
   }
 

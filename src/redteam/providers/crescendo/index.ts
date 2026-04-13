@@ -122,7 +122,7 @@ interface CrescendoConfig {
   /**
    * Multi-input schema for generating multiple vars at each turn.
    * Keys are variable names, values are Inputs definitions: plain descriptions
-   * or structured typed configs with fields like description, type, and default.
+   * or structured typed configs with fields like description, type, and config.
    */
   inputs?: Inputs;
   [key: string]: unknown;
@@ -937,6 +937,8 @@ export class CrescendoProvider implements ApiProvider {
         ? await materializeInputVariablesWithMetadata(currentInputVars, this.config.inputs, {
             materializationIndex: _roundNum,
             pluginId: 'crescendo',
+            provider: await this.getRedTeamProvider(),
+            purpose: context?.test?.metadata?.purpose as string | undefined,
           })
         : undefined;
     const currentRenderInputVars = materializedInputVars?.vars ?? currentInputVars;
@@ -1089,7 +1091,22 @@ export class CrescendoProvider implements ApiProvider {
     }
 
     const iterationStart = Date.now();
-    let targetResponse = await getTargetResponse(provider, finalTargetPrompt, context, options);
+    const targetContext = context
+      ? {
+          ...context,
+          vars: {
+            ...vars,
+            ...(currentRenderInputVars || {}),
+            [this.config.injectVar]: finalTargetPrompt,
+          },
+        }
+      : context;
+    let targetResponse = await getTargetResponse(
+      provider,
+      finalTargetPrompt,
+      targetContext,
+      options,
+    );
     targetResponse = await externalizeResponseForRedteamHistory(targetResponse, {
       evalId: context?.evaluationId,
       testIdx: context?.testIdx,

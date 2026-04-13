@@ -199,6 +199,34 @@ describe('inputVariables', () => {
     expect(wrapperPrompts[1]).toContain('"injectionPlacement": "comment"');
   });
 
+  it('rotates placement using configured input order instead of generated JSON key order', async () => {
+    const result = await materializeInputVariablesWithMetadata(
+      {
+        secondDocument: 'Second document payload',
+        firstDocument: 'First document payload',
+      },
+      {
+        firstDocument: {
+          description: 'First uploaded document',
+          type: 'docx',
+          config: {
+            injectionPlacements: ['header', 'footer'],
+          },
+        },
+        secondDocument: {
+          description: 'Second uploaded document',
+          type: 'docx',
+          config: {
+            injectionPlacements: ['header', 'footer'],
+          },
+        },
+      },
+    );
+
+    expect(result.metadata?.firstDocument.injectionPlacement).toBe('header');
+    expect(result.metadata?.secondDocument.injectionPlacement).toBe('footer');
+  });
+
   it('honors configured DOCX placements without a wrapper provider', async () => {
     const result = await materializeInputVariablesWithMetadata(
       {

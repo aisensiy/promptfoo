@@ -100,7 +100,8 @@ interface GoatConfig {
   _perTurnLayers?: LayerConfig[];
   /**
    * Multi-input schema for generating multiple vars at each turn.
-   * Keys are variable names, values are descriptions.
+   * Keys are variable names, values are Inputs definitions: plain descriptions
+   * or structured typed configs with fields like description, type, and config.
    */
   inputs?: Inputs;
   [key: string]: unknown;
@@ -550,9 +551,18 @@ export default class GoatProvider implements ApiProvider {
 
         const iterationStart = Date.now();
         throwIfTargetPromptExceedsMaxChars(targetPrompt, maxCharsPerMessage);
+        const targetContext = context
+          ? {
+              ...context,
+              vars: {
+                ...targetVars,
+                [this.config.injectVar]: targetPrompt,
+              },
+            }
+          : context;
         const targetResponse = (await targetProvider.callApi(
           targetPrompt,
-          context,
+          targetContext,
           options,
         )) as GoatProviderResponse;
 
@@ -621,7 +631,7 @@ export default class GoatProvider implements ApiProvider {
                 targetResponse.audio?.data && targetResponse.audio?.format
                   ? { data: targetResponse.audio.data, format: targetResponse.audio.format }
                   : undefined,
-              inputVars: currentInputVars,
+              inputVars: currentRenderInputVars,
             });
           }
 

@@ -390,10 +390,16 @@ export async function runRedteamConversation({
     );
 
     const iterationStart = Date.now();
+    const targetContext = iterationContext
+      ? {
+          ...iterationContext,
+          vars: updatedVars,
+        }
+      : iterationContext;
     let targetResponse: TargetResponse = await getTargetResponse(
       targetProvider,
       targetPrompt,
-      iterationContext,
+      targetContext,
       options,
     );
     // Externalize blobs before they hit history/prompts

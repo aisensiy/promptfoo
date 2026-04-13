@@ -341,6 +341,8 @@ export async function runMetaAgentRedteam({
         ? await materializeInputVariablesWithMetadata(currentInputVars, inputs, {
             materializationIndex: i,
             pluginId: String(test?.metadata?.pluginId || 'iterative-meta'),
+            provider: agentProvider,
+            purpose: test?.metadata?.purpose as string | undefined,
           })
         : undefined;
     const currentRenderInputVars = materializedInputVars?.vars ?? currentInputVars;
@@ -367,10 +369,16 @@ export async function runMetaAgentRedteam({
 
     // Execute attack against target
     const iterationStart = Date.now();
+    const targetContext = iterationContext
+      ? {
+          ...iterationContext,
+          vars: updatedVars,
+        }
+      : iterationContext;
     const initialTargetResponse: TargetResponse = await getTargetResponse(
       targetProvider,
       targetPrompt,
-      iterationContext,
+      targetContext,
       options,
     );
     const targetResponse: TargetResponse = await externalizeResponseForRedteamHistory(
