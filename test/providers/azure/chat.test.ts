@@ -405,6 +405,8 @@ describe('AzureChatCompletionProvider', () => {
     });
 
     it('should handle invalid JSON response', async () => {
+      const deleteFromCache = vi.fn();
+
       provider.config.response_format = {
         type: 'secret-response-format-type-sentinel',
       } as any;
@@ -414,6 +416,7 @@ describe('AzureChatCompletionProvider', () => {
         cached: false,
         status: 200,
         statusText: 'OK',
+        deleteFromCache,
       });
 
       const result = await provider.callApi(
@@ -431,9 +434,34 @@ describe('AzureChatCompletionProvider', () => {
       expect(result.error).not.toContain('secret-response-body-sentinel');
       expect(result.error).not.toContain('secret-message-role-sentinel');
       expect(result.error).not.toContain('secret-response-format-type-sentinel');
+      expect(deleteFromCache).toHaveBeenCalledTimes(1);
+    });
+
+    it('should avoid caching Azure error payloads returned with success status', async () => {
+      const deleteFromCache = vi.fn();
+
+      vi.mocked(fetchWithCache).mockResolvedValueOnce({
+        data: {
+          error: {
+            code: 'server_error',
+            message: 'temporary upstream failure',
+          },
+        },
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+        deleteFromCache,
+      });
+
+      const result = await provider.callApi('test prompt');
+
+      expect(result.error).toBe('API response error: server_error temporary upstream failure');
+      expect(deleteFromCache).toHaveBeenCalledTimes(1);
     });
 
     it('should redact malformed API response bodies from response errors', async () => {
+      const deleteFromCache = vi.fn();
+
       vi.mocked(fetchWithCache).mockResolvedValueOnce({
         data: {
           'secret-malformed-response-key-sentinel': 'secret-malformed-response-body-sentinel',
@@ -445,6 +473,7 @@ describe('AzureChatCompletionProvider', () => {
         cached: false,
         status: 200,
         statusText: 'OK',
+        deleteFromCache,
       });
 
       const result = await provider.callApi('test prompt');
@@ -453,6 +482,7 @@ describe('AzureChatCompletionProvider', () => {
       expect(result.error).toContain('Response metadata');
       expect(result.error).not.toContain('secret-malformed-response-body-sentinel');
       expect(result.error).not.toContain('secret-malformed-response-key-sentinel');
+      expect(deleteFromCache).toHaveBeenCalledTimes(1);
     });
 
     it('should handle tool calls in response', async () => {

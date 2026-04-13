@@ -384,6 +384,7 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
     let data;
     let cached = false;
     let latencyMs: number | undefined;
+    let deleteFromCache: (() => Promise<void>) | undefined;
 
     try {
       const url = config.dataSources
@@ -399,6 +400,7 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
         cached: isCached,
         status,
         latencyMs: fetchLatencyMs,
+        deleteFromCache: deleteCachedResponse,
       } = await fetchWithCache(
         url,
         {
@@ -417,12 +419,14 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
 
       cached = isCached;
       latencyMs = fetchLatencyMs;
+      deleteFromCache = deleteCachedResponse;
 
       // Handle the response data
       if (typeof responseData === 'string') {
         try {
           data = JSON.parse(responseData);
         } catch {
+          await deleteFromCache?.();
           return {
             error: `API returned invalid JSON response (status ${status})\n\nResponse metadata: ${JSON.stringify(getAzureChatResponseMetadata(responseData), null, 2)}\n\nRequest metadata: ${JSON.stringify(getAzureChatRequestMetadata(body), null, 2)}`,
           };
@@ -446,6 +450,7 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
 
     try {
       if (data.error) {
+        await deleteFromCache?.();
         // Was the input prompt deemed inappropriate?
         if (data.error.status === 400 && data.error.code === FINISH_REASON_MAP.content_filter) {
           flaggedInput = true;
@@ -569,6 +574,7 @@ export class AzureChatCompletionProvider extends AzureGenericProvider {
         },
       };
     } catch (err) {
+      await deleteFromCache?.();
       return {
         error: `API response error: ${String(err)}\n\nResponse metadata: ${JSON.stringify(getAzureChatResponseMetadata(data), null, 2)}`,
       };
