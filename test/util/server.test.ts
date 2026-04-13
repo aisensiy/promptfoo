@@ -10,8 +10,12 @@ import {
   BrowserBehavior,
   checkServerFeatureSupport,
   checkServerRunning,
+  formatServerUrlHost,
+  getServerBaseUrl,
+  getServerHost,
   openBrowser,
 } from '../../src/util/server';
+import { mockProcessEnv } from './utils';
 
 // Mock opener
 vi.mock('opener', () => ({ default: vi.fn() }));
@@ -52,6 +56,26 @@ const mockFetchWithProxy = fetchModule.fetchWithProxy as MockedFunction<
 describe('Server Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('server host utilities', () => {
+    it('should default to localhost when PROMPTFOO_SERVER_HOST is unset or blank', () => {
+      expect(getServerHost()).toBe('localhost');
+
+      const restoreEnv = mockProcessEnv({ PROMPTFOO_SERVER_HOST: '   ' });
+      try {
+        expect(getServerHost()).toBe('localhost');
+      } finally {
+        restoreEnv();
+      }
+    });
+
+    it('should format wildcard and IPv6 hosts for browser-safe URLs', () => {
+      expect(getServerBaseUrl(3000, '0.0.0.0')).toBe('http://localhost:3000');
+      expect(getServerBaseUrl(3000, '::')).toBe('http://localhost:3000');
+      expect(getServerBaseUrl(3000, '::1')).toBe('http://[::1]:3000');
+      expect(formatServerUrlHost('[::1]')).toBe('[::1]');
+    });
   });
 
   describe('checkServerRunning', () => {
