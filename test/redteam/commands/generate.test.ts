@@ -1503,7 +1503,7 @@ describe('doGenerateRedteam', () => {
       vi.mocked(configModule.resolveConfigs).mockResolvedValue({
         basePath: '/mock/path',
         testSuite: {
-          providers: [{ id: () => 'openai:gpt-4', callApi: async () => ({}) }],
+          providers: [createMockProvider({ id: 'openai:gpt-4', response: {} })],
           prompts: [{ raw: 'Test prompt', label: 'Test label' }],
           tests: [],
         },
@@ -1550,7 +1550,7 @@ describe('doGenerateRedteam', () => {
       vi.mocked(configModule.resolveConfigs).mockResolvedValue({
         basePath: '/mock/path',
         testSuite: {
-          providers: [{ id: () => 'openai:gpt-4', callApi: async () => ({}) }],
+          providers: [createMockProvider({ id: 'openai:gpt-4', response: {} })],
           prompts: [{ raw: 'Test prompt', label: 'Test label' }],
           tests: [],
         },
@@ -2542,12 +2542,7 @@ describe('doGenerateRedteam', () => {
       vi.mocked(configModule.resolveConfigs).mockResolvedValue({
         basePath: '/mock/path',
         testSuite: {
-          providers: [
-            {
-              id: () => 'test-provider',
-              callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-            },
-          ],
+          providers: [createMockProvider({ response: { output: 'test output' } })],
           prompts: [{ raw: 'Test prompt', label: 'Test prompt' }],
           tests: [],
         },
@@ -2612,12 +2607,7 @@ describe('doGenerateRedteam', () => {
       vi.mocked(configModule.resolveConfigs).mockResolvedValue({
         basePath: '/mock/path',
         testSuite: {
-          providers: [
-            {
-              id: () => 'test-provider',
-              callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-            },
-          ],
+          providers: [createMockProvider({ response: { output: 'test output' } })],
           prompts: [{ raw: 'Test prompt', label: 'Test prompt' }],
           tests: [],
         },
@@ -2679,12 +2669,7 @@ describe('doGenerateRedteam', () => {
       vi.mocked(configModule.resolveConfigs).mockResolvedValue({
         basePath: '/mock/path',
         testSuite: {
-          providers: [
-            {
-              id: () => 'test-provider',
-              callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-            },
-          ],
+          providers: [createMockProvider({ response: { output: 'test output' } })],
           prompts: [{ raw: 'Test prompt', label: 'Test prompt' }],
           tests: [],
         },
@@ -2754,12 +2739,7 @@ describe('doGenerateRedteam', () => {
       vi.mocked(configModule.resolveConfigs).mockResolvedValue({
         basePath: '/mock/path',
         testSuite: {
-          providers: [
-            {
-              id: () => 'test-provider',
-              callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-            },
-          ],
+          providers: [createMockProvider({ response: { output: 'test output' } })],
           prompts: [{ raw: 'Test prompt', label: 'Test prompt' }],
           tests: [],
         },
@@ -2811,12 +2791,7 @@ describe('doGenerateRedteam', () => {
       vi.mocked(configModule.resolveConfigs).mockResolvedValue({
         basePath: '/mock/path',
         testSuite: {
-          providers: [
-            {
-              id: () => 'test-provider',
-              callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-            },
-          ],
+          providers: [createMockProvider({ response: { output: 'test output' } })],
           prompts: [{ raw: 'Test prompt', label: 'Test prompt' }],
           tests: [],
         },
@@ -2877,12 +2852,7 @@ describe('doGenerateRedteam', () => {
       vi.mocked(configModule.resolveConfigs).mockResolvedValue({
         basePath: '/mock/path',
         testSuite: {
-          providers: [
-            {
-              id: () => 'test-provider',
-              callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-            },
-          ],
+          providers: [createMockProvider({ response: { output: 'test output' } })],
           prompts: [{ raw: 'Test prompt', label: 'Test prompt' }],
           tests: [],
         },
@@ -2941,12 +2911,7 @@ describe('doGenerateRedteam with external defaultTest', () => {
     vi.mocked(configModule.resolveConfigs).mockResolvedValue({
       basePath: '/mock/path',
       testSuite: {
-        providers: [
-          {
-            id: () => 'test-provider',
-            callApi: vi.fn().mockResolvedValue({ output: 'test output' }),
-          },
-        ],
+        providers: [createMockProvider({ response: { output: 'test output' } })],
         prompts: [],
         tests: [],
       },
