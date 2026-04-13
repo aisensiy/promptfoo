@@ -444,7 +444,7 @@ describe('Fal Provider', () => {
         expect(result.cached).toBe(false);
         const cacheKey = mockCache.get.mock.calls[0]?.[0] as string;
         expect(cacheKey).toMatch(
-          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[0-9a-f-]{36}:[a-f0-9]{64}$/,
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
         );
         expect(cacheKey).not.toContain(prompt);
         expect(cacheKey).not.toContain(contextSecret);
@@ -506,10 +506,10 @@ describe('Fal Provider', () => {
         const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
         const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
         expect(cacheKeyA).toMatch(
-          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[0-9a-f-]{36}:[a-f0-9]{64}$/,
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
         );
         expect(cacheKeyB).toMatch(
-          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[0-9a-f-]{36}:[a-f0-9]{64}$/,
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
         );
         expect(cacheKeyA).not.toBe(cacheKeyB);
         expect(mockSubscribe).toHaveBeenCalledTimes(2);
@@ -518,6 +518,41 @@ describe('Fal Provider', () => {
           expect(cacheKey).not.toContain('fal-tenant-a-secret');
           expect(cacheKey).not.toContain('fal-tenant-b-secret');
         }
+      });
+
+      it('should use a deterministic auth namespace across module reloads', async () => {
+        async function getCacheKeyFromFreshModule() {
+          vi.resetModules();
+          const freshCache = await import('../../src/cache');
+          const mockCache = {
+            get: vi
+              .fn()
+              .mockResolvedValue(JSON.stringify('![cached](https://example.com/cached.png)')),
+            set: vi.fn(),
+          };
+          vi.mocked(freshCache.isCacheEnabled).mockReturnValue(true);
+          vi.mocked(freshCache.getCache).mockReturnValue(mockCache as any);
+          const { FalImageGenerationProvider: FreshFalImageGenerationProvider } = await import(
+            '../../src/providers/fal'
+          );
+
+          const freshProvider = new FreshFalImageGenerationProvider('fal-ai/flux/schnell', {
+            config: { apiKey: 'fal-deterministic-secret' },
+          });
+
+          await freshProvider.callApi('Shared fal prompt');
+          return mockCache.get.mock.calls[0][0] as string;
+        }
+
+        const firstCacheKey = await getCacheKeyFromFreshModule();
+        const secondCacheKey = await getCacheKeyFromFreshModule();
+
+        expect(firstCacheKey).toBe(secondCacheKey);
+        expect(firstCacheKey).toMatch(
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        );
+        expect(firstCacheKey).not.toContain('fal-deterministic-secret');
+        expect(firstCacheKey).not.toContain('Shared fal prompt');
       });
 
       it('should handle cache set errors gracefully', async () => {

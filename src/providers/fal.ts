@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from 'crypto';
+import { createHmac } from 'crypto';
 
 import { getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
@@ -19,7 +19,6 @@ interface FalResult<T = unknown> {
 }
 
 const FAL_CACHE_KEY_HMAC_KEY = 'promptfoo:fal:cache-key:v1';
-const FAL_AUTH_CACHE_NAMESPACES = new Map<string, string>();
 
 function sortObject(obj: any, seen = new WeakSet<object>()): any {
   if (obj === null || obj === undefined) {
@@ -67,12 +66,9 @@ function getAuthCacheNamespace(apiKey: string | undefined): string {
     return 'no-api-key';
   }
 
-  let namespace = FAL_AUTH_CACHE_NAMESPACES.get(apiKey);
-  if (!namespace) {
-    namespace = randomUUID();
-    FAL_AUTH_CACHE_NAMESPACES.set(apiKey, namespace);
-  }
-  return namespace;
+  return createHmac('sha256', FAL_CACHE_KEY_HMAC_KEY)
+    .update(JSON.stringify(['auth', apiKey]))
+    .digest('hex');
 }
 
 function generateInputHash(input: unknown): string {
