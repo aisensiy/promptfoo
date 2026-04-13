@@ -82,6 +82,34 @@ describe('renderPrompt with skipRenderVars', () => {
     expect(result).toBe('User input: {{secret}}');
   });
 
+  it('should not render skipped variable values after alias resolution', async () => {
+    const prompt = { raw: 'User input: {{wrapped_input}}', label: 'test' };
+    const vars = {
+      user_input: '{{7*7}}',
+      wrapped_input: '{{user_input}}',
+    };
+
+    const resultWithoutSkip = await renderPrompt(prompt, { ...vars });
+    expect(resultWithoutSkip).toBe('User input: 49');
+
+    const result = await renderPrompt(prompt, vars, {}, undefined, ['user_input']);
+
+    expect(result).toBe('User input: {{7*7}}');
+  });
+
+  it('should not resolve nested references copied through a skipped variable alias', async () => {
+    const prompt = { raw: 'User input: {{wrapped_input}}', label: 'test' };
+    const vars = {
+      secret: 'do-not-inline',
+      user_input: '{{secret}}',
+      wrapped_input: '{{user_input}}',
+    };
+
+    const result = await renderPrompt(prompt, vars, {}, undefined, ['user_input']);
+
+    expect(result).toBe('User input: {{secret}}');
+  });
+
   it('should preserve trailing newlines inside skipRenderVars values', async () => {
     const prompt = { raw: 'User input: {{user_input}}', label: 'test' };
     const vars = {

@@ -53,6 +53,7 @@ export async function extractTextFromPDF(pdfPath: string): Promise<string> {
 export function resolveVariables(
   variables: Record<string, VarValue>,
   skipResolveVars?: string[],
+  varsResolvedFromSkipped?: Set<string>,
 ): Record<string, VarValue> {
   let resolved: boolean;
   const regex = /\{\{\s*(\w+)\s*\}\}/; // Matches {{variableName}}, {{ variableName }}, etc.
@@ -61,7 +62,11 @@ export function resolveVariables(
   do {
     resolved = true;
     for (const key of Object.keys(variables)) {
-      if (skipResolveVars?.includes(key) || typeof variables[key] !== 'string') {
+      if (
+        skipResolveVars?.includes(key) ||
+        varsResolvedFromSkipped?.has(key) ||
+        typeof variables[key] !== 'string'
+      ) {
         continue;
       }
       const value = variables[key] as string;
@@ -73,6 +78,9 @@ export function resolveVariables(
           // logger.warn(`Variable "${varName}" not found for substitution.`);
         } else {
           variables[key] = value.replace(placeholder, variables[varName] as string);
+          if (skipResolveVars?.includes(varName) || varsResolvedFromSkipped?.has(varName)) {
+            varsResolvedFromSkipped?.add(key);
+          }
           resolved = false; // Indicate that we've made a replacement and should check again
         }
       }
@@ -409,7 +417,8 @@ export async function renderPrompt(
     }
   }
   // Resolve variable mappings
-  resolveVariables(vars, skipRenderVars);
+  const varsResolvedFromSkipped = new Set<string>();
+  resolveVariables(vars, skipRenderVars, varsResolvedFromSkipped);
   // Third party integrations
   if (prompt.raw.startsWith('portkey://')) {
     const portKeyResult = await getPortkeyPrompt(prompt.raw.slice('portkey://'.length), vars);
@@ -500,7 +509,11 @@ export async function renderPrompt(
     // Vars values can be template strings, so we need to render them first:
     const renderedVars = Object.fromEntries(
       Object.entries(vars).map(([key, value]) => {
-        if (typeof value !== 'string' || skipRenderVars?.includes(key)) {
+        if (
+          typeof value !== 'string' ||
+          skipRenderVars?.includes(key) ||
+          varsResolvedFromSkipped.has(key)
+        ) {
           return [key, value];
         }
 
