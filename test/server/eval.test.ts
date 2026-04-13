@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runDbMigrations } from '../../src/migrate';
 import Eval from '../../src/models/eval';
 import EvalResult from '../../src/models/evalResult';
@@ -36,6 +36,7 @@ describe('eval routes', () => {
     // Wait for all cleanups to complete
     await Promise.allSettled(cleanupPromises);
     testEvalIds.clear();
+    vi.restoreAllMocks();
   });
 
   function createManualRatingPayload(originalResult: any, pass: boolean) {
@@ -89,6 +90,20 @@ describe('eval routes', () => {
       invariant(updatedEvalB, 'Eval B is required');
       expect(updatedEvalA.prompts[resultB.promptIdx].metrics).toEqual(originalEvalAMetrics);
       expect(updatedEvalB.prompts[resultB.promptIdx].metrics).toEqual(originalEvalBMetrics);
+    });
+
+    it('returns a JSON 500 response when rating storage fails', async () => {
+      const findByIdSpy = vi
+        .spyOn(EvalResult, 'findById')
+        .mockRejectedValueOnce(new Error('database unavailable'));
+
+      const res = await request(app)
+        .post('/api/eval/eval-1/results/result-1/rating')
+        .send({ pass: true, score: 1 });
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to submit rating' });
+      expect(findByIdSpy).toHaveBeenCalledWith('result-1');
     });
 
     it('Passing test and the user marked it as passing (no change)', async () => {
