@@ -254,7 +254,7 @@ describe('OpenAiModerationProvider', () => {
       expect(result.cached).toBe(true);
       const cacheKey = mockCache.get.mock.calls[0][0] as string;
       expect(cacheKey).toMatch(
-        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKey).not.toContain('assistant response');
       expect(cacheKey).not.toContain(headerSecret);
@@ -302,7 +302,7 @@ describe('OpenAiModerationProvider', () => {
       // Verify we attempted to save to cache
       const cacheKey = mockCache.set.mock.calls[0][0] as string;
       expect(cacheKey).toMatch(
-        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKey).not.toContain('assistant');
       expect(mockCache.set).toHaveBeenCalledWith(
@@ -385,15 +385,54 @@ describe('OpenAiModerationProvider', () => {
 
       const [cacheKeyA, cacheKeyB] = mockCache.get.mock.calls.map(([key]) => key as string);
       expect(cacheKeyA).toMatch(
-        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKeyB).toMatch(
-        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheKeyA).not.toBe(cacheKeyB);
       expect(cacheKeyA).not.toContain('same sensitive text');
       expect(cacheKeyA).not.toContain('sk-moderation-tenant-a');
       expect(cacheKeyB).not.toContain('sk-moderation-tenant-b');
+    });
+
+    it('should keep resolved API key cache identity stable across module reloads', async () => {
+      async function getCacheKeyFromFreshModule() {
+        vi.resetModules();
+        const freshCacheModule = await import('../../../src/cache');
+        const mockCache = {
+          get: vi.fn().mockResolvedValue(JSON.stringify({ flags: [] })),
+          set: vi.fn(),
+        };
+
+        vi.mocked(freshCacheModule.isCacheEnabled).mockImplementation(function () {
+          return true;
+        });
+        vi.mocked(freshCacheModule.getCache).mockImplementation(function () {
+          return mockCache as any;
+        });
+
+        const { OpenAiModerationProvider: FreshOpenAiModerationProvider } = await import(
+          '../../../src/providers/openai/moderation'
+        );
+        const provider = new FreshOpenAiModerationProvider('text-moderation-latest', {
+          config: { apiKey: 'sk-moderation-reload' },
+        });
+
+        await provider.callModerationApi('user', 'same sensitive text');
+
+        return mockCache.get.mock.calls[0][0] as string;
+      }
+
+      const cacheKeyA = await getCacheKeyFromFreshModule();
+      const cacheKeyB = await getCacheKeyFromFreshModule();
+
+      expect(cacheKeyA).toBe(cacheKeyB);
+      expect(cacheKeyA).toMatch(
+        /^openai:moderation:text-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+      );
+      expect(cacheKeyA).not.toContain('same sensitive text');
+      expect(cacheKeyA).not.toContain('sk-moderation-reload');
     });
 
     it('should deduplicate in-flight moderation requests without raw fetch cache keys', async () => {
@@ -577,7 +616,7 @@ describe('OpenAiModerationProvider', () => {
       const cacheSetKey = mockCache.set.mock.calls[0][0] as string;
       expect(cacheGetKey).toBe(cacheSetKey);
       expect(cacheSetKey).toMatch(
-        /^openai:moderation:omni-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}$/,
+        /^openai:moderation:omni-moderation-latest:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
       );
       expect(cacheSetKey).not.toContain(textSecret);
       expect(cacheSetKey).not.toContain(imageUrl);

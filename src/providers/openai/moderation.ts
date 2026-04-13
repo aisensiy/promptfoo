@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from 'crypto';
+import { createHmac } from 'crypto';
 
 import { fetchWithCache, getCache, isCacheEnabled } from '../../cache';
 import logger from '../../logger';
@@ -71,7 +71,6 @@ export type ImageInput = {
 type ModerationInput = string | (TextInput | ImageInput)[];
 
 const OPENAI_MODERATION_CACHE_HASH_KEY = 'promptfoo:openai:moderation-cache-key:v1';
-const OPENAI_MODERATION_AUTH_CACHE_NAMESPACES = new Map<string, string>();
 const OPENAI_MODERATION_INFLIGHT_REQUESTS = new Map<string, Promise<OpenAIModerationFetchResult>>();
 
 type OpenAIModerationFetchResult = {
@@ -82,19 +81,12 @@ type OpenAIModerationFetchResult = {
 };
 
 function hashModerationCacheValue(value: unknown): string {
-  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-  return createHmac('sha256', OPENAI_MODERATION_CACHE_HASH_KEY)
-    .update(serialized ?? String(value))
-    .digest('hex');
+  const serialized = typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value));
+  return createHmac('sha256', OPENAI_MODERATION_CACHE_HASH_KEY).update(serialized).digest('hex');
 }
 
 function getOpenAIModerationAuthCacheNamespace(apiKey: string): string {
-  let namespace = OPENAI_MODERATION_AUTH_CACHE_NAMESPACES.get(apiKey);
-  if (!namespace) {
-    namespace = randomUUID();
-    OPENAI_MODERATION_AUTH_CACHE_NAMESPACES.set(apiKey, namespace);
-  }
-  return namespace;
+  return createHmac('sha256', apiKey).update(OPENAI_MODERATION_CACHE_HASH_KEY).digest('hex');
 }
 
 function fetchOpenAIModerationWithDedupe(
@@ -182,9 +174,6 @@ function getModerationCacheKey(
     ...config,
     apiKey: undefined,
     apiKeyEnvar: undefined,
-    authNamespace: identity.apiKey
-      ? getOpenAIModerationAuthCacheNamespace(identity.apiKey)
-      : undefined,
     apiUrl: identity.apiUrl,
     organization: identity.organization,
     headers:
@@ -197,7 +186,7 @@ function getModerationCacheKey(
         : undefined,
   };
 
-  return `openai:moderation:${modelName}:${hashModerationCacheValue(cacheConfig)}:${hashModerationCacheValue(content)}`;
+  return `openai:moderation:${modelName}:${hashModerationCacheValue(cacheConfig)}:${identity.apiKey ? getOpenAIModerationAuthCacheNamespace(identity.apiKey) : 'no-api-key'}:${hashModerationCacheValue(content)}`;
 }
 
 export function supportsImageInput(modelName: string): boolean {
