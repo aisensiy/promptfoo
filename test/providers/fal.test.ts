@@ -444,7 +444,7 @@ describe('Fal Provider', () => {
         expect(result.cached).toBe(false);
         const cacheKey = mockCache.get.mock.calls[0]?.[0] as string;
         expect(cacheKey).toMatch(
-          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[0-9a-f-]{36}:[a-f0-9]{64}$/,
         );
         expect(cacheKey).not.toContain(prompt);
         expect(cacheKey).not.toContain(contextSecret);
@@ -506,10 +506,10 @@ describe('Fal Provider', () => {
         const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
         const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
         expect(cacheKeyA).toMatch(
-          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[0-9a-f-]{36}:[a-f0-9]{64}$/,
         );
         expect(cacheKeyB).toMatch(
-          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/,
+          /^fal:fal-ai\/flux\/schnell:[a-f0-9]{64}:[0-9a-f-]{36}:[a-f0-9]{64}$/,
         );
         expect(cacheKeyA).not.toBe(cacheKeyB);
         expect(mockSubscribe).toHaveBeenCalledTimes(2);

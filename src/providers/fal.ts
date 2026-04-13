@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID } from 'crypto';
 
 import { getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
@@ -19,6 +19,7 @@ interface FalResult<T = unknown> {
 }
 
 const FAL_CACHE_KEY_HMAC_KEY = 'promptfoo:fal:cache-key:v1';
+const FAL_AUTH_CACHE_NAMESPACES = new Map<string, string>();
 
 function sortObject(obj: any, seen = new WeakSet<object>()): any {
   if (obj === null || obj === undefined) {
@@ -61,12 +62,17 @@ function generateConfigHash(config: FalProviderOptions): string {
     .digest('hex');
 }
 
-function generateAuthHash(apiKey: string | undefined): string {
-  return apiKey
-    ? createHmac('sha256', FAL_CACHE_KEY_HMAC_KEY).update(apiKey).digest('hex')
-    : createHmac('sha256', FAL_CACHE_KEY_HMAC_KEY)
-        .update(JSON.stringify({ hasApiKey: false }))
-        .digest('hex');
+function getAuthCacheNamespace(apiKey: string | undefined): string {
+  if (!apiKey) {
+    return 'no-api-key';
+  }
+
+  let namespace = FAL_AUTH_CACHE_NAMESPACES.get(apiKey);
+  if (!namespace) {
+    namespace = randomUUID();
+    FAL_AUTH_CACHE_NAMESPACES.set(apiKey, namespace);
+  }
+  return namespace;
 }
 
 function generateInputHash(input: unknown): string {
@@ -137,7 +143,7 @@ class FalProvider<Input = Record<string, unknown>> implements ApiProvider {
     const cacheEnabled = isCacheEnabled();
     let cacheKey: string | undefined;
     if (cacheEnabled) {
-      cacheKey = `fal:${this.modelName}:${generateConfigHash(this.config)}:${generateAuthHash(
+      cacheKey = `fal:${this.modelName}:${generateConfigHash(this.config)}:${getAuthCacheNamespace(
         this.apiKey,
       )}:${generateInputHash(input)}`;
       cache = getCache();
