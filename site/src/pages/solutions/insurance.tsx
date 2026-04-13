@@ -88,7 +88,7 @@ export default function Insurance() {
           <div className={styles.heroContent}>
             <p className={styles.heroEyebrow}>Insurance</p>
             <h1 className={styles.heroTitle}>
-              Find insurance AI risk before it reaches policyholders
+              Find insurance AI risks before they reach policyholders
             </h1>
             <p className={styles.heroSubtitle}>
               Automated red teaming for health, property, auto, life, and commercial insurance AI
