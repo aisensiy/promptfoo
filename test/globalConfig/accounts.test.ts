@@ -47,21 +47,15 @@ vi.mock('../../src/globalConfig/globalConfig');
 vi.mock('../../src/util');
 vi.mock('../../src/logger');
 
-const originalPromptfooApiKey = process.env.PROMPTFOO_API_KEY;
-
 describe('accounts', () => {
   beforeEach(() => {
-    delete process.env.PROMPTFOO_API_KEY;
+    vi.stubEnv('PROMPTFOO_API_KEY', undefined);
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.resetAllMocks();
-    if (originalPromptfooApiKey === undefined) {
-      delete process.env.PROMPTFOO_API_KEY;
-    } else {
-      process.env.PROMPTFOO_API_KEY = originalPromptfooApiKey;
-    }
+    vi.unstubAllEnvs();
   });
 
   describe('getUserId', () => {

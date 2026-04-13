@@ -8,13 +8,10 @@ vi.mock('../src/globalConfig/globalConfig', () => ({
   writeGlobalConfigPartial: vi.fn(),
 }));
 
-const originalPromptfooApiKey = process.env.PROMPTFOO_API_KEY;
-const originalPromptfooAuthor = process.env.PROMPTFOO_AUTHOR;
-
 describe('accounts module', () => {
   beforeEach(() => {
-    delete process.env.PROMPTFOO_API_KEY;
-    delete process.env.PROMPTFOO_AUTHOR;
+    vi.stubEnv('PROMPTFOO_API_KEY', undefined);
+    vi.stubEnv('PROMPTFOO_AUTHOR', undefined);
     vi.resetModules();
     vi.clearAllMocks();
     vi.mocked(readGlobalConfig).mockReset();
@@ -22,16 +19,7 @@ describe('accounts module', () => {
 
   afterEach(() => {
     vi.resetAllMocks();
-    if (originalPromptfooApiKey === undefined) {
-      delete process.env.PROMPTFOO_API_KEY;
-    } else {
-      process.env.PROMPTFOO_API_KEY = originalPromptfooApiKey;
-    }
-    if (originalPromptfooAuthor === undefined) {
-      delete process.env.PROMPTFOO_AUTHOR;
-    } else {
-      process.env.PROMPTFOO_AUTHOR = originalPromptfooAuthor;
-    }
+    vi.unstubAllEnvs();
   });
 
   describe('getUserEmail', () => {
@@ -61,13 +49,13 @@ describe('accounts module', () => {
 
   describe('getAuthor', () => {
     it('should fall back to PROMPTFOO_AUTHOR env var when no email is set', () => {
-      process.env.PROMPTFOO_AUTHOR = 'envAuthor';
+      vi.stubEnv('PROMPTFOO_AUTHOR', 'envAuthor');
       vi.mocked(readGlobalConfig).mockReturnValue({ id: 'test-id' });
       expect(getAuthor()).toBe('envAuthor');
     });
 
     it('should prefer email over PROMPTFOO_AUTHOR env var', () => {
-      process.env.PROMPTFOO_AUTHOR = 'envAuthor';
+      vi.stubEnv('PROMPTFOO_AUTHOR', 'envAuthor');
       vi.mocked(readGlobalConfig).mockReturnValue({
         id: 'test-id',
         account: { email: 'test@example.com' },
