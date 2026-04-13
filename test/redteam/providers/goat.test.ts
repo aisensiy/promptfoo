@@ -124,6 +124,38 @@ describe('RedteamGoatProvider', () => {
     });
   });
 
+  it('should not log GOAT constructor input config values', () => {
+    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => ({}) as any);
+
+    try {
+      new RedteamGoatProvider({
+        injectVar: 'goal',
+        maxTurns: 1,
+        inputs: {
+          'secret-input-key-sentinel': 'secret input description sentinel',
+        },
+        _perTurnLayers: [
+          {
+            id: 'audio',
+            config: {
+              voice: 'secret-layer-config-sentinel',
+            },
+          },
+        ],
+      });
+
+      const goatLogs = JSON.stringify(
+        debugSpy.mock.calls.filter(([message]) => String(message).includes('[GOAT]')),
+      );
+      expect(goatLogs).toContain('inputKeyCount');
+      expect(goatLogs).not.toContain('secret-input-key-sentinel');
+      expect(goatLogs).not.toContain('secret input description sentinel');
+      expect(goatLogs).not.toContain('secret-layer-config-sentinel');
+    } finally {
+      debugSpy.mockRestore();
+    }
+  });
+
   it('should enforce maxCharsPerMessage from provider config without cliState', async () => {
     const provider = new RedteamGoatProvider({
       injectVar: 'goal',
@@ -333,6 +365,39 @@ describe('RedteamGoatProvider', () => {
       expect(goatLogs).not.toContain('secret-target-metadata-sentinel');
     } finally {
       debugSpy.mockRestore();
+    }
+  });
+
+  it('should not log invalid GOAT remote response content', async () => {
+    const provider = new RedteamGoatProvider({
+      injectVar: 'goal',
+      maxTurns: 1,
+    });
+    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => ({}) as any);
+    const targetProvider = createMockTargetProvider();
+    const context = createMockContext(targetProvider);
+    mockFetch.mockResolvedValueOnce({
+      json: async () => ({
+        'secret-invalid-response-key-sentinel': true,
+        message: {
+          role: 'secret-invalid-response-role-sentinel',
+        },
+      }),
+      ok: true,
+    });
+
+    try {
+      await provider.callApi('test prompt', context);
+
+      const goatLogs = JSON.stringify(
+        infoSpy.mock.calls.filter(([message]) => String(message).includes('[GOAT]')),
+      );
+      expect(goatLogs).toContain('responseKeyCount');
+      expect(goatLogs).toContain('"messageRole":"other"');
+      expect(goatLogs).not.toContain('secret-invalid-response-key-sentinel');
+      expect(goatLogs).not.toContain('secret-invalid-response-role-sentinel');
+    } finally {
+      infoSpy.mockRestore();
     }
   });
 
