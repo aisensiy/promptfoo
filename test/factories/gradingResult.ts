@@ -12,15 +12,15 @@ export function createGradingResult(overrides: Partial<GradingResult> = {}): Gra
 }
 
 export function createPassingGradingResult(overrides: Partial<GradingResult> = {}): GradingResult {
-  return createGradingResult({ pass: true, score: 1, ...overrides });
+  return createGradingResult({ ...overrides, pass: true, score: 1 });
 }
 
 export function createFailingGradingResult(overrides: Partial<GradingResult> = {}): GradingResult {
   return createGradingResult({
-    pass: false,
-    score: 0,
     reason: 'Grading failed reason',
     ...overrides,
+    pass: false,
+    score: 0,
   });
 }
 

@@ -3,10 +3,11 @@ import { createMockProvider } from './provider';
 import type { AtomicTestCase, Prompt, TestCase, TestSuite } from '../../src/types/index';
 
 export function createPrompt(raw = 'Test prompt', overrides: Partial<Prompt> = {}): Prompt {
+  const effectiveRaw = overrides.raw ?? raw;
   return {
-    raw,
-    label: raw,
     ...overrides,
+    raw: effectiveRaw,
+    label: overrides.label ?? effectiveRaw,
   };
 }
 

@@ -1,0 +1,52 @@
+import { describe, expect, it } from 'vitest';
+import { createFailingGradingResult, createPassingGradingResult } from './gradingResult';
+import { createRequiredTokenUsage } from './provider';
+import { createPrompt } from './testSuite';
+
+describe('test factories', () => {
+  it('uses the effective raw value as the default prompt label', () => {
+    expect(createPrompt('base prompt', { raw: 'overridden prompt' })).toMatchObject({
+      raw: 'overridden prompt',
+      label: 'overridden prompt',
+    });
+
+    expect(
+      createPrompt('base prompt', { raw: 'overridden prompt', label: 'custom label' }),
+    ).toMatchObject({
+      raw: 'overridden prompt',
+      label: 'custom label',
+    });
+  });
+
+  it('keeps grading helper pass and score invariants', () => {
+    expect(createPassingGradingResult({ pass: false, score: 0, reason: 'custom' })).toMatchObject({
+      pass: true,
+      score: 1,
+      reason: 'custom',
+    });
+
+    expect(createFailingGradingResult({ pass: true, score: 1, reason: 'custom' })).toMatchObject({
+      pass: false,
+      score: 0,
+      reason: 'custom',
+    });
+  });
+
+  it('preserves required nested token usage defaults when overriding assertion details', () => {
+    expect(
+      createRequiredTokenUsage({
+        assertions: {
+          completionDetails: {
+            reasoning: 7,
+          },
+        },
+      }).assertions.completionDetails,
+    ).toEqual({
+      reasoning: 7,
+      acceptedPrediction: 0,
+      rejectedPrediction: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    });
+  });
+});

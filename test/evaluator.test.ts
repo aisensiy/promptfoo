@@ -33,7 +33,12 @@ import {
   createGradingProviderResponse,
   createPassingGradingResult,
 } from './factories/gradingResult';
-import { createMockProvider, createProviderResponse, createTokenUsage } from './factories/provider';
+import {
+  createMockProvider,
+  createProviderResponse,
+  createTokenUsage,
+  type MockApiProvider,
+} from './factories/provider';
 
 const exactTransformHandlers = new Map<string, (input: any) => any>([
   ['output + " postprocessed"', (input) => input + ' postprocessed'],
@@ -271,20 +276,32 @@ vi.mock('../src/util/functions/loadFunction', async () => {
   };
 });
 
-const mockApiProvider = createMockProvider();
-
-const mockApiProvider2 = createMockProvider({ id: 'test-provider-2' });
-
-const mockReasoningApiProvider = createMockProvider({
-  id: 'test-reasoning-provider',
-  response: createProviderResponse({
+function createReasoningProviderResponse(): ProviderResponse {
+  return createProviderResponse({
     tokenUsage: createTokenUsage({
       total: 21,
       prompt: 9,
       completion: 12,
       completionDetails: { reasoning: 11, acceptedPrediction: 12, rejectedPrediction: 13 },
     }),
-  }),
+  });
+}
+
+function resetMockProviderCallApi(
+  provider: MockApiProvider,
+  response: ProviderResponse = createProviderResponse(),
+) {
+  vi.mocked(provider.callApi).mockReset();
+  vi.mocked(provider.callApi).mockResolvedValue(response);
+}
+
+const mockApiProvider = createMockProvider();
+
+const mockApiProvider2 = createMockProvider({ id: 'test-provider-2' });
+
+const mockReasoningApiProvider = createMockProvider({
+  id: 'test-reasoning-provider',
+  response: createReasoningProviderResponse(),
 });
 
 const mockGradingApiProviderPasses = createMockProvider({
@@ -308,6 +325,17 @@ describe('evaluator', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetMockProviderCallApi(mockApiProvider);
+    resetMockProviderCallApi(mockApiProvider2);
+    resetMockProviderCallApi(mockReasoningApiProvider, createReasoningProviderResponse());
+    resetMockProviderCallApi(
+      mockGradingApiProviderPasses,
+      createGradingProviderResponse(createPassingGradingResult()),
+    );
+    resetMockProviderCallApi(
+      mockGradingApiProviderFails,
+      createGradingProviderResponse(createFailingGradingResult()),
+    );
     // Reset runExtensionHook to default implementation (other tests may have overridden it)
     vi.mocked(runExtensionHook).mockReset();
     vi.mocked(runExtensionHook).mockImplementation(

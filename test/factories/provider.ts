@@ -48,6 +48,7 @@ export function createRequiredTokenUsage(overrides: TokenUsage = {}): Required<T
       completion: 0,
       cached: 0,
       numRequests: 0,
+      ...overrides.assertions,
       completionDetails: {
         reasoning: 0,
         acceptedPrediction: 0,
@@ -56,7 +57,6 @@ export function createRequiredTokenUsage(overrides: TokenUsage = {}): Required<T
         cacheCreationInputTokens: 0,
         ...overrides.assertions?.completionDetails,
       },
-      ...overrides.assertions,
     },
   };
 }
