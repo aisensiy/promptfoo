@@ -54,7 +54,9 @@ describeEvaluator('evaluator repeat cache isolation', () => {
       repeatIndex: 0,
     });
 
-    expect(contexts[0]?.bustCache).toBeFalsy();
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]).toBeDefined();
+    expect(contexts[0]!.bustCache).toBeFalsy();
 
     contexts.length = 0;
 
@@ -64,7 +66,9 @@ describeEvaluator('evaluator repeat cache isolation', () => {
       repeatIndex: 1,
     });
 
-    expect(contexts[0]?.bustCache).toBeFalsy();
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]).toBeDefined();
+    expect(contexts[0]!.bustCache).toBeFalsy();
   });
 
   it('isolates manual provider cache entries by repeat index', async () => {

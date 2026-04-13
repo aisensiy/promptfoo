@@ -1,6 +1,6 @@
 import './setup';
 
-import { glob } from 'glob';
+import { globSync } from 'glob';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   formatVarsForDisplay,
@@ -31,7 +31,7 @@ describe('generateVarCombinations', () => {
 
   it('should handle file paths and expand them into combinations', () => {
     const vars = { language: 'English', greeting: 'file:///path/to/greetings/*.txt' };
-    vi.spyOn(glob, 'globSync').mockReturnValue(['greeting1.txt', 'greeting2.txt']);
+    vi.mocked(globSync).mockReturnValue(['greeting1.txt', 'greeting2.txt']);
     const expected = [
       { language: 'English', greeting: 'file://greeting1.txt' },
       { language: 'English', greeting: 'file://greeting2.txt' },

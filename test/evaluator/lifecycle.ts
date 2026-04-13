@@ -11,6 +11,7 @@ export function describeEvaluator(name: string, defineTests: () => void) {
     });
 
     beforeEach(() => {
+      vi.useRealTimers();
       vi.clearAllMocks();
       vi.mocked(runExtensionHook).mockReset();
       vi.mocked(runExtensionHook).mockImplementation(
@@ -22,6 +23,7 @@ export function describeEvaluator(name: string, defineTests: () => void) {
     });
 
     afterEach(async () => {
+      vi.useRealTimers();
       vi.clearAllMocks();
       cliState.resume = false;
       cliState.basePath = '';

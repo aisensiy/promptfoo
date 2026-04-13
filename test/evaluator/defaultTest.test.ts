@@ -602,8 +602,8 @@ describe('defaultTest normalization for extensions', () => {
     // but the beforeAll hook call should receive the original suite without normalization
     const beforeAllCall = mockedRunExtensionHook.mock.calls.find((call) => call[1] === 'beforeAll');
     expect(beforeAllCall).toBeDefined();
-    // When no extensions, defaultTest should remain undefined (not normalized)
-    // Note: The normalization only happens when extensions?.length is truthy
+    const suite = (beforeAllCall?.[2] as { suite: TestSuite } | undefined)?.suite;
+    expect(suite?.defaultTest).toBeUndefined();
   });
 
   it('should allow extensions to push to defaultTest.assert safely', async () => {

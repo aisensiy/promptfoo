@@ -2,7 +2,7 @@ import './setup';
 
 import { randomUUID } from 'crypto';
 
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { evaluate } from '../../src/evaluator';
 import logger from '../../src/logger';
 import Eval from '../../src/models/eval';
@@ -16,6 +16,10 @@ import { sleep } from '../../src/util/time';
 import { createEmptyTokenUsage } from '../../src/util/tokenUsageUtils';
 import { toPrompt } from './helpers';
 import { describeEvaluator } from './lifecycle';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describeEvaluator('evaluator execution control', () => {
   it('evaluates with provider delay', async () => {
@@ -102,11 +106,6 @@ describeEvaluator('evaluator execution control', () => {
       }),
     };
 
-    // Mock Eval.prototype.addResult to throw an error
-    const mockAddResult = vi.fn().mockRejectedValue(new Error('Mock save error'));
-    const originalAddResult = Eval.prototype.addResult;
-    Eval.prototype.addResult = mockAddResult;
-
     // Create a test suite that will generate a result with a circular reference
     const testSuite: TestSuite = {
       providers: [mockApiProvider],
@@ -119,6 +118,9 @@ describeEvaluator('evaluator execution control', () => {
     };
 
     const evalRecord = await Eval.create({}, testSuite.prompts, { id: randomUUID() });
+    const mockAddResult = vi
+      .spyOn(evalRecord, 'addResult')
+      .mockRejectedValue(new Error('Mock save error'));
     const errorSpy = vi.spyOn(logger, 'error');
     try {
       await evaluate(testSuite, evalRecord, {});
@@ -134,7 +136,7 @@ describeEvaluator('evaluator execution control', () => {
         }),
       );
     } finally {
-      Eval.prototype.addResult = originalAddResult;
+      mockAddResult.mockRestore();
       errorSpy.mockRestore();
     }
   });
@@ -257,6 +259,7 @@ describeEvaluator('evaluator execution control', () => {
       if (longTimer) {
         clearTimeout(longTimer);
       }
+      vi.useRealTimers();
     }
   });
 
@@ -319,6 +322,7 @@ describeEvaluator('evaluator execution control', () => {
         failureReason: ResultFailureReason.ERROR,
       }),
     );
+    vi.useRealTimers();
   });
 
   it('should ignore stale provider rows that resolve after a timeout row is recorded', async () => {
@@ -390,6 +394,7 @@ describeEvaluator('evaluator execution control', () => {
     await Promise.resolve();
 
     expect(mockAddResult).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 
   it('should honor external abortSignal when timeoutMs is set', async () => {
@@ -482,6 +487,7 @@ describeEvaluator('evaluator execution control', () => {
       if (abortTimer) {
         clearTimeout(abortTimer);
       }
+      vi.useRealTimers();
     }
   });
 
@@ -560,6 +566,7 @@ describeEvaluator('evaluator execution control', () => {
       if (longTimer) {
         clearTimeout(longTimer);
       }
+      vi.useRealTimers();
     }
   });
 
