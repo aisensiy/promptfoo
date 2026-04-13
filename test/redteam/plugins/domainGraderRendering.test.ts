@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getGraderById } from '../../../src/redteam/graders';
 import { FinancialCalculationErrorPluginGrader } from '../../../src/redteam/plugins/financial/financialCalculationError';
 import { FinancialComplianceViolationPluginGrader } from '../../../src/redteam/plugins/financial/financialComplianceViolation';
 import { FinancialDataLeakagePluginGrader } from '../../../src/redteam/plugins/financial/financialDataLeakage';
@@ -34,37 +35,134 @@ type RubricVars = {
 };
 
 type RenderingGrader = {
+  id: string;
   renderRubric: (vars: RubricVars) => string;
 };
 
-const RENDERING_GRADERS: [string, new () => RenderingGrader][] = [
-  ['financial calculation error', FinancialCalculationErrorPluginGrader],
-  ['financial compliance violation', FinancialComplianceViolationPluginGrader],
-  ['financial data leakage', FinancialDataLeakagePluginGrader],
-  ['financial hallucination', FinancialHallucinationPluginGrader],
-  ['financial japan fiea suitability', FinancialJapanFieaSuitabilityPluginGrader],
-  ['financial sycophancy', FinancialSycophancyPluginGrader],
-  ['insurance coverage discrimination', InsuranceCoverageDiscriminationPluginGrader],
-  ['insurance data disclosure', InsuranceDataDisclosurePluginGrader],
-  ['insurance network misinformation', InsuranceNetworkMisinformationPluginGrader],
-  ['insurance phi disclosure', InsurancePhiDisclosurePluginGrader],
-  ['medical anchoring bias', MedicalAnchoringBiasPluginGrader],
-  ['medical hallucination', MedicalHallucinationPluginGrader],
-  ['medical incorrect knowledge', MedicalIncorrectKnowledgePluginGrader],
-  ['medical prioritization error', MedicalPrioritizationErrorPluginGrader],
-  ['medical sycophancy', MedicalSycophancyPluginGrader],
-  ['off topic', OffTopicPluginGrader],
-  ['pharmacy controlled substance compliance', PharmacyControlledSubstanceCompliancePluginGrader],
-  ['pharmacy dosage calculation', PharmacyDosageCalculationPluginGrader],
-  ['pharmacy drug interaction', PharmacyDrugInteractionPluginGrader],
-  ['real estate accessibility discrimination', RealEstateAccessibilityDiscriminationPluginGrader],
-  ['real estate advertising discrimination', RealEstateAdvertisingDiscriminationPluginGrader],
-  ['real estate discriminatory listings', RealEstateDiscriminatoryListingsPluginGrader],
-  ['real estate fair housing discrimination', RealEstateFairHousingDiscriminationPluginGrader],
-  ['real estate lending discrimination', RealEstateLendingDiscriminationPluginGrader],
-  ['real estate source of income', RealEstateSourceOfIncomePluginGrader],
-  ['real estate steering', RealEstateSteeringPluginGrader],
-  ['real estate valuation bias', RealEstateValuationBiasPluginGrader],
+const RENDERING_GRADERS: [string, string, new () => RenderingGrader][] = [
+  [
+    'financial calculation error',
+    'promptfoo:redteam:financial:calculation-error',
+    FinancialCalculationErrorPluginGrader,
+  ],
+  [
+    'financial compliance violation',
+    'promptfoo:redteam:financial:compliance-violation',
+    FinancialComplianceViolationPluginGrader,
+  ],
+  [
+    'financial data leakage',
+    'promptfoo:redteam:financial:data-leakage',
+    FinancialDataLeakagePluginGrader,
+  ],
+  [
+    'financial hallucination',
+    'promptfoo:redteam:financial:hallucination',
+    FinancialHallucinationPluginGrader,
+  ],
+  [
+    'financial japan fiea suitability',
+    'promptfoo:redteam:financial:japan-fiea-suitability',
+    FinancialJapanFieaSuitabilityPluginGrader,
+  ],
+  [
+    'financial sycophancy',
+    'promptfoo:redteam:financial:sycophancy',
+    FinancialSycophancyPluginGrader,
+  ],
+  [
+    'insurance coverage discrimination',
+    'promptfoo:redteam:insurance:coverage-discrimination',
+    InsuranceCoverageDiscriminationPluginGrader,
+  ],
+  [
+    'insurance data disclosure',
+    'promptfoo:redteam:insurance:data-disclosure',
+    InsuranceDataDisclosurePluginGrader,
+  ],
+  [
+    'insurance network misinformation',
+    'promptfoo:redteam:insurance:network-misinformation',
+    InsuranceNetworkMisinformationPluginGrader,
+  ],
+  [
+    'insurance phi disclosure',
+    'promptfoo:redteam:insurance:phi-disclosure',
+    InsurancePhiDisclosurePluginGrader,
+  ],
+  [
+    'medical anchoring bias',
+    'promptfoo:redteam:medical:anchoring-bias',
+    MedicalAnchoringBiasPluginGrader,
+  ],
+  [
+    'medical hallucination',
+    'promptfoo:redteam:medical:hallucination',
+    MedicalHallucinationPluginGrader,
+  ],
+  [
+    'medical incorrect knowledge',
+    'promptfoo:redteam:medical:incorrect-knowledge',
+    MedicalIncorrectKnowledgePluginGrader,
+  ],
+  [
+    'medical prioritization error',
+    'promptfoo:redteam:medical:prioritization-error',
+    MedicalPrioritizationErrorPluginGrader,
+  ],
+  ['medical sycophancy', 'promptfoo:redteam:medical:sycophancy', MedicalSycophancyPluginGrader],
+  ['off topic', 'promptfoo:redteam:off-topic', OffTopicPluginGrader],
+  [
+    'pharmacy controlled substance compliance',
+    'promptfoo:redteam:pharmacy:controlled-substance-compliance',
+    PharmacyControlledSubstanceCompliancePluginGrader,
+  ],
+  [
+    'pharmacy dosage calculation',
+    'promptfoo:redteam:pharmacy:dosage-calculation',
+    PharmacyDosageCalculationPluginGrader,
+  ],
+  [
+    'pharmacy drug interaction',
+    'promptfoo:redteam:pharmacy:drug-interaction',
+    PharmacyDrugInteractionPluginGrader,
+  ],
+  [
+    'real estate accessibility discrimination',
+    'promptfoo:redteam:realestate:accessibility-discrimination',
+    RealEstateAccessibilityDiscriminationPluginGrader,
+  ],
+  [
+    'real estate advertising discrimination',
+    'promptfoo:redteam:realestate:advertising-discrimination',
+    RealEstateAdvertisingDiscriminationPluginGrader,
+  ],
+  [
+    'real estate discriminatory listings',
+    'promptfoo:redteam:realestate:discriminatory-listings',
+    RealEstateDiscriminatoryListingsPluginGrader,
+  ],
+  [
+    'real estate fair housing discrimination',
+    'promptfoo:redteam:realestate:fair-housing-discrimination',
+    RealEstateFairHousingDiscriminationPluginGrader,
+  ],
+  [
+    'real estate lending discrimination',
+    'promptfoo:redteam:realestate:lending-discrimination',
+    RealEstateLendingDiscriminationPluginGrader,
+  ],
+  [
+    'real estate source of income',
+    'promptfoo:redteam:realestate:source-of-income',
+    RealEstateSourceOfIncomePluginGrader,
+  ],
+  ['real estate steering', 'promptfoo:redteam:realestate:steering', RealEstateSteeringPluginGrader],
+  [
+    'real estate valuation bias',
+    'promptfoo:redteam:realestate:valuation-bias',
+    RealEstateValuationBiasPluginGrader,
+  ],
 ];
 
 describe('domain-specific grader rendering', () => {
@@ -74,7 +172,18 @@ describe('domain-specific grader rendering', () => {
     output: 'Sentinel model output for rubric interpolation',
   };
 
-  it.each(RENDERING_GRADERS)('%s renders runtime context and decision fields', (_, GraderClass) => {
+  it.each(
+    RENDERING_GRADERS,
+  )('%s is registered under its canonical grader id', (_, expectedId, GraderClass) => {
+    const grader = new GraderClass();
+
+    expect(grader.id).toBe(expectedId);
+    expect(getGraderById(expectedId)).toBeInstanceOf(GraderClass);
+  });
+
+  it.each(
+    RENDERING_GRADERS,
+  )('%s renders runtime context and decision fields', (_, __, GraderClass) => {
     const rubric = new GraderClass().renderRubric(vars);
 
     expect(rubric).toContain(vars.purpose);
