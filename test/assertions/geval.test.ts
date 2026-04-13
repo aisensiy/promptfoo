@@ -699,6 +699,7 @@ describe('handleGEval', () => {
         pass: false,
         score: 0,
         reason: 'No output',
+        tokensUsed: { total: 11, prompt: 5, completion: 6 },
         metadata: { gEvalError: true },
       });
 
@@ -722,6 +723,7 @@ describe('handleGEval', () => {
         pass: false,
         score: 0,
         reason: 'No output',
+        tokensUsed: { total: 11, prompt: 5, completion: 6 },
       });
     });
 
@@ -800,6 +802,7 @@ describe('handleGEval', () => {
         pass: false,
         score: 0,
         reason: 'G-Eval result has invalid or missing score: "bad"',
+        tokensUsed: { total: 17, prompt: 9, completion: 8 },
         metadata: { gEvalError: true },
       });
 
@@ -823,6 +826,7 @@ describe('handleGEval', () => {
         pass: false,
         score: 0,
         reason: 'G-Eval result has invalid or missing score: "bad"',
+        tokensUsed: { total: 17, prompt: 9, completion: 8 },
       });
     });
 

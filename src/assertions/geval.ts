@@ -57,6 +57,7 @@ export const handleGEval = async ({
         pass: false,
         score: 0,
         reason: firstFailure.reason,
+        tokensUsed: firstFailure.tokensUsed,
       };
     }
 
@@ -87,6 +88,7 @@ export const handleGEval = async ({
       pass: false,
       score: 0,
       reason: resp.reason,
+      tokensUsed: resp.tokensUsed,
     };
   }
 
