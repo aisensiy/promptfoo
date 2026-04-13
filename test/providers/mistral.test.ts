@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithCache, getCache, isCacheEnabled } from '../../src/cache';
+import logger from '../../src/logger';
 import {
   MistralChatCompletionProvider,
   MistralEmbeddingProvider,
 } from '../../src/providers/mistral';
 import { maybeLoadToolsFromExternalFile } from '../../src/util';
+
+vi.mock('../../src/logger', () => ({
+  default: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
 
 vi.mock('../../src/cache', async () => ({
   ...(await vi.importActual('../../src/cache')),
@@ -129,11 +139,14 @@ describe('Mistral', () => {
           method: 'POST',
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
+            'x-promptfoo-silent': 'true',
             Authorization: expect.stringContaining('Bearer '),
           }),
           body: expect.stringContaining('"messages":[{"role":"user","content":"Test prompt"}]'),
         }),
         expect.any(Number),
+        'json',
+        true,
       );
 
       expect(result).toEqual({
@@ -335,7 +348,7 @@ describe('Mistral', () => {
       );
     });
 
-    it('should isolate hashed cache keys by non-secret API configuration', async () => {
+    it('should isolate hashed cache keys by resolved API key', async () => {
       const cacheGet = vi.fn().mockResolvedValue(null);
       const cacheSet = vi.fn();
       vi.mocked(isCacheEnabled).mockReturnValue(true);
@@ -363,8 +376,8 @@ describe('Mistral', () => {
       const providerB = new MistralChatCompletionProvider('mistral-tiny');
       vi.spyOn(providerA, 'getApiKey').mockReturnValue('sk-mistral-tenant-a');
       vi.spyOn(providerB, 'getApiKey').mockReturnValue('sk-mistral-tenant-b');
-      vi.spyOn(providerA, 'getApiUrl').mockReturnValue('https://tenant-a.mistral.example/v1');
-      vi.spyOn(providerB, 'getApiUrl').mockReturnValue('https://tenant-b.mistral.example/v1');
+      vi.spyOn(providerA, 'getApiUrl').mockReturnValue('https://shared.mistral.example/v1');
+      vi.spyOn(providerB, 'getApiUrl').mockReturnValue('https://shared.mistral.example/v1');
       vi.mocked(fetchWithCache)
         .mockResolvedValueOnce({
           data: {
@@ -398,9 +411,38 @@ describe('Mistral', () => {
         expect(cacheKey).not.toContain('Shared sensitive prompt');
         expect(cacheKey).not.toContain('sk-mistral-tenant-a');
         expect(cacheKey).not.toContain('sk-mistral-tenant-b');
-        expect(cacheKey).not.toContain('tenant-a.mistral.example');
-        expect(cacheKey).not.toContain('tenant-b.mistral.example');
+        expect(cacheKey).not.toContain('shared.mistral.example');
       }
+    });
+
+    it('should avoid logging prompts and generated outputs in debug metadata', async () => {
+      vi.mocked(fetchWithCache).mockResolvedValueOnce({
+        data: {
+          choices: [{ message: { content: 'Generated secret response' } }],
+          usage: { total_tokens: 10, prompt_tokens: 5, completion_tokens: 5 },
+        },
+        cached: false,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      await provider.callApi('Sensitive prompt with sk-mistral-secret');
+
+      const fetchCall = vi.mocked(fetchWithCache).mock.calls[0];
+      expect(fetchCall[3]).toBe('json');
+      expect(fetchCall[4]).toBe(true);
+      expect(fetchCall[1]).toEqual(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'x-promptfoo-silent': 'true',
+          }),
+        }),
+      );
+
+      const debugLogs = JSON.stringify(vi.mocked(logger.debug).mock.calls);
+      expect(debugLogs).not.toContain('Sensitive prompt');
+      expect(debugLogs).not.toContain('sk-mistral-secret');
+      expect(debugLogs).not.toContain('Generated secret response');
     });
 
     it('should not use cache when disabled', async () => {
@@ -435,6 +477,8 @@ describe('Mistral', () => {
         expect.stringContaining('/chat/completions'),
         expect.any(Object),
         expect.any(Number),
+        'json',
+        true,
       );
     });
 
@@ -474,6 +518,8 @@ describe('Mistral', () => {
         'https://custom.mistral.ai/v1/chat/completions',
         expect.any(Object),
         expect.any(Number),
+        'json',
+        true,
       );
     });
 
@@ -499,6 +545,8 @@ describe('Mistral', () => {
         'https://custom.mistral.ai/v1/chat/completions',
         expect.any(Object),
         expect.any(Number),
+        'json',
+        true,
       );
     });
 

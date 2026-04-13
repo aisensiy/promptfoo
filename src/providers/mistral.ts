@@ -1,9 +1,10 @@
+import { createHmac } from 'crypto';
+
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvString } from '../envars';
 import logger from '../logger';
 import { type GenAISpanContext, type GenAISpanResult, withGenAISpan } from '../tracing/genaiTracer';
 import { maybeLoadToolsFromExternalFile } from '../util';
-import { sha256 } from '../util/createHash';
 import { calculateCost, parseChatPrompt, REQUEST_TIMEOUT_MS } from './shared';
 
 import type { EnvVarKey } from '../envars';
@@ -164,6 +165,84 @@ interface MistralChatCompletionOptions {
   cost?: number;
 }
 
+const MISTRAL_CACHE_HASH_KEY = 'promptfoo:mistral:cache-key:v1';
+
+function hashMistralCacheValue(value: unknown): string {
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  return createHmac('sha256', MISTRAL_CACHE_HASH_KEY)
+    .update(serialized ?? String(value))
+    .digest('hex');
+}
+
+function getMistralUrlMetadata(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    return {
+      protocol: parsedUrl.protocol,
+      hostname: parsedUrl.hostname,
+      pathnameLength: parsedUrl.pathname.length,
+      hasSearch: parsedUrl.search.length > 0,
+    };
+  } catch {
+    return {
+      valid: false,
+      length: url.length,
+    };
+  }
+}
+
+function getSafeToolChoice(toolChoice: MistralChatCompletionOptions['tool_choice'] | undefined) {
+  if (typeof toolChoice === 'string') {
+    return ['none', 'auto', 'any', 'required'].includes(toolChoice) ? toolChoice : 'other';
+  }
+  if (toolChoice && typeof toolChoice === 'object') {
+    return toolChoice.type === 'function' ? 'function' : 'object';
+  }
+  return undefined;
+}
+
+function getMistralRequestMetadata(params: {
+  model: string;
+  messages?: unknown;
+  tools?: unknown;
+  tool_choice?: MistralChatCompletionOptions['tool_choice'];
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  safe_prompt?: boolean;
+  random_seed?: number | null;
+  parallel_tool_calls?: boolean;
+  response_format?: unknown;
+}) {
+  return {
+    model: params.model,
+    messageCount: Array.isArray(params.messages) ? params.messages.length : undefined,
+    temperature: params.temperature,
+    top_p: params.top_p,
+    max_tokens: params.max_tokens,
+    safe_prompt: params.safe_prompt,
+    random_seed: params.random_seed,
+    toolCount: Array.isArray(params.tools) ? params.tools.length : undefined,
+    hasTools: params.tools !== undefined,
+    tool_choice: getSafeToolChoice(params.tool_choice),
+    parallel_tool_calls: params.parallel_tool_calls,
+    hasResponseFormat: params.response_format !== undefined,
+  };
+}
+
+function getMistralResponseMetadata(data: any) {
+  const usage = data?.usage;
+  return {
+    choiceCount: Array.isArray(data?.choices) ? data.choices.length : undefined,
+    hasError: data?.error !== undefined,
+    hasUsage: usage !== undefined,
+    totalTokens: typeof usage?.total_tokens === 'number' ? usage.total_tokens : undefined,
+    promptTokens: typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : undefined,
+    completionTokens:
+      typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : undefined,
+  };
+}
+
 function getTokenUsage(data: any, cached: boolean): Partial<TokenUsage> {
   if (data.usage) {
     if (cached) {
@@ -258,14 +337,12 @@ export class MistralChatCompletionProvider implements ApiProvider {
     return apiKeyCandidate;
   }
 
-  private getCacheIdentityHash(apiUrl: string): string {
-    const authSource = Object.prototype.hasOwnProperty.call(this.config, 'apiKey')
-      ? 'config'
-      : Object.prototype.hasOwnProperty.call(this.config, 'apiKeyEnvar')
-        ? 'custom-env'
-        : 'env:MISTRAL_API_KEY';
-
-    return sha256(JSON.stringify({ apiUrl, authSource }));
+  private getCacheIdentityHash(apiUrl: string, apiKey: string): string {
+    return hashMistralCacheValue({
+      apiUrl,
+      apiKeyEnvar: this.config.apiKeyEnvar,
+      apiKeyFingerprint: hashMistralCacheValue(apiKey),
+    });
   }
 
   async callApi(prompt: string, context?: CallApiContextParams): Promise<ProviderResponse> {
@@ -347,9 +424,10 @@ export class MistralChatCompletionProvider implements ApiProvider {
       ...(config?.response_format ? { response_format: config.response_format } : {}),
     };
 
-    const cacheKey = `mistral:chat:${this.modelName}:${this.getCacheIdentityHash(apiUrl)}:${sha256(
-      JSON.stringify(params),
-    )}`;
+    const cacheKey = `mistral:chat:${this.modelName}:${this.getCacheIdentityHash(
+      apiUrl,
+      apiKey,
+    )}:${hashMistralCacheValue(params)}`;
     if (isCacheEnabled()) {
       const cache = getCache();
       if (cache) {
@@ -369,7 +447,10 @@ export class MistralChatCompletionProvider implements ApiProvider {
     }
 
     const url = `${apiUrl}/chat/completions`;
-    logger.debug('Mistral API request', { url, params });
+    logger.debug('Mistral API request', {
+      endpoint: getMistralUrlMetadata(url),
+      params: getMistralRequestMetadata(params),
+    });
 
     let data,
       cached = false;
@@ -381,11 +462,14 @@ export class MistralChatCompletionProvider implements ApiProvider {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-promptfoo-silent': 'true',
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(params),
         },
         REQUEST_TIMEOUT_MS,
+        'json',
+        true,
       )) as unknown as { data: any; cached: boolean });
     } catch (err) {
       return {
@@ -393,7 +477,7 @@ export class MistralChatCompletionProvider implements ApiProvider {
       };
     }
 
-    logger.debug('Mistral API response', { data });
+    logger.debug('Mistral API response', getMistralResponseMetadata(data));
 
     if (data.error) {
       return {
