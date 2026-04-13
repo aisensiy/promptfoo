@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from 'crypto';
+import { createHmac } from 'crypto';
 
 import { fetchWithCache, getCache, isCacheEnabled } from '../cache';
 import { getEnvFloat, getEnvInt, getEnvString } from '../envars';
@@ -62,41 +62,10 @@ interface ReplicatePrediction {
 }
 
 const REPLICATE_CACHE_KEY_HMAC_KEY = 'promptfoo:replicate:cache-key:v1';
-const REPLICATE_CACHE_KEY_OMITTED_FIELD_NAMES = new Set([
-  'apiKey',
-  'filters',
-  'getCache',
-  'logger',
-  'originalProvider',
-]);
-const REPLICATE_AUTH_CACHE_NAMESPACES = new Map<string, string>();
-
 function hashReplicateCacheValue(value: unknown) {
   return createHmac('sha256', REPLICATE_CACHE_KEY_HMAC_KEY)
     .update(safeJsonStringify(value) ?? '')
     .digest('hex');
-}
-
-function omitReplicateCacheKeyFields(value: unknown, seen = new WeakSet<object>()): unknown {
-  if (Array.isArray(value)) {
-    if (seen.has(value)) {
-      return '[Circular]';
-    }
-    seen.add(value);
-    return value.map((item) => omitReplicateCacheKeyFields(item, seen));
-  }
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-  if (seen.has(value)) {
-    return '[Circular]';
-  }
-  seen.add(value);
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => !REPLICATE_CACHE_KEY_OMITTED_FIELD_NAMES.has(key))
-      .map(([key, fieldValue]) => [key, omitReplicateCacheKeyFields(fieldValue, seen)]),
-  );
 }
 
 function getReplicateAuthCacheNamespace(apiKey: string | undefined) {
@@ -104,12 +73,7 @@ function getReplicateAuthCacheNamespace(apiKey: string | undefined) {
     return 'no-api-key';
   }
 
-  let namespace = REPLICATE_AUTH_CACHE_NAMESPACES.get(apiKey);
-  if (!namespace) {
-    namespace = randomUUID();
-    REPLICATE_AUTH_CACHE_NAMESPACES.set(apiKey, namespace);
-  }
-  return namespace;
+  return hashReplicateCacheValue(['auth', apiKey]);
 }
 
 function getReplicateValueSummary(prefix: string, value: unknown): Record<string, unknown> {
@@ -205,15 +169,41 @@ export class ReplicateProvider implements ApiProvider {
       prompt = prompt + this.config.prompt.suffix;
     }
 
+    const messages = parseChatPrompt(prompt, [{ role: 'user', content: prompt }]);
+    const systemPrompt =
+      messages.find((message) => message.role === 'system')?.content ||
+      this.config.system_prompt ||
+      getEnvString('REPLICATE_SYSTEM_PROMPT');
+    const userPrompt = messages.find((message) => message.role === 'user')?.content || prompt;
+
+    const inputOptions = {
+      max_length: this.config.max_length ?? getEnvInt('REPLICATE_MAX_LENGTH'),
+      max_new_tokens: this.config.max_new_tokens ?? getEnvInt('REPLICATE_MAX_NEW_TOKENS'),
+      temperature: this.config.temperature ?? getEnvFloat('REPLICATE_TEMPERATURE'),
+      top_p: this.config.top_p ?? getEnvFloat('REPLICATE_TOP_P'),
+      top_k: this.config.top_k ?? getEnvInt('REPLICATE_TOP_K'),
+      repetition_penalty:
+        this.config.repetition_penalty ?? getEnvFloat('REPLICATE_REPETITION_PENALTY'),
+      stop_sequences: this.config.stop_sequences ?? getEnvString('REPLICATE_STOP_SEQUENCES'),
+      seed: this.config.seed ?? getEnvInt('REPLICATE_SEED'),
+      system_prompt: systemPrompt,
+      prompt: userPrompt,
+    };
+
+    const data = {
+      version: this.modelName.includes(':') ? this.modelName.split(':')[1] : undefined,
+      input: {
+        ...this.config,
+        ...Object.fromEntries(Object.entries(inputOptions).filter(([_, v]) => v !== undefined)),
+      },
+    };
+
     let cache;
     let cacheKey;
     if (isCacheEnabled()) {
       cache = await getCache();
       cacheKey = `replicate:${this.modelName}:${getReplicateAuthCacheNamespace(this.apiKey)}:${hashReplicateCacheValue(
-        {
-          config: this.config,
-          prompt,
-        },
+        data,
       )}`;
 
       // Try to get the cached response
@@ -225,38 +215,9 @@ export class ReplicateProvider implements ApiProvider {
       }
     }
 
-    const messages = parseChatPrompt(prompt, [{ role: 'user', content: prompt }]);
-    const systemPrompt =
-      messages.find((message) => message.role === 'system')?.content ||
-      this.config.system_prompt ||
-      getEnvString('REPLICATE_SYSTEM_PROMPT');
-    const userPrompt = messages.find((message) => message.role === 'user')?.content || prompt;
-
     logger.debug('Calling Replicate', { modelName: this.modelName, promptLength: prompt.length });
     let response;
     try {
-      const inputOptions = {
-        max_length: this.config.max_length ?? getEnvInt('REPLICATE_MAX_LENGTH'),
-        max_new_tokens: this.config.max_new_tokens ?? getEnvInt('REPLICATE_MAX_NEW_TOKENS'),
-        temperature: this.config.temperature ?? getEnvFloat('REPLICATE_TEMPERATURE'),
-        top_p: this.config.top_p ?? getEnvFloat('REPLICATE_TOP_P'),
-        top_k: this.config.top_k ?? getEnvInt('REPLICATE_TOP_K'),
-        repetition_penalty:
-          this.config.repetition_penalty ?? getEnvFloat('REPLICATE_REPETITION_PENALTY'),
-        stop_sequences: this.config.stop_sequences ?? getEnvString('REPLICATE_STOP_SEQUENCES'),
-        seed: this.config.seed ?? getEnvInt('REPLICATE_SEED'),
-        system_prompt: systemPrompt,
-        prompt: userPrompt,
-      };
-
-      const data = {
-        version: this.modelName.includes(':') ? this.modelName.split(':')[1] : undefined,
-        input: {
-          ...this.config,
-          ...Object.fromEntries(Object.entries(inputOptions).filter(([_, v]) => v !== undefined)),
-        },
-      };
-
       // Create prediction with sync mode (wait up to 60 seconds)
       const createResponse = await fetchWithCache(
         this.modelName.includes(':')
@@ -458,7 +419,7 @@ export class ReplicateImageProvider extends ReplicateProvider {
 
   async callApi(
     prompt: string,
-    context?: CallApiContextParams,
+    _context?: CallApiContextParams,
     _callApiOptions?: CallApiOptionsParams,
   ): Promise<ProviderResponse> {
     if (!this.apiKey) {
@@ -471,7 +432,6 @@ export class ReplicateImageProvider extends ReplicateProvider {
     const cacheKey = `replicate:image:${this.modelName}:${getReplicateAuthCacheNamespace(this.apiKey)}:${hashReplicateCacheValue(
       {
         config: this.config,
-        context: omitReplicateCacheKeyFields(context),
         prompt,
       },
     )}`;

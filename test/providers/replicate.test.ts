@@ -330,7 +330,7 @@ describe('ReplicateProvider', () => {
     expect(result.output).toBe('test response');
     expect(mockCache.set).toHaveBeenCalledTimes(1);
     const cacheKey = mockCache.set.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^replicate:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
+    expect(cacheKey).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain(mockApiKey);
     expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
@@ -382,14 +382,93 @@ describe('ReplicateProvider', () => {
 
     const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
     const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
-    expect(cacheKeyA).toMatch(/^replicate:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
-    expect(cacheKeyB).toMatch(/^replicate:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
+    expect(cacheKeyA).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKeyB).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKeyA).not.toBe(cacheKeyB);
     expect(mockedFetchWithCache).toHaveBeenCalledTimes(2);
     for (const cacheKey of [cacheKeyA, cacheKeyB]) {
       expect(cacheKey).not.toContain('Shared replicate prompt');
       expect(cacheKey).not.toContain('replicate-tenant-a-secret');
       expect(cacheKey).not.toContain('replicate-tenant-b-secret');
+    }
+  });
+
+  it('should use a stable cache namespace for the same API key', async () => {
+    mockedFetchWithCache.mockResolvedValue({
+      data: {
+        id: 'test-id',
+        status: 'succeeded',
+        output: 'stable tenant response',
+      },
+      cached: false,
+      status: 200,
+      statusText: 'OK',
+    });
+    const mockCache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn(),
+    } as any;
+    vi.mocked(isCacheEnabled).mockReturnValue(true);
+    vi.mocked(getCache).mockResolvedValue(mockCache);
+
+    const providerA = new ReplicateProvider('test-model', {
+      config: { apiKey: 'replicate-stable-tenant-secret' },
+    });
+    const providerB = new ReplicateProvider('test-model', {
+      config: { apiKey: 'replicate-stable-tenant-secret' },
+    });
+
+    await providerA.callApi('Shared replicate prompt');
+    await providerB.callApi('Shared replicate prompt');
+
+    const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
+    const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
+    expect(cacheKeyA).toBe(cacheKeyB);
+    expect(cacheKeyA).toMatch(/^replicate:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
+    expect(cacheKeyA).not.toContain('replicate-stable-tenant-secret');
+    expect(cacheKeyA).not.toContain('Shared replicate prompt');
+  });
+
+  it('should separate cache keys for env-backed generation defaults', async () => {
+    const originalTemperature = process.env.REPLICATE_TEMPERATURE;
+    mockedFetchWithCache.mockResolvedValue({
+      data: {
+        id: 'test-id',
+        status: 'succeeded',
+        output: 'env default response',
+      },
+      cached: false,
+      status: 200,
+      statusText: 'OK',
+    });
+    const mockCache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn(),
+    } as any;
+    vi.mocked(isCacheEnabled).mockReturnValue(true);
+    vi.mocked(getCache).mockResolvedValue(mockCache);
+
+    try {
+      const provider = new ReplicateProvider('test-model', {
+        config: { apiKey: mockApiKey },
+      });
+
+      process.env.REPLICATE_TEMPERATURE = '0.1';
+      await provider.callApi('Shared env prompt');
+      process.env.REPLICATE_TEMPERATURE = '0.9';
+      await provider.callApi('Shared env prompt');
+
+      const cacheKeyA = mockCache.get.mock.calls[0][0] as string;
+      const cacheKeyB = mockCache.get.mock.calls[1][0] as string;
+      expect(cacheKeyA).not.toBe(cacheKeyB);
+      expect(cacheKeyA).not.toContain('Shared env prompt');
+      expect(cacheKeyA).not.toContain(mockApiKey);
+    } finally {
+      if (originalTemperature === undefined) {
+        delete process.env.REPLICATE_TEMPERATURE;
+      } else {
+        process.env.REPLICATE_TEMPERATURE = originalTemperature;
+      }
     }
   });
 });
@@ -705,7 +784,7 @@ describe('ReplicateImageProvider', () => {
 
     expect(result.cached).toBe(false);
     const cacheKey = mockCache.set.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^replicate:image:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
+    expect(cacheKey).toMatch(/^replicate:image:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain(prompt);
     expect(cacheKey).not.toContain('PFQA_REPLICATE_IMAGE_CONFIG_SENTINEL');
     expect(cacheKey).not.toContain(mockApiKey);
@@ -749,9 +828,48 @@ describe('ReplicateImageProvider', () => {
     ).resolves.toEqual(expect.objectContaining({ cached: false }));
 
     const cacheKey = mockCache.set.mock.calls[0][0] as string;
-    expect(cacheKey).toMatch(/^replicate:image:test-model:[0-9a-f-]{36}:[a-f0-9]{64}$/);
+    expect(cacheKey).toMatch(/^replicate:image:test-model:[a-f0-9]{64}:[a-f0-9]{64}$/);
     expect(cacheKey).not.toContain('PFQA_REPLICATE_CONTEXT_API_KEY_SECRET');
     expect(cacheKey).not.toContain('PFQA_REPLICATE_CIRCULAR_CONTEXT_PROMPT');
     expect(cacheKey).not.toContain('PFQA_REPLICATE_LOGGER_SECRET');
+  });
+
+  it('should ignore unused image context when computing cache keys', async () => {
+    mockedFetchWithCache.mockResolvedValue({
+      data: {
+        id: 'test-id',
+        status: 'succeeded',
+        output: ['https://example.com/image.png'],
+      },
+      cached: false,
+      status: 200,
+      statusText: 'OK',
+    });
+
+    const mockCache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn(),
+    } as any;
+
+    vi.mocked(isCacheEnabled).mockReturnValue(true);
+    vi.mocked(getCache).mockReturnValue(mockCache);
+
+    const provider = new ReplicateImageProvider('test-model', {
+      config: { apiKey: mockApiKey },
+    });
+
+    await provider.callApi('PFQA_REPLICATE_IMAGE_CONTEXT_PROMPT', {
+      vars: { tenant: 'PFQA_REPLICATE_IMAGE_CONTEXT_TENANT_A' },
+    } as any);
+    await provider.callApi('PFQA_REPLICATE_IMAGE_CONTEXT_PROMPT', {
+      vars: { tenant: 'PFQA_REPLICATE_IMAGE_CONTEXT_TENANT_B' },
+    } as any);
+
+    const firstCacheKey = mockCache.get.mock.calls[0][0] as string;
+    const secondCacheKey = mockCache.get.mock.calls[1][0] as string;
+    expect(firstCacheKey).toBe(secondCacheKey);
+    expect(firstCacheKey).not.toContain('PFQA_REPLICATE_IMAGE_CONTEXT_PROMPT');
+    expect(firstCacheKey).not.toContain('PFQA_REPLICATE_IMAGE_CONTEXT_TENANT_A');
+    expect(secondCacheKey).not.toContain('PFQA_REPLICATE_IMAGE_CONTEXT_TENANT_B');
   });
 });
