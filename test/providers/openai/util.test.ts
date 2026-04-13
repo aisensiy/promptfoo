@@ -312,6 +312,23 @@ describe('calculateOpenAICost', () => {
     expect(cost).toBe(15.0075);
   });
 
+  it('should calculate cost correctly with separate custom text and audio costs', () => {
+    const cost = calculateOpenAICost(
+      'gpt-4o-audio-preview',
+      {
+        inputCost: 0.01,
+        outputCost: 0.02,
+        audioInputCost: 0.03,
+        audioOutputCost: 0.04,
+      },
+      1000,
+      500,
+      200,
+      100,
+    );
+    expect(cost).toBe(30);
+  });
+
   it('should handle a model with no cost property', () => {
     const cost = calculateOpenAICost('text-davinci-002', {}, 1000, 500);
     expect(cost).toBeUndefined();

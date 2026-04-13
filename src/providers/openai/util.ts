@@ -598,10 +598,16 @@ export function calculateOpenAICost(
   totalCost += inputCost * promptTokens + outputCost * completionTokens;
 
   if ('audioInput' in model.cost || 'audioOutput' in model.cost) {
-    const audioInputCost =
-      config.audioInputCost ?? config.audioCost ?? (model.cost as any).audioInput ?? 0;
-    const audioOutputCost =
-      config.audioOutputCost ?? config.audioCost ?? (model.cost as any).audioOutput ?? 0;
+    const modelAudioInputCost =
+      'audioInput' in model.cost && typeof model.cost.audioInput === 'number'
+        ? model.cost.audioInput
+        : 0;
+    const modelAudioOutputCost =
+      'audioOutput' in model.cost && typeof model.cost.audioOutput === 'number'
+        ? model.cost.audioOutput
+        : 0;
+    const audioInputCost = config.audioInputCost ?? config.audioCost ?? modelAudioInputCost;
+    const audioOutputCost = config.audioOutputCost ?? config.audioCost ?? modelAudioOutputCost;
     totalCost += audioInputCost * audioPromptTokens + audioOutputCost * audioCompletionTokens;
   }
 

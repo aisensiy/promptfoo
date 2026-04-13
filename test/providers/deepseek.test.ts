@@ -33,6 +33,12 @@ describe('calculateDeepSeekCost', () => {
     expect(cost).toBeCloseTo(2.0); // (1.0 + 1.0) from config override
   });
 
+  it('should use separate input and output cost overrides with cache hits', () => {
+    const config = { inputCost: 1.0 / 1e6, outputCost: 2.0 / 1e6 };
+    const cost = calculateDeepSeekCost('deepseek-chat', config, 1000000, 1000000, 500000);
+    expect(cost).toBeCloseTo(2.514); // input override for uncached tokens + default cache read + output override
+  });
+
   it('should handle unknown model names', () => {
     const cost = calculateDeepSeekCost('unknown-model', {}, 1000000, 1000000);
     expect(cost).toBeUndefined();

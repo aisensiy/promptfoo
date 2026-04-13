@@ -2687,6 +2687,18 @@ describe('util', () => {
       expect(cost).toBeCloseTo(1.5, 10);
     });
 
+    it('should respect separate input and output cost overrides in standard pricing', () => {
+      const config = { inputCost: 0.001, outputCost: 0.002 };
+      const cost = calculateGoogleCost('gemini-pro', config, 1000, 500);
+      expect(cost).toBeCloseTo(2, 10);
+    });
+
+    it('should respect separate input and output cost overrides in tiered pricing', () => {
+      const config = { inputCost: 0.001, outputCost: 0.002 };
+      const cost = calculateGoogleCost('gemini-3.1-pro-preview', config, 250000, 50000);
+      expect(cost).toBeCloseTo(350, 10);
+    });
+
     it('should use Vertex-specific pricing for gemini-2.0-flash in Vertex mode', () => {
       // AI Studio: input=0.1/1M, output=0.4/1M
       // Vertex AI: input=0.15/1M, output=0.6/1M
@@ -2696,6 +2708,12 @@ describe('util', () => {
       expect(aiStudioCost).toBeCloseTo(0.003, 10);
       // Vertex: (10000 * 0.15 + 5000 * 0.6) / 1M = 0.0045
       expect(vertexCost).toBeCloseTo(0.0045, 10);
+    });
+
+    it('should respect separate input and output cost overrides in Vertex pricing', () => {
+      const config = { inputCost: 0.001, outputCost: 0.002 };
+      const cost = calculateGoogleCost('gemini-2.0-flash', config, 10000, 5000, true);
+      expect(cost).toBeCloseTo(20, 10);
     });
 
     it('should use standard pricing for models without Vertex-specific pricing in Vertex mode', () => {

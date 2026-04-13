@@ -130,6 +130,16 @@ describe('HyperbolicProvider', () => {
       );
       expect(cost).toBe(customCost * 1000 + customCost * 500);
     });
+
+    it('should use separate input and output cost overrides', () => {
+      const cost = calculateHyperbolicCost(
+        'deepseek-ai/DeepSeek-R1',
+        { inputCost: 0.001, outputCost: 0.002 },
+        1000,
+        500,
+      );
+      expect(cost).toBe(2);
+    });
   });
 });
 
