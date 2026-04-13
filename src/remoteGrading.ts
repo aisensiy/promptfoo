@@ -19,6 +19,10 @@ function getRemoteGradingResponseMetadata(data: unknown) {
   };
 }
 
+function isRemoteGradingResponse(data: unknown): data is { result?: GradingResult } {
+  return typeof data === 'object' && data !== null && !Array.isArray(data);
+}
+
 function formatRemoteGradingError(error: unknown): string {
   if (
     error instanceof Error &&
@@ -44,10 +48,13 @@ export async function doRemoteGrading(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-promptfoo-silent': 'true',
         },
         body,
       },
       REQUEST_TIMEOUT_MS,
+      'json',
+      true,
     );
 
     logger.debug('Remote grading result', {
@@ -58,9 +65,18 @@ export async function doRemoteGrading(
     if (status !== 200) {
       throw new Error(`Remote grading failed with status ${status}`);
     }
-    const { result } = data as { result: GradingResult };
+    if (!isRemoteGradingResponse(data)) {
+      throw new Error('Remote grading failed. Response data is invalid');
+    }
 
-    if (!result || result.pass === undefined) {
+    const { result } = data;
+
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      Array.isArray(result) ||
+      result.pass === undefined
+    ) {
       throw new Error('Remote grading failed. Response data is invalid');
     }
 

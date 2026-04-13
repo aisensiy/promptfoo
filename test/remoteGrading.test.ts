@@ -57,6 +57,19 @@ describe('doRemoteGrading', () => {
     expect(debugLogs).not.toContain('SECRET_INPUT_TEXT');
     expect(debugLogs).not.toContain('sensitive-user@example.com');
     expect(serializedDebugLogs).not.toContain('SECRET_RESPONSE_REASON');
+    expect(fetchWithCache).toHaveBeenCalledWith(
+      'https://remote-grading.example.com',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'x-promptfoo-silent': 'true',
+        }),
+        body: expect.any(String),
+      }),
+      expect.any(Number),
+      'json',
+      true,
+    );
   });
 
   it('does not expose response content in non-200 errors or logs', async () => {
@@ -104,6 +117,32 @@ describe('doRemoteGrading', () => {
 
     const allOutput = JSON.stringify(vi.mocked(logger.debug).mock.calls);
     expect(allOutput).not.toContain('SECRET_INVALID_RESPONSE_REASON');
+  });
+
+  it.each([
+    null,
+    'SECRET_STRING_RESPONSE',
+    ['SECRET_ARRAY_RESPONSE'],
+  ])('returns the safe invalid response error for non-object JSON payloads', async (data) => {
+    vi.mocked(fetchWithCache).mockResolvedValue({
+      data,
+      status: 200,
+      statusText: 'OK',
+      cached: false,
+    });
+
+    await expect(
+      doRemoteGrading({
+        task: 'llm-rubric',
+        prompt: 'SECRET_PROMPT_TEXT',
+      }),
+    ).rejects.toThrow(
+      'Could not perform remote grading: Remote grading failed. Response data is invalid',
+    );
+
+    const allOutput = JSON.stringify(vi.mocked(logger.debug).mock.calls);
+    expect(allOutput).not.toContain('SECRET_STRING_RESPONSE');
+    expect(allOutput).not.toContain('SECRET_ARRAY_RESPONSE');
   });
 
   it('does not expose transport error messages in thrown errors', async () => {
