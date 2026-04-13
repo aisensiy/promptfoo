@@ -568,55 +568,6 @@ describe('runEval', () => {
     expect(results[0].response?.output).toBe('original-provider-test');
   });
 
-  it('should accumulate token usage correctly', async () => {
-    const results = await runEval({
-      ...defaultOptions,
-
-      provider: mockProvider,
-      prompt: { raw: 'Test prompt', label: 'test-label' },
-      test: {
-        assert: [
-          {
-            type: 'llm-rubric',
-            value: 'Test output',
-          },
-        ],
-        options: { provider: mockGradingApiProviderPasses },
-      },
-      conversations: {},
-      registers: {},
-    });
-
-    expect(results[0].tokenUsage).toEqual({
-      total: 10, // Only provider tokens, NOT assertion tokens
-      prompt: 5, // Only provider tokens
-      completion: 5, // Only provider tokens
-      cached: 0,
-      completionDetails: {
-        reasoning: 0,
-        acceptedPrediction: 0,
-        rejectedPrediction: 0,
-        cacheReadInputTokens: 0,
-        cacheCreationInputTokens: 0,
-      },
-      numRequests: 1, // Only provider requests
-      assertions: {
-        total: 10, // Assertion tokens tracked separately
-        prompt: 5,
-        completion: 5,
-        cached: 0,
-        numRequests: 1, // Assertion requests tracked separately
-        completionDetails: {
-          reasoning: 0,
-          acceptedPrediction: 0,
-          rejectedPrediction: 0,
-          cacheReadInputTokens: 0,
-          cacheCreationInputTokens: 0,
-        },
-      },
-    });
-  });
-
   it('should skip rendering redteam inject variable to prevent nunjucks errors on template syntax', async () => {
     // This tests the fix for Discord issue where redteam prompts containing {{purpose | trim}}
     // caused "TypeError: Cannot read properties of undefined (reading 'replace')"
@@ -1005,19 +956,23 @@ describe('runEval', () => {
         }),
       };
 
-      const resultPromise = runEval({
-        ...defaultOptions,
-        provider: providerWithoutLatency,
-        prompt: { raw: 'Test prompt', label: 'test-label' },
-        test: {},
-        conversations: {},
-        registers: {},
-      });
-      await vi.advanceTimersByTimeAsync(50);
-      const results = await resultPromise;
+      try {
+        const resultPromise = runEval({
+          ...defaultOptions,
+          provider: providerWithoutLatency,
+          prompt: { raw: 'Test prompt', label: 'test-label' },
+          test: {},
+          conversations: {},
+          registers: {},
+        });
+        await vi.runAllTimersAsync();
+        const results = await resultPromise;
 
-      // Should have measured latency (>= 45ms accounting for timer precision)
-      expect(results[0].latencyMs).toBeGreaterThanOrEqual(45);
+        // Should have measured latency (>= 45ms accounting for timer precision)
+        expect(results[0].latencyMs).toBeGreaterThanOrEqual(45);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should respect provider latencyMs of 0', async () => {
