@@ -113,7 +113,7 @@ describe('Global Config', () => {
       it('should create new config directory and file with generated UUID', () => {
         const result = globalConfig.readGlobalConfig();
 
-        expect(fs.existsSync).toHaveBeenCalledTimes(2);
+        expect(fs.existsSync).toHaveBeenCalledTimes(1);
         expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), {
           recursive: true,
           mode: 0o700,
@@ -130,6 +130,22 @@ describe('Global Config', () => {
         expect(result.id).toBeDefined();
         expect(typeof result.id).toBe('string');
         expect(isValidUUID(result.id!)).toBe(true);
+      });
+
+      it('should ensure the config directory before writing a missing config file', () => {
+        vi.mocked(fs.existsSync).mockImplementation((filePath) => {
+          return !filePath.toString().includes('promptfoo.yaml');
+        });
+
+        globalConfig.readGlobalConfig();
+
+        expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), {
+          recursive: true,
+          mode: 0o700,
+        });
+        const mkdirOrder = vi.mocked(fs.mkdirSync).mock.invocationCallOrder[0]!;
+        const writeOrder = vi.mocked(fs.writeFileSync).mock.invocationCallOrder[0]!;
+        expect(mkdirOrder).toBeLessThan(writeOrder);
       });
     });
 

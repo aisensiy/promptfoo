@@ -29,9 +29,7 @@ function writeGlobalConfigFile(configFilePath: string, config: GlobalConfig): vo
 
 function ensureGlobalConfigDirectory(): string {
   const configDir = getConfigDirectoryPath();
-  if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true, mode: GLOBAL_CONFIG_DIR_MODE });
-  }
+  fs.mkdirSync(configDir, { recursive: true, mode: GLOBAL_CONFIG_DIR_MODE });
   return configDir;
 }
 
@@ -52,9 +50,7 @@ export function readGlobalConfig(): GlobalConfig {
       writeGlobalConfig(globalConfig);
     }
   } else {
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true, mode: GLOBAL_CONFIG_DIR_MODE });
-    }
+    ensureGlobalConfigDirectory();
     writeGlobalConfigFile(configFilePath, globalConfig);
   }
 
