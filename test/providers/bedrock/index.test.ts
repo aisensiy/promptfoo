@@ -3296,6 +3296,36 @@ describe('AwsBedrockCompletionProvider', () => {
     }
   });
 
+  it('should separate cache keys by effective bearer token env value', () => {
+    const originalBearerToken = process.env.AWS_BEARER_TOKEN_BEDROCK;
+
+    try {
+      const params = { prompt: 'PFQA_BEDROCK_PROMPT_SENTINEL' };
+      const region = 'us-east-1';
+      const config = {
+        region,
+      } as BedrockClaudeMessagesCompletionOptions;
+
+      process.env.AWS_BEARER_TOKEN_BEDROCK = 'PFQA_BEDROCK_ENV_BEARER_A';
+      const bearerACacheKey = createBedrockCacheKeyHash({ config, params, region });
+      process.env.AWS_BEARER_TOKEN_BEDROCK = 'PFQA_BEDROCK_ENV_BEARER_B';
+      const bearerBCacheKey = createBedrockCacheKeyHash({ config, params, region });
+
+      expect(bearerACacheKey).not.toBe(bearerBCacheKey);
+      for (const cacheKey of [bearerACacheKey, bearerBCacheKey]) {
+        expect(cacheKey).toMatch(/^[a-f0-9]{64}:[a-f0-9]{64}$/);
+        expect(cacheKey).not.toContain('PFQA_BEDROCK_ENV_BEARER_A');
+        expect(cacheKey).not.toContain('PFQA_BEDROCK_ENV_BEARER_B');
+      }
+    } finally {
+      if (originalBearerToken === undefined) {
+        delete process.env.AWS_BEARER_TOKEN_BEDROCK;
+      } else {
+        process.env.AWS_BEARER_TOKEN_BEDROCK = originalBearerToken;
+      }
+    }
+  });
+
   it('should preserve non-auth request fields named like credentials in request hashes', () => {
     const region = 'us-east-1';
     const config = {
