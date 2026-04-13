@@ -8,7 +8,6 @@ import promptfoo from '../../index';
 import logger from '../../logger';
 import Eval, { EvalQueries } from '../../models/eval';
 import EvalResult from '../../models/evalResult';
-import { maybeFilePath } from '../../prompts/utils';
 import { EvalSchemas } from '../../types/api/eval';
 import { deleteEval, deleteEvals, updateResult, writeResultsToDatabase } from '../../util/database';
 import invariant from '../../util/invariant';
@@ -51,6 +50,28 @@ const SERVER_PROMPT_SOURCE_EXECUTABLE_EXTENSIONS = [
   '.sh',
 ];
 
+function hasPathLikeSeparator(value: string): boolean {
+  const separatorIndex = value.search(/[/\\]/);
+  if (separatorIndex < 0) {
+    return false;
+  }
+
+  const firstSegment = value.slice(0, separatorIndex);
+  if (/\s/.test(firstSegment)) {
+    return false;
+  }
+
+  return firstSegment.length > 1;
+}
+
+function hasFileLikeExtension(value: string): boolean {
+  return /^[^\s{}[\]]+\.[a-z0-9]{1,8}(?::[a-z_$][\w$]*)?$/i.test(value);
+}
+
+function hasGlobLikeWildcard(value: string): boolean {
+  return value.includes('*') && !/\s/.test(value);
+}
+
 function isServerPromptSourceReference(prompt: string): boolean {
   const trimmed = prompt.trim();
   if (!trimmed) {
@@ -80,7 +101,9 @@ function isServerPromptSourceReference(prompt: string): boolean {
 
   const pathOrFunctionToken = trimmed.split(':')[0].toLowerCase();
   return (
-    maybeFilePath(trimmed) ||
+    hasPathLikeSeparator(trimmed) ||
+    hasGlobLikeWildcard(trimmed) ||
+    hasFileLikeExtension(trimmed) ||
     SERVER_PROMPT_SOURCE_EXECUTABLE_EXTENSIONS.some((extension) =>
       pathOrFunctionToken.endsWith(extension),
     )

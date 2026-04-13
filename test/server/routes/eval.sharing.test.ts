@@ -184,7 +184,12 @@ describe('Eval Routes - Sharing behavior', () => {
   it('allows inline templated and JSON-like prompt strings', async () => {
     const response = await postJob({
       ...minimalTestSuite,
-      prompts: ['{{prompt}}', '{"role":"user","content":"hello"}'],
+      prompts: [
+        '{{prompt}}',
+        '{"role":"user","content":"hello"}',
+        '["hello","world"]',
+        'Explain A/B testing and calculate 2 * 2.',
+      ],
     });
 
     expect(response.status).toBe(200);
